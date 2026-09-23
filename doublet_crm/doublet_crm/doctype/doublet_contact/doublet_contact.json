@@ -1,0 +1,105 @@
+{
+ "doctype": "DocType",
+ "name": "DoubleT Contact",
+ "module": "DoubleT CRM",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "field_order": [
+  "first_name",
+  "last_name",
+  "phone",
+  "email",
+  "birthday",
+  "address",
+  "source",
+  "contact_owner",
+  "company",
+  "job_title",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "first_name",
+   "fieldtype": "Data",
+   "label": "First Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "last_name",
+   "fieldtype": "Data",
+   "label": "Last Name",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "label": "Phone",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "birthday",
+   "fieldtype": "Date",
+   "label": "Birthday"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Small Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Link",
+   "label": "Source",
+   "options": "DoubleT Lead Source"
+  },
+  {
+   "fieldname": "contact_owner",
+   "fieldtype": "Link",
+   "label": "Contact Owner",
+   "options": "User"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "DoubleT Company",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "job_title",
+   "fieldtype": "Data",
+   "label": "Job Title"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "first_name",
+ "search_fields": "first_name,last_name,phone,email"
+}
+

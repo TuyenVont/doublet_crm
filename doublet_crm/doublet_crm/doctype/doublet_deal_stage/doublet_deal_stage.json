@@ -1,0 +1,70 @@
+{
+ "doctype": "DocType",
+ "name": "DoubleT Deal Stage",
+ "module": "DoubleT CRM",
+ "autoname": "field:stage_name",
+ "engine": "InnoDB",
+ "field_order": [
+  "stage_name",
+  "sort_order",
+  "stage_type",
+  "color",
+  "enabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "stage_name",
+   "fieldtype": "Data",
+   "label": "Stage Name",
+   "reqd": 1,
+   "in_list_view": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Sort Order",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "stage_type",
+   "fieldtype": "Select",
+   "label": "Stage Type",
+   "reqd": 1,
+   "in_list_view": 1,
+   "options": "OPEN\nWON\nLOST"
+  },
+  {
+   "fieldname": "color",
+   "fieldtype": "Color",
+   "label": "Color"
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1",
+   "in_list_view": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "sort_field": "sort_order",
+ "sort_order": "ASC",
+ "title_field": "stage_name",
+ "search_fields": "stage_name,stage_type"
+}
+

@@ -1,0 +1,47 @@
+{
+ "doctype": "DocType",
+ "name": "DoubleT Lead Source",
+ "module": "DoubleT CRM",
+ "autoname": "field:source_name",
+ "engine": "InnoDB",
+ "field_order": [
+  "source_name",
+  "is_active"
+ ],
+ "fields": [
+  {
+   "fieldname": "source_name",
+   "fieldtype": "Data",
+   "label": "Source Name",
+   "reqd": 1,
+   "in_list_view": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Is Active",
+   "default": "1",
+   "in_list_view": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "source_name",
+ "search_fields": "source_name"
+}
+

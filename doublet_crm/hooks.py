@@ -85,6 +85,11 @@ app_license = "mit"
 # before_install = "doublet_crm.install.before_install"
 # after_install = "doublet_crm.install.after_install"
 
+after_migrate = [
+	"doublet_crm.kanban.sync_deal_kanban_board",
+	"doublet_crm.dashboard.sync_dashboard",
+]
+
 # Uninstallation
 # ------------
 
@@ -144,6 +149,17 @@ app_license = "mit"
 # 		"on_trash": "method"
 # 	}
 # }
+
+doc_events = {
+	"DoubleT Deal Stage": {
+		"on_update": "doublet_crm.kanban.sync_deal_kanban_board",
+		"after_delete": "doublet_crm.kanban.sync_deal_kanban_board",
+		"after_rename": "doublet_crm.kanban.sync_deal_kanban_board",
+	},
+	"Kanban Board": {
+		"validate": "doublet_crm.kanban.validate_deal_kanban_board",
+	},
+}
 
 # Scheduled Tasks
 # ---------------
@@ -246,4 +262,3 @@ app_license = "mit"
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
-
