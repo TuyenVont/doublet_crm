@@ -1,8 +1,8 @@
 {
- "doctype": "DocType",
- "name": "DoubleT Deal",
- "module": "DoubleT CRM",
+ "actions": [],
  "autoname": "hash",
+ "creation": "2026-09-22 22:45:33.889821",
+ "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "deal_title",
@@ -21,16 +21,17 @@
   {
    "fieldname": "deal_title",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Deal Title",
-   "reqd": 1,
-   "in_list_view": 1
+   "reqd": 1
   },
   {
+   "default": "0",
    "fieldname": "amount",
    "fieldtype": "Currency",
+   "in_list_view": 1,
    "label": "Amount",
-   "default": "0",
-   "in_list_view": 1
+   "permlevel": 1
   },
   {
    "fieldname": "deal_owner",
@@ -42,69 +43,84 @@
    "fieldname": "contact",
    "fieldtype": "Link",
    "label": "Contact",
-   "options": "DoubleT Contact"
+   "options": "DoubleT Contact",
+   "permlevel": 1
   },
   {
    "fieldname": "company",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Company",
    "options": "DoubleT Company",
-   "in_list_view": 1
+   "permlevel": 1
   },
   {
    "fieldname": "source_lead",
    "fieldtype": "Link",
    "label": "Source Lead",
-   "options": "DoubleT Lead"
+   "options": "DoubleT Lead",
+   "permlevel": 1
   },
   {
    "fieldname": "expected_close_date",
    "fieldtype": "Date",
-   "label": "Expected Close Date"
+   "label": "Expected Close Date",
+   "permlevel": 1
   },
   {
    "fieldname": "stage",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Stage",
    "options": "DoubleT Deal Stage",
-   "reqd": 1,
-   "in_list_view": 1
+   "reqd": 1
   },
   {
    "fieldname": "won_on",
    "fieldtype": "Datetime",
    "label": "Won On",
+   "permlevel": 1,
    "read_only": 1
   },
   {
    "fieldname": "lost_on",
    "fieldtype": "Datetime",
    "label": "Lost On",
+   "permlevel": 1,
    "read_only": 1
   },
   {
    "fieldname": "lost_reason",
    "fieldtype": "Small Text",
-   "label": "Lost Reason"
+   "label": "Lost Reason",
+   "permlevel": 1
   }
  ],
+ "links": [],
+ "modified": "2026-09-26 22:00:47.136807",
+ "modified_by": "Administrator",
+ "module": "DoubleT CRM",
+ "name": "DoubleT Deal",
+ "owner": "Administrator",
  "permissions": [
   {
-   "role": "System Manager",
-   "read": 1,
-   "write": 1,
    "create": 1,
    "delete": 1,
-   "report": 1,
+   "email": 1,
    "export": 1,
    "print": 1,
-   "email": 1,
-   "share": 1
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
   }
  ],
+ "row_format": "Dynamic",
+ "search_fields": "deal_title,contact,company",
  "sort_field": "modified",
  "sort_order": "DESC",
+ "states": [],
  "title_field": "deal_title",
- "search_fields": "deal_title,contact,company",
  "track_changes": 1
 }
