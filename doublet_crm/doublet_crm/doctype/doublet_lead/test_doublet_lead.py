@@ -83,6 +83,7 @@ class TestDoubleTLeadConversion(FrappeTestCase):
 		self.assertEqual(deal.source_lead, self.lead.name)
 		self.assertEqual(deal.contact, contact.name)
 		self.assertEqual(deal.company, result["company"])
+		self.assertEqual(deal.deal_type, "COMPANY")
 		self.assertEqual(deal.stage, stage.name)
 		self.assertEqual(deal.amount, 125)
 
@@ -100,6 +101,7 @@ class TestDoubleTLeadConversion(FrappeTestCase):
 		self.assertEqual(deal.source_lead, self.lead.name)
 		self.assertEqual(deal.contact, result["contact"])
 		self.assertFalse(deal.company)
+		self.assertEqual(deal.deal_type, "PERSONAL")
 		self.assertEqual(deal.amount, 0)
 		self.assertFalse(lead.converted_company)
 		self.assertEqual(lead.converted_deal, deal.name)

@@ -8,6 +8,7 @@
   "deal_title",
   "amount",
   "deal_owner",
+  "deal_type",
   "contact",
   "company",
   "source_lead",
@@ -37,6 +38,13 @@
    "fieldtype": "Link",
    "label": "Deal Owner",
    "options": "User"
+  },
+  {
+   "fieldname": "deal_type",
+   "fieldtype": "Select",
+   "label": "Deal Type",
+   "options": "PERSONAL\nCOMPANY",
+   "reqd": 1
   },
   {
    "fieldname": "contact",

@@ -10,6 +10,14 @@ class TestDoubleTDealLifecycle(FrappeTestCase):
 		self.won_stage = self.make_stage(f"Beta-{unique}", "WON")
 		self.lost_stage = self.make_stage(f"Gamma-{unique}", "LOST")
 		self.title = f"Lifecycle-{unique}"
+		self.contact = frappe.get_doc({
+			"doctype": "DoubleT Contact",
+			"first_name": f"Contact-{unique}",
+		}).insert()
+		self.company = frappe.get_doc({
+			"doctype": "DoubleT Company",
+			"company_name": f"Company-{unique}",
+		}).insert()
 
 	def make_stage(self, name, stage_type):
 		return frappe.get_doc({
@@ -24,9 +32,81 @@ class TestDoubleTDealLifecycle(FrappeTestCase):
 		return frappe.get_doc({
 			"doctype": "DoubleT Deal",
 			"deal_title": self.title,
+			"deal_type": "PERSONAL",
+			"contact": self.contact.name,
 			"stage": stage or self.open_stage.name,
 			**values,
 		}).insert()
+
+	def test_valid_personal_deal(self):
+		deal = self.make_deal()
+		deal.reload()
+		self.assertEqual(deal.deal_type, "PERSONAL")
+		self.assertEqual(deal.contact, self.contact.name)
+		self.assertFalse(deal.company)
+
+	def test_valid_company_deal_with_optional_contact(self):
+		for contact in (None, self.contact.name):
+			with self.subTest(contact=contact):
+				deal = self.make_deal(deal_type="COMPANY", company=self.company.name, contact=contact)
+				deal.reload()
+				self.assertEqual(deal.deal_type, "COMPANY")
+				self.assertEqual(deal.company, self.company.name)
+				self.assertEqual(deal.contact or None, contact)
+
+	def test_personal_requires_contact(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "Contact is required for a PERSONAL deal"):
+			self.make_deal(contact=None)
+
+	def test_personal_rejects_company(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "Company must be empty for a PERSONAL deal"):
+			self.make_deal(company=self.company.name)
+
+	def test_company_requires_company(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "Company is required for a COMPANY deal"):
+			self.make_deal(deal_type="COMPANY", company=None)
+
+	def test_invalid_deal_type(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "Deal Type must be PERSONAL or COMPANY"):
+			self.make_deal(deal_type="INVALID")
+
+	def test_missing_deal_type(self):
+		for deal_type in (None, ""):
+			with self.subTest(deal_type=deal_type):
+				with self.assertRaisesRegex(frappe.ValidationError, "Deal Type must be PERSONAL or COMPANY"):
+					self.make_deal(deal_type=deal_type)
+
+	def test_omitted_deal_type(self):
+		deal = frappe.get_doc({
+			"doctype": "DoubleT Deal",
+			"deal_title": self.title,
+			"contact": self.contact.name,
+			"stage": self.open_stage.name,
+		})
+		with self.assertRaisesRegex(frappe.ValidationError, "Deal Type must be PERSONAL or COMPANY"):
+			deal.insert()
+
+	def test_company_to_personal_rejects_stale_company(self):
+		deal = self.make_deal(deal_type="COMPANY", company=self.company.name)
+		deal.deal_type = "PERSONAL"
+		with self.assertRaisesRegex(frappe.ValidationError, "Company must be empty for a PERSONAL deal"):
+			deal.save()
+		deal.reload()
+		self.assertEqual(deal.deal_type, "COMPANY")
+		self.assertEqual(deal.company, self.company.name)
+
+	def test_personal_to_company_requires_company(self):
+		deal = self.make_deal()
+		deal.deal_type = "COMPANY"
+		with self.assertRaisesRegex(frappe.ValidationError, "Company is required for a COMPANY deal"):
+			deal.save()
+		deal.reload()
+		self.assertEqual(deal.deal_type, "PERSONAL")
+		self.assertFalse(deal.company)
+
+	def test_negative_amount_is_rejected(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "Amount cannot be negative"):
+			self.make_deal(amount=-1)
 
 	def test_open_deal_has_no_lifecycle_fields(self):
 		deal = self.make_deal(
