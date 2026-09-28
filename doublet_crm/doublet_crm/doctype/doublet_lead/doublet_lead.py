@@ -58,6 +58,7 @@ def convert_lead(lead_name, create_company=0, company_name=None, create_deal=0, 
 			deal = frappe.get_doc({
 				"doctype": "DoubleT Deal",
 				"deal_title": deal_title,
+				"deal_type": "COMPANY" if company else "PERSONAL",
 				"stage": stage,
 				"amount": 0 if amount is None or amount == "" else amount,
 				"source_lead": lead.name,
