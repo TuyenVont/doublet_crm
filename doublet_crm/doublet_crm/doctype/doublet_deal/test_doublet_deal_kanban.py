@@ -13,6 +13,10 @@ class TestDoubleTDealKanban(FrappeTestCase):
 		self.won_stage = self.make_stage(f"Second-{unique}", "WON", 20)
 		self.lost_stage = self.make_stage(f"Third-{unique}", "LOST", 10)
 		self.board = sync_deal_kanban_board()
+		self.contact = frappe.get_doc({
+			"doctype": "DoubleT Contact",
+        		"first_name": f"Kanban Contact {unique}",
+		}).insert()
 
 	def make_stage(self, name, stage_type, sort_order):
 		return frappe.get_doc({
@@ -28,6 +32,8 @@ class TestDoubleTDealKanban(FrappeTestCase):
 		deal = frappe.get_doc({
 			"doctype": "DoubleT Deal",
 			"deal_title": self.title,
+			"deal_type": "PERSONAL",
+                	"contact": self.contact.name,
 			"stage": stage,
 			**values,
 		}).insert()

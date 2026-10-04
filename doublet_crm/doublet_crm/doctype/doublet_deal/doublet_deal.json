@@ -44,21 +44,25 @@
    "fieldname": "deal_type",
    "fieldtype": "Select",
    "label": "Deal Type",
-   "options": "PERSONAL\nCOMPANY",
+   "options": "\nPERSONAL\nCOMPANY",
    "reqd": 1
   },
   {
+   "depends_on": "eval:doc.deal_type=='PERSONAL'",
    "fieldname": "contact",
    "fieldtype": "Link",
    "label": "Contact",
+   "mandatory_depends_on": "eval:doc.deal_type=='PERSONAL'",
    "options": "DoubleT Contact",
    "permlevel": 1
   },
   {
+   "depends_on": "eval:doc.deal_type=='COMPANY'",
    "fieldname": "company",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Company",
+   "mandatory_depends_on": "eval:doc.deal_type=='COMPANY'",
    "options": "DoubleT Company",
    "permlevel": 1
   },
