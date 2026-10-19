@@ -64,6 +64,11 @@ app_license = "mit"
 # 	"Role": "home_page"
 # }
 
+website_route_rules = [
+	{"from_route": "/doublet-crm/<path:app_path>", "to_route": "doublet_crm"},
+	{"from_route": "/doublet-crm", "to_route": "doublet_crm"},
+]
+
 # Generators
 # ----------
 
