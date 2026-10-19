@@ -1,7 +1,8 @@
+
 import { createRouter, createWebHistory } from 'vue-router'
 
 import DealsView from '@/pages/DealsView.vue'
-const FrappeDeal = () => import('@/pages/FrappeDeal.vue')
+const DealDetailView = () => import('@/pages/DealDetailView.vue')
 import LeadsView from '@/pages/LeadsView.vue'
 const FrappeLead = () => import('@/pages/FrappeLead.vue')
 import ContactsView from '@/pages/ContactsView.vue'
@@ -21,7 +22,7 @@ const routes = [
   {
     path: '/deals/:dealId',
     name: 'DealDetail',
-    component: FrappeDeal,
+    component: DealDetailView,
     props: true,
   },
   {
