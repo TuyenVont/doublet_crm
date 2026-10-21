@@ -25,7 +25,7 @@
     <ListRows
       v-slot="{ idx, column, item, row }"
       :rows="rows"
-      doctype="DoubleT Deal"
+      :doctype="doctype"
     >
       <ListRowItem :item="item" :align="column.align" class="overflow-hidden">
         <template #prefix>
@@ -50,12 +50,13 @@
               <div>{{ item.timeAgo }}</div>
             </Tooltip>
           </div>
-          <div
-            v-else-if="label"
-            class="truncate text-base"
-          >
-            {{ label }}
-          </div>
+          <button
+            v-else-if="label && column.key === columns[0]?.key && detailRoute"
+            type="button"
+            class="truncate text-left text-base hover:underline"
+            @click.stop="openDetail(row.name)"
+          >{{ label }}</button>
+          <div v-else-if="label" class="truncate text-base">{{ label }}</div>
         </template>
       </ListRowItem>
     </ListRows>
@@ -81,6 +82,12 @@
 </template>
 
 <script setup>
+import { useRouter } from 'vue-router'
+const router = useRouter()
+function openDetail(name) {
+  if (props.detailRoute && name) router.push({ name: props.detailRoute, params: { [props.detailParam]: name } })
+}
+
 import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import ListRows from '@/components/ListViews/ListRows.vue'
 import {
@@ -95,7 +102,10 @@ import {
   Button,
 } from 'frappe-ui'
 
-defineProps({
+const props = defineProps({
+  doctype: { type: String, default: 'DoubleT Deal' },
+  detailRoute: { type: String, default: '' },
+  detailParam: { type: String, default: 'id' },
   rows: { type: Array, required: true },
   columns: { type: Array, required: true },
   rowCount: { type: Number, default: 0 },

@@ -65,6 +65,9 @@
 
       <DealsListView
         v-else-if="filteredRows.length"
+        doctype="DoubleT Company"
+        detailRoute="CompanyDetail"
+        detailParam="companyId"
         :rows="filteredRows"
         :columns="columns"
         :rowCount="filteredRows.length"
@@ -89,6 +92,8 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
+const router = useRouter()
 
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
@@ -170,6 +175,6 @@ const filteredRows = computed(() => {
 })
 
 function openDeskCreate() {
-  window.open('/app/doublet-company/new', '_blank')
+  router.push({ name: 'CompanyCreate' })
 }
 </script>

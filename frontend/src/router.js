@@ -6,7 +6,9 @@ const DealDetailView = () => import('@/pages/DealDetailView.vue')
 import LeadsView from '@/pages/LeadsView.vue'
 const FrappeLead = () => import('@/pages/FrappeLead.vue')
 import ContactsView from '@/pages/ContactsView.vue'
+const ContactDetailView = () => import('@/pages/ContactDetailView.vue')
 import CompaniesView from '@/pages/CompaniesView.vue'
+const CompanyDetailView = () => import('@/pages/CompanyDetailView.vue')
 import PlaceholderView from '@/pages/PlaceholderView.vue'
 
 const routes = [
@@ -51,9 +53,29 @@ const routes = [
     component: ContactsView,
   },
   {
+    path: '/contacts/new',
+    name: 'ContactCreate',
+    component: ContactDetailView,
+  },
+  {
+    path: '/contacts/:contactId',
+    name: 'ContactDetail',
+    component: ContactDetailView,
+  },
+  {
     path: '/companies',
     name: 'Companies',
     component: CompaniesView,
+  },
+  {
+    path: '/companies/new',
+    name: 'CompanyCreate',
+    component: CompanyDetailView,
+  },
+  {
+    path: '/companies/:companyId',
+    name: 'CompanyDetail',
+    component: CompanyDetailView,
   },
   {
     path: '/notes',

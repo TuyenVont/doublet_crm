@@ -61,8 +61,8 @@ export function useDoubleTCompanies() {
         company.website || '-',
 
       company_owner: {
-        label: company.company_owner || company.owner || 'Unassigned',
-        full_name: company.company_owner || company.owner || 'Unassigned',
+        label: company.company_owner || 'Unassigned',
+        full_name: company.company_owner || 'Unassigned',
       },
 
       modified: {
