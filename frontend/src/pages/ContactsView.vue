@@ -1,8 +1,12 @@
 <template>
-  <div class="flex h-full flex-col overflow-hidden bg-surface-white">
+  <div
+    class="flex h-full flex-col overflow-hidden bg-surface-white"
+  >
     <LayoutHeader>
       <template #left-header>
-        <ViewBreadcrumbs routeName="Contacts" />
+        <ViewBreadcrumbs
+          routeName="Contacts"
+        />
       </template>
 
       <template #right-header>
@@ -10,7 +14,7 @@
           variant="solid"
           :label="__('Create')"
           iconLeft="plus"
-          @click="openDeskCreate"
+          @click="openCreate"
         />
       </template>
     </LayoutHeader>
@@ -18,7 +22,9 @@
     <div
       class="flex items-center justify-between gap-2 border-b border-outline-gray-2/60 bg-surface-white px-5 py-3"
     >
-      <div class="flex flex-1 items-center gap-2">
+      <div
+        class="flex flex-1 items-center gap-2"
+      >
         <div class="w-64">
           <TextInput
             v-model="searchQuery"
@@ -26,20 +32,36 @@
             :placeholder="__('Search contacts...')"
           >
             <template #prefix>
-              <FeatherIcon name="search" class="h-4 w-4 text-ink-gray-4" />
+              <FeatherIcon
+                name="search"
+                class="h-4 w-4 text-ink-gray-4"
+              />
             </template>
           </TextInput>
         </div>
 
-        <Dropdown :options="sourceDropdownOptions">
-          <template #default="{ open }">
+        <Dropdown
+          :options="sourceDropdownOptions"
+        >
+          <template
+            #default="{ open }"
+          >
             <Button
               variant="subtle"
-              :label="selectedSource || __('All Sources')"
-              :iconRight="open ? 'chevron-up' : 'chevron-down'"
+              :label="
+                selectedSource ||
+                __('All Sources')
+              "
+              :iconRight="
+                open
+                  ? 'chevron-up'
+                  : 'chevron-down'
+              "
             >
               <template #prefix>
-                <FilterIcon class="h-4 w-4" />
+                <FilterIcon
+                  class="h-4 w-4"
+                />
               </template>
             </Button>
           </template>
@@ -49,25 +71,38 @@
       <Button
         :tooltip="__('Refresh')"
         :icon="RefreshIcon"
-        :loading="contactsResource.loading"
+        :loading="loading"
         @click="reload"
       />
     </div>
 
-    <div class="relative flex-1 overflow-hidden">
+    <div
+      class="relative flex-1 overflow-hidden"
+    >
       <div
-        v-if="contactsResource.loading && !filteredRows.length"
+        v-if="
+          loading &&
+          !rows.length
+        "
         class="flex h-64 items-center justify-center text-sm text-ink-gray-5"
       >
-        <LoadingIndicator class="mr-2 size-5" />
-        {{ __('Loading contacts...') }}
+        <LoadingIndicator
+          class="mr-2 size-5"
+        />
+
+        {{
+          __('Loading contacts...')
+        }}
       </div>
 
       <DealsListView
-        v-else-if="filteredRows.length"
-        :rows="filteredRows"
+        v-else-if="rows.length"
+        doctype="DoubleT Contact"
+        detailRoute="ContactDetail"
+        detailParam="contactId"
+        :rows="rows"
         :columns="columns"
-        :rowCount="filteredRows.length"
+        :rowCount="rows.length"
         :totalCount="totalCount"
         :options="{
           selectable: true,
@@ -80,15 +115,22 @@
       <EmptyState
         v-else
         name="Contacts"
-        :title="__('No Contacts Found')"
-        :description="__('No DoubleT contacts match the selected criteria.')"
+        :title="
+          __('No Contacts Found')
+        "
+        :description="
+          __(
+            'No DoubleT contacts match the selected criteria.'
+          )
+        "
       />
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
@@ -108,68 +150,49 @@ import {
   FeatherIcon,
 } from 'frappe-ui'
 
+const router = useRouter()
+
 const {
-  contactsResource,
+  loading,
+
+  searchQuery,
+  selectedSource,
+  sourceOptions,
+
   columns,
   rows,
+
   totalCount,
+
   reload,
   loadMore,
 } = useDoubleTContacts()
 
-const searchQuery = ref('')
-const selectedSource = ref('')
+const sourceDropdownOptions =
+  computed(() => [
+    {
+      label: __('All Sources'),
 
-const availableSources = computed(() => [
-  ...new Set(
-    rows.value
-      .map((row) => row.source)
-      .filter((value) => value && value !== '-')
-  ),
-])
-
-const sourceDropdownOptions = computed(() => [
-  {
-    label: __('All Sources'),
-    onClick: () => {
-      selectedSource.value = ''
+      onClick: () => {
+        selectedSource.value = ''
+      },
     },
-  },
 
-  ...availableSources.value.map((source) => ({
-    label: source,
-    onClick: () => {
-      selectedSource.value = source
-    },
-  })),
-])
+    ...sourceOptions.value.map(
+      (source) => ({
+        label: source,
 
-const filteredRows = computed(() => {
-  let result = rows.value
+        onClick: () => {
+          selectedSource.value =
+            source
+        },
+      })
+    ),
+  ])
 
-  if (selectedSource.value) {
-    result = result.filter(
-      (row) => row.source === selectedSource.value
-    )
-  }
-
-  if (searchQuery.value.trim()) {
-    const q = searchQuery.value.trim().toLowerCase()
-
-    result = result.filter((row) => {
-      return (
-        String(row.full_name || '').toLowerCase().includes(q) ||
-        String(row.company || '').toLowerCase().includes(q) ||
-        String(row.email || '').toLowerCase().includes(q) ||
-        String(row.phone || '').toLowerCase().includes(q)
-      )
-    })
-  }
-
-  return result
-})
-
-function openDeskCreate() {
-  window.open('/app/doublet-contact/new', '_blank')
+function openCreate() {
+  router.push({
+    name: 'ContactCreate',
+  })
 }
 </script>
