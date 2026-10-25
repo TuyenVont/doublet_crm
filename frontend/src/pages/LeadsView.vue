@@ -11,7 +11,7 @@
           variant="solid"
           :label="__('Create')"
           iconLeft="plus"
-          @click="openDeskCreate"
+          @click="showCreateLead = true"
         />
       </template>
     </LayoutHeader>
@@ -126,6 +126,10 @@
         "
       />
     </div>
+        <LeadCreateModal
+      v-model="showCreateLead"
+      @created="handleLeadCreated"
+    />
 
   </div>
 </template>
@@ -135,6 +139,7 @@ import { computed, ref } from 'vue'
 
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
+import LeadCreateModal from '@/components/Modals/LeadCreateModal.vue'
 import LeadsListView from '@/components/ListViews/FrappeLeadsListView.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 
@@ -163,6 +168,7 @@ const {
 const searchQuery = ref('')
 const selectedStatus = ref('')
 const selectedSource = ref('')
+const showCreateLead = ref(false)
 
 const statuses = [
   'NEW',
@@ -275,10 +281,7 @@ const filteredRows = computed(() => {
   return result
 })
 
-function openDeskCreate() {
-  window.open(
-    '/app/doublet-lead/new',
-    '_blank'
-  )
+async function handleLeadCreated() {
+  await reload()
 }
 </script>

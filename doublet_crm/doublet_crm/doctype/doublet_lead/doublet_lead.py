@@ -6,7 +6,108 @@ from frappe.utils import cint, cstr, now_datetime
 
 class DoubleTLead(Document):
 	pass
+@frappe.whitelist()
+def check_duplicate_lead(email=None, phone=None):
+	email = cstr(email).strip()
+	phone = cstr(phone).strip()
 
+	matches = {}
+
+	def add_matches(doctype, fieldname, value, fields):
+		if not value:
+			return
+
+		rows = frappe.get_list(
+			doctype,
+			filters={
+				fieldname: value,
+			},
+			fields=fields,
+			limit_page_length=10,
+		)
+
+		for row in rows:
+			key = f"{doctype}:{row.name}"
+
+			if key not in matches:
+				full_name = " ".join(
+					filter(
+						None,
+						[
+							row.get("first_name"),
+							row.get("last_name"),
+						],
+					)
+				)
+
+				matches[key] = {
+					"doctype": doctype,
+					"name": row.name,
+					"full_name": full_name,
+					"email": row.get("email"),
+					"phone": row.get("phone"),
+					"status": row.get("status"),
+					"company": (
+						row.get("company_name")
+						or row.get("company")
+					),
+					"matched_by": [],
+				}
+
+			if fieldname not in matches[key]["matched_by"]:
+				matches[key]["matched_by"].append(fieldname)
+
+	lead_fields = [
+		"name",
+		"first_name",
+		"last_name",
+		"email",
+		"phone",
+		"company_name",
+		"status",
+	]
+
+	contact_fields = [
+		"name",
+		"first_name",
+		"last_name",
+		"email",
+		"phone",
+		"company",
+	]
+
+	add_matches(
+		"DoubleT Lead",
+		"email",
+		email,
+		lead_fields,
+	)
+
+	add_matches(
+		"DoubleT Lead",
+		"phone",
+		phone,
+		lead_fields,
+	)
+
+	add_matches(
+		"DoubleT Contact",
+		"email",
+		email,
+		contact_fields,
+	)
+
+	add_matches(
+		"DoubleT Contact",
+		"phone",
+		phone,
+		contact_fields,
+	)
+
+	return {
+		"has_duplicates": bool(matches),
+		"matches": list(matches.values()),
+	}
 
 @frappe.whitelist(methods=["POST"])
 def convert_lead(lead_name, create_company=0, company_name=None, create_deal=0, deal_title=None, stage=None, amount=0):
