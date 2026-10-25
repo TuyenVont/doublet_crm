@@ -35,10 +35,15 @@
         </template>
       </Dropdown>
       <Button
-        :label="__('Convert to Deal')"
-        variant="solid"
-        @click="showConvertToDealModal = true"
-      />
+  :label="
+    isConverted
+      ? __('Converted')
+      : __('Convert to Deal')
+  "
+  variant="solid"
+  :disabled="isConverted"
+  @click="openConvertToDeal"
+/>
     </template>
   </LayoutHeader>
   <div v-if="doc.name" class="flex h-full overflow-hidden">
@@ -323,6 +328,12 @@ const {
 const canDelete = computed(() => permissions.data?.permissions?.delete || false)
 
 const doc = computed(() => document.doc || {})
+const isConverted = computed(() => {
+  return (
+    doc.value?.status === 'CONVERTED' ||
+    Boolean(doc.value?.converted_contact)
+  )
+})
 
 onMounted(async () => {
   if (document.doc) await triggerOnRender()
@@ -505,7 +516,13 @@ function openEmailBox() {
   }
   nextTick(() => (activities.value.emailBox.show = true))
 }
+function openConvertToDeal() {
+  if (isConverted.value) {
+    return
+  }
 
+  showConvertToDealModal.value = true
+}
 function statusLabel(status) {
   if (isTranslatable('CRM Lead Status')) return __(status)
   return status
