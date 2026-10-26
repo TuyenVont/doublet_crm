@@ -166,10 +166,11 @@
             </div>
 
             <div class="grid gap-x-8 gap-y-5 p-5 sm:grid-cols-2">
-              <InfoField label="Deal Title" :value="deal.deal_title" />
-              <InfoField label="Stage" :value="deal.stage" />
-              <InfoField label="Deal Type" :value="deal.deal_type" />
-              <InfoField label="Amount" :value="displayAmount" />
+<InfoField label="Deal Title" :value="deal.deal_title" />
+<InfoField label="Stage" :value="deal.stage" />
+<InfoField label="Deal Type" :value="deal.deal_type" />
+<InfoField label="Source" :value="deal.source" />
+<InfoField label="Amount" :value="displayAmount" />
 
               <InfoField
                 label="Expected Close Date"

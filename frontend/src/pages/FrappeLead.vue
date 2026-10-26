@@ -3,20 +3,35 @@
     <template #left-header>
       <Breadcrumbs :items="breadcrumbs">
         <template #prefix="{ item }">
-          <Icon v-if="item.icon" :icon="item.icon" class="mr-2 h-4" />
+          <Icon
+            v-if="item.icon"
+            :icon="item.icon"
+            class="mr-2 h-4"
+          />
         </template>
       </Breadcrumbs>
     </template>
-    <template v-if="!errorTitle" #right-header>
+
+    <template
+      v-if="!errorTitle"
+      #right-header
+    >
       <CustomActions
         v-if="document._actions?.length"
         :actions="document._actions"
       />
+
       <CustomActions
         v-if="document.actions?.length"
         :actions="document.actions"
       />
-      <AssignTo v-model="assignees.data" doctype="DoubleT Lead" :docname="leadId" />
+
+      <AssignTo
+        v-model="assignees.data"
+        doctype="DoubleT Lead"
+        :docname="leadId"
+      />
+
       <Dropdown
         v-if="doc && document.statuses"
         :options="statuses"
@@ -26,31 +41,54 @@
           <Button
             v-if="doc.status"
             :label="statusLabel(doc.status)"
-            :iconRight="open ? 'chevron-up' : 'chevron-down'"
+            :iconRight="
+              open
+                ? 'chevron-up'
+                : 'chevron-down'
+            "
           >
             <template #prefix>
-              <IndicatorIcon :class="getLeadStatus(doc.status).color" />
+              <IndicatorIcon
+                :class="
+                  getLeadStatus(doc.status).color
+                "
+              />
             </template>
           </Button>
         </template>
       </Dropdown>
+
       <Button
-  :label="
-    isConverted
-      ? __('Converted')
-      : __('Convert to Deal')
-  "
-  variant="solid"
-  :disabled="isConverted"
-  @click="openConvertToDeal"
-/>
+        :label="
+          isConverted
+            ? __('Converted')
+            : __('Convert to Deal')
+        "
+        variant="solid"
+        :disabled="isConverted"
+        @click="openConvertToDeal"
+      />
     </template>
   </LayoutHeader>
-  <div v-if="doc.name" class="flex h-full overflow-hidden">
+
+  <!-- MAIN CONTENT -->
+  <div
+    v-if="doc.name"
+    class="flex h-full overflow-hidden"
+  >
+    <!-- ACTIVITY AREA -->
     <Tabs
       v-model="tabIndex"
       :tabs="tabs"
-      class="flex flex-1 overflow-hidden flex-col [&_[role='tab']]:px-0 [&_[role='tab']]:shrink-0 [&_[role='tablist']]:px-5 [&_[role='tablist']::-webkit-scrollbar]:h-0 [&_[role='tablist']]:min-h-[45px] [&_[role='tablist']]:gap-7.5 [&_[role='tabpanel']:not([hidden])]:flex [&_[role='tabpanel']:not([hidden])]:grow"
+      class="flex flex-1 overflow-hidden flex-col
+             [&_[role='tab']]:px-0
+             [&_[role='tab']]:shrink-0
+             [&_[role='tablist']]:px-5
+             [&_[role='tablist']::-webkit-scrollbar]:h-0
+             [&_[role='tablist']]:min-h-[45px]
+             [&_[role='tablist']]:gap-7.5
+             [&_[role='tabpanel']:not([hidden])]:flex
+             [&_[role='tabpanel']:not([hidden])]:grow"
     >
       <template #tab-panel>
         <Activities
@@ -65,19 +103,38 @@
         />
       </template>
     </Tabs>
-    <Resizer class="flex flex-col justify-between border-l" side="right">
+
+    <!-- RIGHT SIDEBAR -->
+    <Resizer
+      class="flex flex-col justify-between border-l"
+      side="right"
+    >
+      <!-- LEAD ID -->
       <div
-        class="flex h-[45px] cursor-copy items-center border-b px-5 py-2.5 text-lg-medium text-ink-gray-9"
+        class="flex h-[45px] cursor-copy items-center border-b
+               px-5 py-2.5 text-lg-medium text-ink-gray-9"
         @click="copyToClipboard(leadId)"
       >
         {{ __(leadId) }}
       </div>
+
+      <!-- PROFILE HEADER -->
       <FileUploader
         :validateFile="validateIsImageFile"
-        @success="(file) => updateField('image', file.file_url)"
+        @success="
+          (file) =>
+            updateField(
+              'image',
+              file.file_url
+            )
+        "
       >
         <template #default="{ openFileSelector }">
-          <div class="flex items-center justify-start gap-5 border-b p-5">
+          <div
+            class="flex items-center justify-start
+                   gap-5 border-b p-5"
+          >
+            <!-- AVATAR -->
             <div class="group relative size-12">
               <Avatar
                 size="3xl"
@@ -85,89 +142,143 @@
                 :label="title"
                 :image="doc.image"
               />
+
               <component
-                :is="doc.image ? Dropdown : 'div'"
+                :is="
+                  doc.image
+                    ? Dropdown
+                    : 'div'
+                "
                 v-bind="
                   doc.image
                     ? {
                         options: [
                           {
                             icon: 'upload',
-                            label: doc.image
-                              ? __('Change Image')
-                              : __('Upload Image'),
-                            onClick: openFileSelector,
+                            label:
+                              doc.image
+                                ? __('Change Image')
+                                : __('Upload Image'),
+                            onClick:
+                              openFileSelector,
                           },
                           {
                             icon: 'trash-2',
-                            label: __('Remove Image'),
-                            onClick: () => updateField('image', ''),
+                            label:
+                              __('Remove Image'),
+                            onClick:
+                              () =>
+                                updateField(
+                                  'image',
+                                  ''
+                                ),
                           },
                         ],
                       }
-                    : { onClick: openFileSelector }
+                    : {
+                        onClick:
+                          openFileSelector,
+                      }
                 "
                 class="!absolute bottom-0 left-0 right-0"
               >
                 <div
-                  class="z-1 absolute bottom-0.5 left-0 right-0.5 flex h-9 cursor-pointer items-center justify-center rounded-b-full bg-black bg-opacity-40 pt-3 opacity-0 duration-300 ease-in-out group-hover:opacity-100"
+                  class="z-1 absolute bottom-0.5 left-0 right-0.5
+                         flex h-9 cursor-pointer items-center
+                         justify-center rounded-b-full
+                         bg-black bg-opacity-40 pt-3
+                         opacity-0 duration-300 ease-in-out
+                         group-hover:opacity-100"
                   style="
                     -webkit-clip-path: inset(12px 0 0 0);
                     clip-path: inset(12px 0 0 0);
                   "
                 >
-                  <CameraIcon class="size-4 cursor-pointer text-white" />
+                  <CameraIcon
+                    class="size-4 cursor-pointer text-white"
+                  />
                 </div>
               </component>
             </div>
-            <div class="flex flex-col gap-2.5 truncate">
-              <Tooltip :text="doc.lead_name || __('Set First Name')">
-                <div class="truncate text-3xl-medium text-ink-gray-9">
+
+            <!-- NAME + QUICK ACTIONS -->
+            <div
+              class="flex flex-col gap-2.5 truncate"
+            >
+              <Tooltip :text="title">
+                <div
+                  class="truncate text-3xl-medium
+                         text-ink-gray-9"
+                >
                   {{ title }}
                 </div>
               </Tooltip>
+
               <div class="flex gap-1.5">
+                <!-- CALL -->
                 <Button
                   v-if="callEnabled"
                   :tooltip="__('Make a Call')"
                   :icon="PhoneIcon"
                   @click="
                     () =>
+                      doc.phone ||
                       doc.mobile_no
-                        ? makeCall(doc.mobile_no)
+                        ? makeCall(
+                            doc.phone ||
+                              doc.mobile_no
+                          )
                         : toast.error(
-                            __('Please set a mobile number to make calls'),
+                            __(
+                              'Please set a phone number to make calls'
+                            )
                           )
                   "
                 />
 
+                <!-- EMAIL -->
                 <Button
-                  :tooltip="__('Send an Email')"
+                  :tooltip="
+                    __('Send an Email')
+                  "
                   :icon="Email2Icon"
                   @click="
                     doc.email
                       ? openEmailBox()
                       : toast.error(
-                          __('Please set an email address to send emails'),
+                          __(
+                            'Please set an email address to send emails'
+                          )
                         )
                   "
                 />
+
+                <!-- WEBSITE -->
                 <Button
-                  :tooltip="__('Go to Website')"
+                  v-if="doc.website"
+                  :tooltip="
+                    __('Go to Website')
+                  "
                   :icon="LinkIcon"
                   @click="
-                    doc.website
-                      ? openWebsite(doc.website)
-                      : toast.error(__('Please set a website to visit'))
+                    openWebsite(
+                      doc.website
+                    )
                   "
                 />
 
+                <!-- ATTACHMENT -->
                 <Button
-                  :tooltip="__('Attach a File')"
+                  :tooltip="
+                    __('Attach a File')
+                  "
                   :icon="AttachmentIcon"
-                  @click="showFilesUploader = true"
+                  @click="
+                    showFilesUploader = true
+                  "
                 />
 
+                <!-- DELETE -->
                 <Button
                   v-if="canDelete"
                   :tooltip="__('Delete')"
@@ -177,41 +288,50 @@
                   @click="deleteLead"
                 />
               </div>
-              <ErrorMessage :message="__(error)" />
+
+              <ErrorMessage
+                :message="__(error)"
+              />
             </div>
           </div>
         </template>
       </FileUploader>
+
+      <!-- SLA -->
       <SLASection
         v-if="doc.sla_status"
         v-model="doc"
         @updateField="updateField"
       />
+
+      <!-- NEW DOUBLET LEAD INFORMATION -->
       <div
-        v-if="sections.data"
-        class="flex flex-1 flex-col justify-between overflow-hidden"
+        class="flex flex-1 flex-col
+               overflow-hidden"
       >
-        <SidePanelLayout
-          :sections="sections.data"
-          doctype="DoubleT Lead"
-          :docname="leadId"
-          @reload="sections.reload"
-          @beforeFieldChange="beforeStatusChange"
-          @afterFieldChange="reloadResources"
+        <DoubleTLeadInfoPanel
+          :lead="doc"
         />
       </div>
     </Resizer>
   </div>
+
+  <!-- ERROR -->
   <ErrorPage
     v-else-if="errorTitle"
     :errorTitle="errorTitle"
     :errorMessage="errorMessage"
   />
-  <ConvertToDealModal
-    v-if="showConvertToDealModal"
+
+  <!-- CONVERT MODAL -->
+  <DoubleTConvertToDealModal
+    v-if="doc?.name"
     v-model="showConvertToDealModal"
     :lead="doc"
+    @converted="handleConverted"
   />
+
+  <!-- FILE UPLOADER -->
   <FilesUploader
     v-model="showFilesUploader"
     doctype="DoubleT Lead"
@@ -223,6 +343,8 @@
       }
     "
   />
+
+  <!-- DELETE MODAL -->
   <DeleteLinkedDocModal
     v-if="showDeleteLinkedDocModal"
     v-model="showDeleteLinkedDocModal"
@@ -230,6 +352,8 @@
     :docname="leadId"
     name="Leads"
   />
+
+  <!-- LOST REASON -->
   <LostReasonModal
     v-if="showLostReasonModal"
     v-model="showLostReasonModal"
@@ -237,11 +361,38 @@
     :document="document"
   />
 </template>
+
 <script setup>
+import {
+  ref,
+  computed,
+  watch,
+  nextTick,
+  onMounted,
+} from 'vue'
+
+import {
+  useRouter,
+  useRoute,
+} from 'vue-router'
+
+import {
+  FileUploader,
+  Dropdown,
+  Tooltip,
+  Avatar,
+  Tabs,
+  Breadcrumbs,
+  call,
+  usePageMeta,
+  toast,
+} from 'frappe-ui'
+
 import DeleteLinkedDocModal from '@/components/DeleteLinkedDocModal.vue'
 import ErrorPage from '@/components/ErrorPage.vue'
 import Icon from '@/components/Icon.vue'
 import Resizer from '@/components/Resizer.vue'
+
 import ActivityIcon from '@/components/Icons/ActivityIcon.vue'
 import EmailIcon from '@/components/Icons/EmailIcon.vue'
 import Email2Icon from '@/components/Icons/Email2Icon.vue'
@@ -255,15 +406,19 @@ import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import CameraIcon from '@/components/Icons/CameraIcon.vue'
 import LinkIcon from '@/components/Icons/LinkIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
+
 import LostReasonModal from '@/components/Modals/LostReasonModal.vue'
+import DoubleTConvertToDealModal from '@/components/Modals/DoubleTConvertToDealModal.vue'
+
+import DoubleTLeadInfoPanel from '@/components/Lead/DoubleTLeadInfoPanel.vue'
+
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import AssignTo from '@/components/AssignTo.vue'
 import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
-import SidePanelLayout from '@/components/SidePanelLayout.vue'
 import SLASection from '@/components/SLASection.vue'
 import CustomActions from '@/components/CustomActions.vue'
-import ConvertToDealModal from '@/components/Modals/ConvertToDealModal.vue'
+
 import {
   openWebsite,
   setupCustomizations,
@@ -271,6 +426,7 @@ import {
   validateIsImageFile,
   isTranslatable,
 } from '@/utils'
+
 import { getView } from '@/utils/view'
 import { getSettings } from '@/stores/settings'
 import { globalStore } from '@/stores/global'
@@ -279,41 +435,53 @@ import { getMeta } from '@/stores/meta'
 import { useDocument } from '@/data/document'
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
-import {
-  createResource,
-  FileUploader,
-  Dropdown,
-  Tooltip,
-  Avatar,
-  Tabs,
-  Breadcrumbs,
-  call,
-  usePageMeta,
-  toast,
-} from 'frappe-ui'
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
 
+
 const { brand } = getSettings()
-const { $dialog, $socket, makeCall } = globalStore()
-const { statusOptions, getLeadStatus } = statusesStore()
-const { doctypeMeta } = getMeta('DoubleT Lead')
+
+const {
+  $dialog,
+  $socket,
+  makeCall,
+} = globalStore()
+
+const {
+  statusOptions,
+  getLeadStatus,
+} = statusesStore()
+
+const {
+  doctypeMeta,
+} = getMeta('DoubleT Lead')
 
 const route = useRoute()
 const router = useRouter()
 
+
 const props = defineProps({
-  leadId: { type: String, required: true },
+  leadId: {
+    type: String,
+    required: true,
+  },
 })
+
 
 const reload = ref(false)
 const activities = ref(null)
+
 const errorTitle = ref('')
 const errorMessage = ref('')
-const showDeleteLinkedDocModal = ref(false)
-const showConvertToDealModal = ref(false)
-const showFilesUploader = ref(false)
+
+const showDeleteLinkedDocModal =
+  ref(false)
+
+const showConvertToDealModal =
+  ref(false)
+
+const showFilesUploader =
+  ref(false)
+
 
 const {
   triggerOnChange,
@@ -323,71 +491,164 @@ const {
   document,
   scripts,
   error,
-} = useDocument('DoubleT Lead', props.leadId)
+} = useDocument(
+  'DoubleT Lead',
+  props.leadId
+)
 
-const canDelete = computed(() => permissions.data?.permissions?.delete || false)
 
-const doc = computed(() => document.doc || {})
-const isConverted = computed(() => {
+const canDelete = computed(() => {
   return (
-    doc.value?.status === 'CONVERTED' ||
-    Boolean(doc.value?.converted_contact)
+    permissions.data
+      ?.permissions
+      ?.delete ||
+    false
   )
 })
 
-onMounted(async () => {
-  if (document.doc) await triggerOnRender()
+
+const doc = computed(() => {
+  return document.doc || {}
 })
 
-watch(error, (err) => {
-  if (err) {
-    errorTitle.value = __(
-      err.exc_type == 'DoesNotExistError'
-        ? 'Document not found'
-        : 'Error occurred',
+
+const isConverted = computed(() => {
+  return (
+    doc.value?.status ===
+      'CONVERTED' ||
+    Boolean(
+      doc.value?.converted_contact
     )
-    errorMessage.value = __(err.messages?.[0] || 'An error occurred')
-  } else {
-    errorTitle.value = ''
-    errorMessage.value = ''
+  )
+})
+
+
+/* --------------------------------
+ * INITIAL RENDER
+ * -------------------------------- */
+
+onMounted(async () => {
+  if (document.doc) {
+    await triggerOnRender()
   }
 })
 
+
+/* --------------------------------
+ * DOCUMENT ERROR
+ * -------------------------------- */
+
 watch(
-  () => document.doc,
-  async (_doc) => {
-    if (scripts.data?.length) {
-      let s = await setupCustomizations(scripts.data, {
-        doc: _doc,
-        $dialog,
-        $socket,
-        router,
-        toast,
-        updateField,
-        createToast: toast.create,
-        deleteDoc: deleteLead,
-        call,
-      })
-      document._actions = s.actions || []
-      document._statuses = s.statuses || []
+  error,
+  (err) => {
+    if (err) {
+      errorTitle.value = __(
+        err.exc_type ===
+          'DoesNotExistError'
+          ? 'Document not found'
+          : 'Error occurred'
+      )
+
+      errorMessage.value = __(
+        err.messages?.[0] ||
+          'An error occurred'
+      )
+    } else {
+      errorTitle.value = ''
+      errorMessage.value = ''
     }
-  },
-  { once: true },
+  }
 )
 
-const breadcrumbs = computed(() => {
-  let items = [{ label: __('Leads'), route: { name: 'Leads' } }]
 
-  if (route.query.view || route.query.viewType) {
-    let view = getView(route.query.view, route.query.viewType, 'DoubleT Lead')
+/* --------------------------------
+ * CUSTOM SCRIPTS
+ * -------------------------------- */
+
+watch(
+  () => document.doc,
+
+  async (_doc) => {
+    if (scripts.data?.length) {
+      const s =
+        await setupCustomizations(
+          scripts.data,
+          {
+            doc: _doc,
+
+            $dialog,
+            $socket,
+
+            router,
+            toast,
+
+            updateField,
+
+            createToast:
+              toast.create,
+
+            deleteDoc:
+              deleteLead,
+
+            call,
+          }
+        )
+
+      document._actions =
+        s.actions || []
+
+      document._statuses =
+        s.statuses || []
+    }
+  },
+
+  {
+    once: true,
+  }
+)
+
+
+/* --------------------------------
+ * BREADCRUMBS
+ * -------------------------------- */
+
+const breadcrumbs = computed(() => {
+  const items = [
+    {
+      label: __('Leads'),
+      route: {
+        name: 'Leads',
+      },
+    },
+  ]
+
+  if (
+    route.query.view ||
+    route.query.viewType
+  ) {
+    const view = getView(
+      route.query.view,
+      route.query.viewType,
+      'DoubleT Lead'
+    )
+
     if (view) {
       items.push({
         label: __(view.label),
         icon: view.icon,
+
         route: {
           name: 'Leads',
-          params: { viewType: route.query.viewType },
-          query: { view: route.query.view },
+
+          params: {
+            viewType:
+              route.query.viewType,
+          },
+
+          query: {
+            view:
+              route.query.view,
+          },
         },
       })
     }
@@ -395,178 +656,452 @@ const breadcrumbs = computed(() => {
 
   items.push({
     label: title.value,
-    route: { name: 'Lead', params: { leadId: props.leadId } },
+
+    route: {
+      name: 'Lead',
+
+      params: {
+        leadId:
+          props.leadId,
+      },
+    },
   })
+
   return items
 })
 
+
+/* --------------------------------
+ * TITLE
+ * -------------------------------- */
+
 const title = computed(() => {
-  let t = doctypeMeta.value?.title_field || 'name'
-  return doc.value?.[t] || props.leadId
+  const firstName =
+    doc.value?.first_name || ''
+
+  const lastName =
+    doc.value?.last_name || ''
+
+  const fullName =
+    [
+      firstName,
+      lastName,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+
+  if (fullName) {
+    return fullName
+  }
+
+  const titleField =
+    doctypeMeta.value
+      ?.title_field
+
+  if (
+    titleField &&
+    doc.value?.[titleField]
+  ) {
+    return doc.value[
+      titleField
+    ]
+  }
+
+  return props.leadId
 })
+
+
+/* --------------------------------
+ * STATUS
+ * -------------------------------- */
 
 const statuses = computed(() => {
-  let customStatuses = document.statuses?.length
-    ? document.statuses
-    : document._statuses || []
-  return statusOptions('lead', customStatuses, triggerStatusChange)
+  const customStatuses =
+    document.statuses?.length
+      ? document.statuses
+      : document._statuses ||
+        []
+
+  return statusOptions(
+    'lead',
+    customStatuses,
+    triggerStatusChange
+  )
 })
+
+
+/* --------------------------------
+ * PAGE META
+ * -------------------------------- */
 
 usePageMeta(() => {
-  return { title: title.value, icon: brand.favicon }
+  return {
+    title: title.value,
+    icon: brand.favicon,
+  }
 })
 
+
+/* --------------------------------
+ * ACTIVITY TABS
+ * -------------------------------- */
+
 const tabs = computed(() => {
-  let tabOptions = [
+  const tabOptions = [
     {
       name: 'Activity',
       label: __('Activity'),
       icon: ActivityIcon,
     },
+
     {
       name: 'Emails',
       label: __('Emails'),
       icon: EmailIcon,
     },
+
     {
       name: 'Comments',
       label: __('Comments'),
       icon: CommentIcon,
     },
+
     {
       name: 'Data',
       label: __('Data'),
       icon: DetailsIcon,
     },
+
     {
       name: 'Calls',
       label: __('Calls'),
       icon: PhoneIcon,
     },
+
     {
       name: 'Tasks',
       label: __('Tasks'),
       icon: TaskIcon,
     },
+
     {
       name: 'Notes',
       label: __('Notes'),
       icon: NoteIcon,
     },
+
     {
       name: 'Attachments',
-      label: __('Attachments'),
-      icon: AttachmentIcon,
+      label:
+        __('Attachments'),
+      icon:
+        AttachmentIcon,
     },
+
     {
       name: 'WhatsApp',
       label: __('WhatsApp'),
       icon: WhatsAppIcon,
-      condition: () => whatsappEnabled.value,
+
+      condition: () =>
+        whatsappEnabled.value,
     },
   ]
-  return tabOptions.filter((tab) => (tab.condition ? tab.condition() : true))
+
+  return tabOptions.filter(
+    (tab) =>
+      tab.condition
+        ? tab.condition()
+        : true
+  )
 })
 
-const { tabIndex, changeTabTo } = useActiveTabManager(tabs, 'lastLeadTab')
 
-const sections = createResource({
-  url: 'crm.fcrm.doctype.crm_fields_layout.crm_fields_layout.get_sidepanel_sections',
-  cache: ['sidePanelSections', 'DoubleT Lead'],
-  params: { doctype: 'DoubleT Lead' },
-  auto: true,
-})
+const {
+  tabIndex,
+  changeTabTo,
+} = useActiveTabManager(
+  tabs,
+  'lastLeadTab'
+)
 
-async function triggerStatusChange(value) {
-  await triggerOnChange('status', value)
+
+/* --------------------------------
+ * STATUS CHANGE
+ * -------------------------------- */
+
+async function triggerStatusChange(
+  value
+) {
+  await triggerOnChange(
+    'status',
+    value
+  )
+
   setLostReason()
 }
 
-function updateField(name, value) {
-  value = Array.isArray(name) ? '' : value
-  let oldValues = Array.isArray(name) ? {} : doc.value[name]
+
+/* --------------------------------
+ * UPDATE FIELD
+ * -------------------------------- */
+
+function updateField(
+  name,
+  value
+) {
+  value =
+    Array.isArray(name)
+      ? ''
+      : value
+
+  const oldValues =
+    Array.isArray(name)
+      ? {}
+      : doc.value[name]
 
   if (Array.isArray(name)) {
-    name.forEach((field) => (doc.value[field] = value))
+    name.forEach(
+      (field) => {
+        oldValues[field] =
+          doc.value[field]
+
+        doc.value[field] =
+          value
+      }
+    )
   } else {
-    doc.value[name] = value
+    doc.value[name] =
+      value
   }
 
-  document.save.submit(null, {
-    onSuccess: () => (reload.value = true),
-    onError: (err) => {
-      if (Array.isArray(name)) {
-        name.forEach((field) => (doc.value[field] = oldValues[field]))
-      } else {
-        doc.value[name] = oldValues
-      }
-      toast.error(err.messages?.[0] || __('Error updating field'))
-    },
+  document.save.submit(
+    null,
+    {
+      onSuccess: () => {
+        reload.value = true
+      },
+
+      onError: (err) => {
+        if (
+          Array.isArray(name)
+        ) {
+          name.forEach(
+            (field) => {
+              doc.value[field] =
+                oldValues[field]
+            }
+          )
+        } else {
+          doc.value[name] =
+            oldValues
+        }
+
+        toast.error(
+          err.messages?.[0] ||
+            __(
+              'Error updating field'
+            )
+        )
+      },
+    }
+  )
+}
+
+
+/* --------------------------------
+ * DELETE LEAD
+ * -------------------------------- */
+
+function deleteLead() {
+  showDeleteLinkedDocModal.value =
+    true
+}
+
+
+/* --------------------------------
+ * EMAIL
+ * -------------------------------- */
+
+function openEmailBox() {
+  const currentTab =
+    tabs.value[
+      tabIndex.value
+    ]
+
+  if (
+    ![
+      'Emails',
+      'Comments',
+      'Activities',
+    ].includes(
+      currentTab.name
+    )
+  ) {
+    activities.value
+      ?.changeTabTo(
+        'emails'
+      )
+  }
+
+  nextTick(() => {
+    if (
+      activities.value
+        ?.emailBox
+    ) {
+      activities.value
+        .emailBox
+        .show = true
+    }
   })
 }
 
-function deleteLead() {
-  showDeleteLinkedDocModal.value = true
-}
 
-function openEmailBox() {
-  let currentTab = tabs.value[tabIndex.value]
-  if (!['Emails', 'Comments', 'Activities'].includes(currentTab.name)) {
-    activities.value.changeTabTo('emails')
-  }
-  nextTick(() => (activities.value.emailBox.show = true))
-}
+/* --------------------------------
+ * CONVERT
+ * -------------------------------- */
+
 function openConvertToDeal() {
   if (isConverted.value) {
     return
   }
 
-  showConvertToDealModal.value = true
+  showConvertToDealModal.value =
+    true
 }
+
+
+async function handleConverted(
+  result
+) {
+  reload.value = true
+
+  if (result?.deal) {
+    router.push({
+      name: 'Deal',
+
+      params: {
+        dealId:
+          result.deal,
+      },
+    })
+  }
+}
+
+
+/* --------------------------------
+ * STATUS LABEL
+ * -------------------------------- */
+
 function statusLabel(status) {
-  if (isTranslatable('CRM Lead Status')) return __(status)
+  if (
+    isTranslatable(
+      'CRM Lead Status'
+    )
+  ) {
+    return __(status)
+  }
+
   return status
 }
 
-const showLostReasonModal = ref(false)
+
+/* --------------------------------
+ * LOST REASON
+ * -------------------------------- */
+
+const showLostReasonModal =
+  ref(false)
+
 
 function setLostReason() {
   if (
-    getLeadStatus(document.doc.status).type !== 'Lost' ||
-    (document.doc.lost_reason && document.doc.lost_reason !== 'Other') ||
-    (document.doc.lost_reason === 'Other' && document.doc.lost_notes)
+    getLeadStatus(
+      document.doc.status
+    ).type !== 'Lost' ||
+
+    (
+      document.doc
+        .lost_reason &&
+      document.doc
+        .lost_reason !==
+        'Other'
+    ) ||
+
+    (
+      document.doc
+        .lost_reason ===
+        'Other' &&
+      document.doc
+        .lost_notes
+    )
   ) {
-    document.save.submit(null, {
-      onSuccess: () => sections.reload(),
-    })
+    document.save.submit(
+      null,
+      {
+        onSuccess: () => {
+          reload.value = true
+        },
+      }
+    )
+
     return
   }
 
-  showLostReasonModal.value = true
+  showLostReasonModal.value =
+    true
 }
 
-function beforeStatusChange(data) {
+
+/* --------------------------------
+ * BEFORE STATUS CHANGE
+ * -------------------------------- */
+
+function beforeStatusChange(
+  data
+) {
   if (
-    Object.hasOwn(data ?? {}, 'status') &&
-    getLeadStatus(data.status).type == 'Lost'
+    Object.hasOwn(
+      data ?? {},
+      'status'
+    ) &&
+
+    getLeadStatus(
+      data.status
+    ).type === 'Lost'
   ) {
     setLostReason()
   } else {
-    document.save.submit(null, {
-      onSuccess: () => reloadResources(data),
-    })
+    document.save.submit(
+      null,
+      {
+        onSuccess: () =>
+          reloadResources(
+            data
+          ),
+      }
+    )
   }
 }
 
-function reloadResources(data) {
-  if (Object.hasOwn(data ?? {}, 'lead_owner')) {
+
+/* --------------------------------
+ * RELOAD RESOURCES
+ * -------------------------------- */
+
+function reloadResources(
+  data
+) {
+  if (
+    Object.hasOwn(
+      data ?? {},
+      'lead_owner'
+    )
+  ) {
     assignees.reload()
   }
-  if (
-    Object.hasOwn(data ?? {}, 'status') &&
-    getLeadStatus(data.status).type != 'Lost'
-  ) {
-    sections.reload()
-  }
+
+  reload.value = true
 }
 </script>
