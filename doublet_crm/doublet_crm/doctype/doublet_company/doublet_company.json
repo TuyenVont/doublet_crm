@@ -84,8 +84,10 @@
   }
  ],
  "sort_field": "modified",
- "sort_order": "DESC",
- "title_field": "company_name",
- "search_fields": "company_name,tax_id,phone,email"
+"sort_order": "DESC",
+"title_field": "company_name",
+"show_title_field_in_link": 1,
+"search_fields": "company_name,phone,email"
+
 }
 

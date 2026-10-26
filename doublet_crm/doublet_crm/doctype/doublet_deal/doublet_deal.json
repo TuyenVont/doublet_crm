@@ -8,6 +8,7 @@
   "deal_title",
   "amount",
   "deal_owner",
+  "source",
   "deal_type",
   "contact",
   "company",
@@ -39,6 +40,36 @@
    "fieldtype": "Link",
    "label": "Deal Owner",
    "options": "User"
+  },
+  {
+  "fieldname": "source",
+  "fieldtype": "Link",
+  "label": "Source",
+  "options": "DoubleT Lead Source"
+},
+  {
+   "fieldname": "source",
+   "fieldtype": "Link",
+   "label": "Source",
+   "options": "DoubleT Lead Source"
+  },
+  {
+   "fieldname": "source_lead",
+   "fieldtype": "Link",
+   "label": "Source Lead",
+   "options": "DoubleT Lead"
+  },
+  {
+   "fieldname": "expected_close_date",
+   "fieldtype": "Date",
+   "label": "Expected Close Date"
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Stage",
+   "options": "DoubleT Deal Stage"
   },
   {
    "fieldname": "deal_type",
