@@ -42,12 +42,6 @@
    "options": "User"
   },
   {
-  "fieldname": "source",
-  "fieldtype": "Link",
-  "label": "Source",
-  "options": "DoubleT Lead Source"
-},
-  {
    "fieldname": "source",
    "fieldtype": "Link",
    "label": "Source",
@@ -57,19 +51,22 @@
    "fieldname": "source_lead",
    "fieldtype": "Link",
    "label": "Source Lead",
-   "options": "DoubleT Lead"
+   "options": "DoubleT Lead",
+   "permlevel": 1
   },
   {
    "fieldname": "expected_close_date",
    "fieldtype": "Date",
-   "label": "Expected Close Date"
+   "label": "Expected Close Date",
+   "permlevel": 1
   },
   {
    "fieldname": "stage",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Stage",
-   "options": "DoubleT Deal Stage"
+   "options": "DoubleT Deal Stage",
+   "reqd": 1
   },
   {
    "fieldname": "deal_type",
@@ -96,27 +93,6 @@
    "mandatory_depends_on": "eval:doc.deal_type=='COMPANY'",
    "options": "DoubleT Company",
    "permlevel": 1
-  },
-  {
-   "fieldname": "source_lead",
-   "fieldtype": "Link",
-   "label": "Source Lead",
-   "options": "DoubleT Lead",
-   "permlevel": 1
-  },
-  {
-   "fieldname": "expected_close_date",
-   "fieldtype": "Date",
-   "label": "Expected Close Date",
-   "permlevel": 1
-  },
-  {
-   "fieldname": "stage",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Stage",
-   "options": "DoubleT Deal Stage",
-   "reqd": 1
   },
   {
    "fieldname": "won_on",
