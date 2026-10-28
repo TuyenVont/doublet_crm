@@ -58,16 +58,34 @@
         </template>
       </Dropdown>
 
-      <Button
-        :label="
-          isConverted
-            ? __('Converted')
-            : __('Convert to Deal')
-        "
-        variant="solid"
-        :disabled="isConverted"
-        @click="openConvertToDeal"
-      />
+<div class="flex items-center gap-2">
+
+  <!-- CHƯA CONVERT -->
+  <Button
+    v-if="!isConverted"
+    :label="__('Convert to Deal')"
+    variant="solid"
+    @click="openConvertToDeal"
+  />
+
+  <!-- ĐÃ CONVERT -->
+  <template v-else>
+    <Button
+      label="Converted"
+      variant="subtle"
+      disabled
+    />
+
+    <Button
+      v-if="doc.converted_deal"
+      :label="__('Open Deal')"
+      variant="solid"
+      iconRight="arrow-up-right"
+      @click="openConvertedDeal"
+    />
+  </template>
+
+</div>
     </template>
   </LayoutHeader>
 
@@ -90,18 +108,29 @@
              [&_[role='tabpanel']:not([hidden])]:flex
              [&_[role='tabpanel']:not([hidden])]:grow"
     >
-      <template #tab-panel>
-        <Activities
-          ref="activities"
-          v-model:reload="reload"
-          v-model:tabIndex="tabIndex"
-          doctype="DoubleT Lead"
-          :docname="leadId"
-          :tabs="tabs"
-          @beforeSave="beforeStatusChange"
-          @afterSave="reloadResources"
-        />
-      </template>
+   <template #tab-panel>
+
+  <!-- CUSTOM DATA TAB -->
+  <DoubleTLeadDataPanel
+    v-if="activeTabName === 'Data'"
+    :lead="doc"
+    @saved="onLeadDataSaved"
+  />
+
+  <!-- NORMAL ACTIVITY TABS -->
+  <Activities
+    v-else
+    ref="activities"
+    v-model:reload="reload"
+    v-model:tabIndex="tabIndex"
+    doctype="DoubleT Lead"
+    :docname="leadId"
+    :tabs="tabs"
+    @beforeSave="beforeStatusChange"
+    @afterSave="reloadResources"
+  />
+
+</template>
     </Tabs>
 
     <!-- RIGHT SIDEBAR -->
@@ -311,6 +340,7 @@
       >
         <DoubleTLeadInfoPanel
           :lead="doc"
+          @saved="onLeadSidebarSaved"
         />
       </div>
     </Resizer>
@@ -411,7 +441,7 @@ import LostReasonModal from '@/components/Modals/LostReasonModal.vue'
 import DoubleTConvertToDealModal from '@/components/Modals/DoubleTConvertToDealModal.vue'
 
 import DoubleTLeadInfoPanel from '@/components/Lead/DoubleTLeadInfoPanel.vue'
-
+import DoubleTLeadDataPanel from '@/components/Lead/DoubleTLeadDataPanel.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import AssignTo from '@/components/AssignTo.vue'
@@ -465,7 +495,19 @@ const props = defineProps({
     required: true,
   },
 })
+function openConvertedDeal() {
+  if (!doc.value?.converted_deal) {
+    return
+  }
 
+  router.push({
+    name: 'DealDetail',
+    params: {
+      dealId:
+        doc.value.converted_deal,
+    },
+  })
+}
 
 const reload = ref(false)
 const activities = ref(null)
@@ -521,7 +563,26 @@ const isConverted = computed(() => {
     )
   )
 })
+async function onLeadSidebarSaved(data) {
+  if (
+    data &&
+    document.doc
+  ) {
+    Object.assign(
+      document.doc,
+      data
+    )
+  }
 
+  if (
+    typeof document.reload ===
+    'function'
+  ) {
+    await document.reload()
+  }
+
+  reload.value = true
+}
 
 /* --------------------------------
  * INITIAL RENDER
@@ -825,8 +886,33 @@ const {
   tabs,
   'lastLeadTab'
 )
+const activeTabName = computed(() => {
+  return (
+    tabs.value?.[
+      tabIndex.value
+    ]?.name || ''
+  )
+})
+async function onLeadDataSaved(data) {
+  if (
+    data &&
+    document.doc
+  ) {
+    Object.assign(
+      document.doc,
+      data
+    )
+  }
 
+  if (
+    typeof document.reload ===
+    'function'
+  ) {
+    await document.reload()
+  }
 
+  reload.value = true
+}
 /* --------------------------------
  * STATUS CHANGE
  * -------------------------------- */
@@ -972,23 +1058,64 @@ function openConvertToDeal() {
 }
 
 
-async function handleConverted(
-  result
-) {
-  reload.value = true
+async function handleConverted(result) {
+  showConvertToDealModal.value = false
 
-  if (result?.deal) {
-    router.push({
-      name: 'Deal',
+  try {
+    // -----------------------------------------
+    // Reload Lead document từ DB
+    // -----------------------------------------
+    await document.reload()
 
-      params: {
-        dealId:
-          result.deal,
-      },
-    })
+    // -----------------------------------------
+    // Reload activity/timeline
+    // -----------------------------------------
+    reload.value = true
+
+    // -----------------------------------------
+    // Reload assignees nếu cần
+    // -----------------------------------------
+    if (
+      typeof assignees.reload === 'function'
+    ) {
+      assignees.reload()
+    }
+
+    // -----------------------------------------
+    // Thông báo thành công
+    // -----------------------------------------
+    toast.success(
+      result?.deal
+        ? __('Lead converted and Deal created successfully')
+        : __('Lead converted successfully')
+    )
+
+  } catch (e) {
+    console.error(
+      'Reload converted Lead failed:',
+      e
+    )
+
+    // Fallback:
+    // backend đã convert thành công nên cập nhật local
+    // để UI vẫn phản ánh ngay.
+    if (result) {
+      document.doc.status =
+        'CONVERTED'
+
+      document.doc.converted_contact =
+        result.contact || null
+
+      document.doc.converted_company =
+        result.company || null
+
+      document.doc.converted_deal =
+        result.deal || null
+    }
+
+    reload.value = true
   }
 }
-
 
 /* --------------------------------
  * STATUS LABEL
