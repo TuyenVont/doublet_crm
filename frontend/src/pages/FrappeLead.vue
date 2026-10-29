@@ -1101,7 +1101,7 @@ async function handleConverted(result) {
     // để UI vẫn phản ánh ngay.
     if (result) {
       document.doc.status =
-        'CONVERTED'
+        'CpONVERTED'
 
       document.doc.converted_contact =
         result.contact || null

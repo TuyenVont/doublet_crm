@@ -1,9 +1,7 @@
 <template>
   <div class="flex h-full flex-col overflow-hidden bg-surface-white">
 
-    <!-- =====================================================
-         HEADER
-    ====================================================== -->
+    <!-- HEADER -->
     <LayoutHeader>
       <template #left-header>
         <div class="flex items-center gap-2">
@@ -40,12 +38,21 @@
           v-if="deal"
           class="flex items-center gap-2"
         >
-          <!-- ASSIGN -->
+          <!-- ASSIGN TO = COLLABORATORS -->
           <AssignTo
             v-model="assignees"
             doctype="DoubleT Deal"
             :docname="dealId"
           />
+
+          <!-- STAGE STATUS -->
+          <span
+            v-if="deal.stage"
+            class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold"
+            :class="stageBadgeClass"
+          >
+            {{ currentStageType }}
+          </span>
 
           <!-- STAGE -->
           <select
@@ -79,9 +86,7 @@
       </template>
     </LayoutHeader>
 
-    <!-- =====================================================
-         INITIAL LOADING
-    ====================================================== -->
+    <!-- LOADING -->
     <div
       v-if="loading && !deal"
       class="flex flex-1 items-center justify-center text-ink-gray-5"
@@ -89,9 +94,7 @@
       {{ __('Loading Deal...') }}
     </div>
 
-    <!-- =====================================================
-         ERROR
-    ====================================================== -->
+    <!-- ERROR -->
     <div
       v-else-if="error && !deal"
       class="flex flex-1 flex-col items-center justify-center gap-3"
@@ -110,17 +113,13 @@
       />
     </div>
 
-    <!-- =====================================================
-         MAIN RECORD LAYOUT
-    ====================================================== -->
+    <!-- MAIN -->
     <div
       v-else-if="deal"
       class="flex min-h-0 flex-1 overflow-hidden"
     >
 
-      <!-- =================================================
-           LEFT / MAIN CONTENT
-      ================================================== -->
+      <!-- MAIN CONTENT -->
       <Tabs
         v-model="tabIndex"
         :tabs="tabs"
@@ -139,14 +138,12 @@
       >
         <template #tab-panel>
 
-          <!-- CUSTOM DATA -->
           <DoubleTDealDataPanel
             v-if="activeTabName === 'Data'"
             :deal="deal"
             @saved="onDealSaved"
           />
 
-          <!-- NORMAL CRM ACTIVITY TABS -->
           <Activities
             v-else
             ref="activities"
@@ -160,9 +157,7 @@
         </template>
       </Tabs>
 
-      <!-- =================================================
-           RIGHT SIDEBAR
-      ================================================== -->
+      <!-- RIGHT SIDEBAR -->
       <Resizer
         side="right"
         class="flex flex-col border-l"
@@ -202,9 +197,16 @@
             >
               <span
                 v-if="deal.stage"
-                class="rounded-md bg-surface-gray-2 px-2 py-0.5 text-xs text-ink-gray-7"
+                class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
+                :class="stageBadgeClass"
               >
-                {{ deal.stage }}
+                <span
+                  class="size-1.5 rounded-full bg-current opacity-70"
+                />
+
+                {{ currentStageLabel }}
+                ·
+                {{ currentStageType }}
               </span>
 
               <span
@@ -228,9 +230,7 @@
       </Resizer>
     </div>
 
-    <!-- =====================================================
-         LOST REASON MODAL
-    ====================================================== -->
+    <!-- LOST REASON MODAL -->
     <Teleport to="body">
       <div
         v-if="showLostModal"
@@ -344,10 +344,6 @@ import {
   useActiveTabManager,
 } from '@/composables/useActiveTabManager'
 
-/* =====================================================
- * ROUTE
- * ===================================================== */
-
 const route = useRoute()
 const router = useRouter()
 
@@ -366,10 +362,6 @@ const dealId = computed(() => {
   )
 })
 
-/* =====================================================
- * MAIN STATE
- * ===================================================== */
-
 const deal = ref(null)
 
 const loading = ref(false)
@@ -379,9 +371,8 @@ const activities = ref(null)
 const reloadActivities = ref(false)
 
 /*
- * AssignTo itself persists assignments.
- * For now the local array provides the v-model used
- * by the component, matching the Deal record page shell.
+ * AssignTo chỉ quản lý collaborators.
+ * Primary Owner nằm ở deal_owner.
  */
 const assignees = ref([])
 
@@ -443,6 +434,54 @@ const displayAmount = computed(() => {
     return String(amount)
   }
 })
+
+/* =====================================================
+ * STAGE DISPLAY
+ * ===================================================== */
+
+const currentStage = computed(() => {
+  return stageOptions.value.find(
+    stage =>
+      stage.name ===
+      deal.value?.stage
+  )
+})
+
+const currentStageLabel =
+  computed(() => {
+    return (
+      currentStage.value?.stage_name ||
+      deal.value?.stage ||
+      __('No Stage')
+    )
+  })
+
+const currentStageType =
+  computed(() => {
+    return (
+      currentStage.value?.stage_type ||
+      'OPEN'
+    )
+  })
+
+const stageBadgeClass =
+  computed(() => {
+    if (
+      currentStageType.value ===
+      'WON'
+    ) {
+      return 'border-green-200 bg-green-50 text-green-700'
+    }
+
+    if (
+      currentStageType.value ===
+      'LOST'
+    ) {
+      return 'border-red-200 bg-red-50 text-red-700'
+    }
+
+    return 'border-blue-200 bg-blue-50 text-blue-700'
+  })
 
 /* =====================================================
  * TABS
@@ -507,17 +546,18 @@ const {
   'lastDealTab'
 )
 
-const activeTabName = computed(() => {
-  return (
-    tabs.value?.[
-      tabIndex.value
-    ]?.name ||
-    'Activity'
-  )
-})
+const activeTabName =
+  computed(() => {
+    return (
+      tabs.value?.[
+        tabIndex.value
+      ]?.name ||
+      'Activity'
+    )
+  })
 
 /* =====================================================
- * API ERROR
+ * ERROR
  * ===================================================== */
 
 function getApiError(e) {
@@ -643,7 +683,8 @@ async function loadStages() {
       getApiError(e)
     )
   } finally {
-    stagesLoading.value = false
+    stagesLoading.value =
+      false
   }
 }
 
@@ -693,8 +734,7 @@ async function changeStage() {
   }
 
   /*
-   * LOST:
-   * ask for reason before calling backend.
+   * LOST
    */
   if (
     nextStage.stage_type ===
@@ -709,14 +749,14 @@ async function changeStage() {
 
     lostError.value = ''
 
-    showLostModal.value = true
+    showLostModal.value =
+      true
 
     return
   }
 
   /*
-   * WON:
-   * require confirmation.
+   * WON
    */
   if (
     nextStage.stage_type ===
@@ -771,7 +811,9 @@ async function saveStage(
     }
 
     const stage =
-      getStage(stageName)
+      getStage(
+        stageName
+      )
 
     if (
       stage?.stage_type ===
@@ -816,7 +858,8 @@ async function saveStage(
       error.value
     )
   } finally {
-    stageSaving.value = false
+    stageSaving.value =
+      false
   }
 }
 
@@ -831,7 +874,9 @@ function cancelLostStage() {
     return
   }
 
-  showLostModal.value = false
+  showLostModal.value =
+    false
+
   lostReason.value = ''
   lostError.value = ''
   pendingLostStage.value = ''
@@ -875,22 +920,23 @@ async function confirmLostStage() {
     deal.value?.stage ===
     targetStage
   ) {
-    showLostModal.value = false
+    showLostModal.value =
+      false
+
     lostReason.value = ''
-    pendingLostStage.value = ''
+
+    pendingLostStage.value =
+      ''
   }
 }
 
 /* =====================================================
- * CHILD COMPONENT SAVED
+ * CHILD SAVED
  * ===================================================== */
 
 async function onDealSaved(
   data
 ) {
-  /*
-   * Optimistic update first so sidebar/data react instantly.
-   */
   if (
     data &&
     deal.value
@@ -901,10 +947,6 @@ async function onDealSaved(
     )
   }
 
-  /*
-   * Then reload authoritative DB values.
-   * Important for won_on / lost_on / lost_reason.
-   */
   await reloadDeal()
 
   reloadActivities.value =
@@ -912,7 +954,7 @@ async function onDealSaved(
 }
 
 /* =====================================================
- * FULL RELOAD
+ * RELOAD
  * ===================================================== */
 
 async function reloadDeal() {
@@ -945,10 +987,7 @@ async function copyDealId() {
       __('Deal ID copied')
     )
   } catch {
-    /*
-     * Clipboard API may be unavailable in some
-     * browser/http contexts.
-     */
+    // ignore clipboard failure
   }
 }
 
