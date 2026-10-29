@@ -231,12 +231,27 @@ def convert_lead(
 			company.check_permission("read")
 
 		elif create_company:
-			company = frappe.get_doc({
-				"doctype": "DoubleT Company",
-				"company_name": company_name,
-			}).insert()
+			# Reuse an existing company with the same name instead of
+			# creating a duplicate master record.
+			existing_company_name = frappe.db.get_value(
+				"DoubleT Company",
+				{"company_name": company_name},
+				"name",
+			)
 
-			company_created = True
+			if existing_company_name:
+				company = frappe.get_doc(
+					"DoubleT Company",
+					existing_company_name,
+				)
+				company.check_permission("read")
+			else:
+				company = frappe.get_doc({
+					"doctype": "DoubleT Company",
+					"company_name": company_name,
+				}).insert()
+
+				company_created = True
 
 		# --------------------------------
 		# CONTACT

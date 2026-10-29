@@ -119,8 +119,23 @@
             <input
               v-model="form.company_name"
               type="text"
+              list="doublet-lead-company-options"
+              autocomplete="off"
               class="w-full rounded-lg border border-outline-gray-2 px-3 py-2 text-sm"
+              :placeholder="__('Type a new company or choose an existing one')"
             />
+
+            <datalist id="doublet-lead-company-options">
+              <option
+                v-for="item in companies"
+                :key="item.name"
+                :value="item.company_name || item.name"
+              />
+            </datalist>
+
+            <p class="text-xs text-ink-gray-5">
+              {{ __('You can select an existing company or enter a new company name.') }}
+            </p>
           </label>
 
           <!-- SOURCE -->
@@ -170,7 +185,7 @@
           <!-- OWNER -->
           <label class="space-y-1">
             <span class="text-sm font-medium text-ink-gray-8">
-              {{ __('Lead Owner') }}
+              {{ __('Primary Owner') }}
             </span>
 
             <select
@@ -285,6 +300,7 @@ const error = ref('')
 
 const sources = ref([])
 const users = ref([])
+const companies = ref([])
 
 const statuses = [
   'NEW',
@@ -409,6 +425,34 @@ async function loadSources() {
   } catch (e) {
     console.error(
       'Load Lead Sources failed:',
+      e
+    )
+  }
+}
+
+
+async function loadCompanies() {
+  try {
+    const result = await call(
+      'frappe.client.get_list',
+      {
+        doctype: 'DoubleT Company',
+        fields: [
+          'name',
+          'company_name',
+        ],
+        order_by: 'company_name asc',
+        limit_page_length: 200,
+      }
+    )
+
+    companies.value =
+      Array.isArray(result)
+        ? result
+        : []
+  } catch (e) {
+    console.error(
+      'Load Companies failed:',
       e
     )
   }
@@ -578,6 +622,7 @@ watch(
 onMounted(() => {
   loadSources()
   loadUsers()
+  loadCompanies()
 })
 
 const ReadOnlyField =

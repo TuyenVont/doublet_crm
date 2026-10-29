@@ -69,6 +69,8 @@ declare module 'vue' {
     DocumentIcon: typeof import('./src/components/Icons/DocumentIcon.vue')['default']
     DotIcon: typeof import('./src/components/Icons/DotIcon.vue')['default']
     DoubleCheckIcon: typeof import('./src/components/Icons/DoubleCheckIcon.vue')['default']
+    DoubleTContactDataPanel: typeof import('./src/components/Contact/DoubleTContactDataPanel.vue')['default']
+    DoubleTContactInfoPanel: typeof import('./src/components/Contact/DoubleTContactInfoPanel.vue')['default']
     DoubleTConvertToDealModal: typeof import('./src/components/Modals/DoubleTConvertToDealModal.vue')['default']
     DoubleTDealDataPanel: typeof import('./src/components/Deal/DoubleTDealDataPanel.vue')['default']
     DoubleTDealInfoPanel: typeof import('./src/components/Deal/DoubleTDealInfoPanel.vue')['default']
