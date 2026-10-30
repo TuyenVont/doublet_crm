@@ -1,12 +1,14 @@
 [
- {
-  "doctype": "Role",
-  "role_name": "Call Log Viewer",
-  "desk_access": 1
- },
- {
-  "doctype": "Role",
-  "role_name": "Call Log API",
-  "desk_access": 0
- }
+  {
+    "doctype": "Role",
+    "role_name": "Call Log Viewer",
+    "desk_access": 1,
+    "name": "Call Log Viewer"
+  },
+  {
+    "doctype": "Role",
+    "role_name": "Call Log API",
+    "desk_access": 0,
+    "name": "Call Log API"
+  }
 ]
