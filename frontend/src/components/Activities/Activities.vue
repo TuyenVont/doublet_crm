@@ -12,7 +12,7 @@
   />
   <FadedScrollableDiv class="flex flex-col h-full overflow-y-auto">
     <div
-      v-if="all_activities?.loading"
+      v-if="activitiesResource?.loading"
       class="flex flex-1 flex-col items-center justify-center gap-3 text-2xl-medium text-ink-gray-4"
     >
       <LoadingIndicator class="h-6 w-6" />
@@ -71,7 +71,11 @@
         </div>
       </div>
       <div v-else-if="title == 'Tasks'" class="px-3 pb-3 sm:px-10 sm:pb-5">
-        <TaskArea :modalRef="modalRef" :tasks="activities" :doctype="doctype" />
+        <TaskArea
+          :modalRef="modalRef"
+          :tasks="activities"
+          :doctype="doctype"
+        />
       </div>
       <div v-else-if="title == 'Calls'" class="activity">
         <div v-for="(call, i) in activities" :key="call.name">
@@ -418,7 +422,7 @@
   />
   <AllModals
     ref="modalRef"
-    v-model="all_activities"
+  v-model="all_activities"
     :doctype="doctype"
     :doc="doc"
   />
@@ -520,6 +524,13 @@ const showFilesUploader = ref(false)
 
 const title = computed(() => props.tabs?.[tabIndex.value]?.name || 'Activity')
 
+const supportedTaskDoctypes = [
+  'DoubleT Lead',
+  'DoubleT Deal',
+  'DoubleT Contact',
+  'DoubleT Company',
+]
+
 const changeTabTo = (tabName) => {
   const tabNames = props.tabs?.map((tab) => tab.name?.toLowerCase())
   const index = tabNames?.indexOf(tabName)
@@ -531,12 +542,62 @@ const all_activities = createResource({
   url: 'crm.api.activities.get_activities',
   params: { name: props.docname },
   cache: ['activity', props.docname],
-  auto: true,
   transform: ([versions, calls, notes, tasks, attachments]) => {
     return { versions, calls, notes, tasks, attachments }
   },
   onSuccess: () => nextTick(() => scroll()),
 })
+
+const linkedTasks = createResource({
+  url: 'doublet_crm.api.get_linked_tasks',
+  params: { doctype: props.doctype, docname: props.docname },
+  cache: ['doublet_linked_tasks', props.doctype, props.docname],
+  auto: false,
+  transform: ([, , , tasks]) => ({
+    versions: [],
+    calls: [],
+    notes: [],
+    tasks: tasks || [],
+    attachments: [],
+  }),
+  onSuccess: () => nextTick(() => scroll()),
+})
+
+watch(
+  reload,
+  (reloadValue) => {
+    if (reloadValue && supportedTaskDoctypes.includes(props.doctype)) {
+      linkedTasks.reload()
+      reload.value = false
+    }
+  },
+)
+
+const activitiesResource = computed(() =>
+  supportedTaskDoctypes.includes(props.doctype) && title.value === 'Tasks'
+    ? linkedTasks
+    : all_activities,
+)
+
+watch(
+  linkedTasks,
+  (resource) => {
+    if (supportedTaskDoctypes.includes(props.doctype) && title.value === 'Tasks') {
+      all_activities.data = resource.data
+      all_activities.loading = resource.loading
+    }
+  },
+)
+
+watch(
+  title,
+  (tabName) => {
+    if (supportedTaskDoctypes.includes(props.doctype) && tabName === 'Tasks') {
+      linkedTasks.fetch()
+    }
+  },
+  { immediate: true },
+)
 
 const showWhatsappTemplates = ref(false)
 
@@ -629,8 +690,11 @@ const activities = computed(() => {
     if (!all_activities.data?.calls) return []
     return sortByCreation(all_activities.data.calls, isNewestFirst.value)
   } else if (title.value == 'Tasks') {
-    if (!all_activities.data?.tasks) return []
-    return sortByModified(all_activities.data.tasks)
+    const tasks = supportedTaskDoctypes.includes(props.doctype)
+      ? linkedTasks.data
+      : all_activities.data?.tasks
+    if (!tasks) return []
+    return sortByModified(tasks)
   } else if (title.value == 'Notes') {
     if (!all_activities.data?.notes) return []
     return sortByModified(all_activities.data.notes)

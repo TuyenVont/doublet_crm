@@ -45,6 +45,10 @@
             <button v-for="entry in group.rows" :key="entry.name" class="mb-2 block text-left text-blue-600 hover:underline" @click="router.push({ name: group.route, params: { [group.param]: entry.name } })">{{ entry.label }}</button>
           </div>
         </section>
+        <section v-if="!isNew && !editing" class="rounded border border-outline-gray-2 p-5">
+          <h2 class="mb-3 text-lg font-semibold">Tasks</h2>
+          <Activities :doctype="doctype" :docname="recordName" :tabs="taskTabs" />
+        </section>
       </template>
     </div>
   </div>
@@ -55,6 +59,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { call, Button } from 'frappe-ui'
 import LayoutHeader from '@/components/LayoutHeader.vue'
+import Activities from '@/components/Activities/Activities.vue'
+import TaskIcon from '@/components/Icons/TaskIcon.vue'
 
 const props = defineProps({ kind: { type: String, required: true } })
 const router = useRouter()
@@ -65,6 +71,7 @@ const listRoute = computed(() => isContact.value ? 'Contacts' : 'Companies')
 const titleField = computed(() => isContact.value ? 'first_name' : 'company_name')
 const recordName = computed(() => route.params[isContact.value ? 'contactId' : 'companyId'])
 const isNew = computed(() => !recordName.value)
+const taskTabs = [{ name: 'Tasks', label: __('Tasks'), icon: TaskIcon }]
 const contactFields = [
   { key: 'first_name', label: 'First Name', required: true }, { key: 'last_name', label: 'Last Name' },
   { key: 'phone', label: 'Phone' }, { key: 'email', label: 'Email', type: 'email' },

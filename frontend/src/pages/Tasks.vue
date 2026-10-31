@@ -27,6 +27,28 @@
       allowedViews: ['list', 'kanban'],
     }"
   />
+  <div class="flex flex-wrap items-center gap-3 border-b px-3 py-2 sm:px-5">
+    <label class="flex items-center gap-2 text-sm text-ink-gray-7">
+      <input v-model="myTasksOnly" type="checkbox" class="rounded border-outline-gray-2" />
+      {{ __('My Tasks') }}
+    </label>
+    <label class="flex items-center gap-2 text-sm text-ink-gray-7">
+      <span>{{ __('Status') }}</span>
+      <select v-model="statusFilter" class="rounded border border-outline-gray-2 bg-surface-white px-2 py-1">
+        <option value="">{{ __('All') }}</option>
+        <option v-for="status in taskStatuses" :key="status" :value="status">{{ __(status) }}</option>
+      </select>
+    </label>
+    <label class="flex items-center gap-2 text-sm text-ink-gray-7">
+      <span>{{ __('Due Date') }}</span>
+      <select v-model="dueDateFilter" class="rounded border border-outline-gray-2 bg-surface-white px-2 py-1">
+        <option value="All">{{ __('All') }}</option>
+        <option value="Overdue">{{ __('Overdue') }}</option>
+        <option value="Due Today">{{ __('Due Today') }}</option>
+        <option value="Upcoming">{{ __('Upcoming') }}</option>
+      </select>
+    </label>
+  </div>
   <KanbanView
     v-if="$route.params.viewType == 'kanban' && rows.length"
     v-model="tasks"
@@ -75,6 +97,7 @@
       <div
         v-if="getRow(itemName, fieldName).label"
         class="truncate flex items-center gap-2"
+        :class="isOverdueTask(getTask(itemName)) ? 'text-ink-red-6 font-medium' : ''"
       >
         <div v-if="fieldName === 'status'">
           <TaskStatusIcon
@@ -94,8 +117,13 @@
             size="sm"
           />
         </div>
+        <div v-if="fieldName === 'due_date' && getRow(itemName, fieldName).label" class="truncate text-base">
+          <Tooltip :text="formatDate(getRow(itemName, fieldName).label, 'ddd, MMM D, YYYY | hh:mm a')">
+            <span>{{ formatDate(getRow(itemName, fieldName).label, 'D MMM, hh:mm a') }}</span>
+          </Tooltip>
+        </div>
         <div
-          v-if="['modified', 'creation'].includes(fieldName)"
+          v-else-if="['modified', 'creation'].includes(fieldName)"
           class="truncate text-base"
         >
           <Tooltip :text="getRow(itemName, fieldName).label">
@@ -114,7 +142,7 @@
             class="flex-1 overflow-hidden"
           />
         </div>
-        <div v-else class="truncate text-base">
+        <div v-else class="truncate text-base" :class="isOverdueTask(getTask(itemName)) ? 'text-ink-red-6 font-semibold' : ''">
           {{ getRow(itemName, fieldName).label }}
         </div>
       </div>
@@ -128,9 +156,9 @@
             variant="ghost"
             size="sm"
             :label="
-              getRow(itemName, 'reference_doctype').label == 'CRM Deal'
-                ? __('Deal')
-                : __('Lead')
+              relatedRecordLabels[getRow(itemName, 'reference_doctype').label]
+                ? __(relatedRecordLabels[getRow(itemName, 'reference_doctype').label])
+                : getRow(itemName, 'reference_doctype').label
             "
             :iconRight="ArrowUpRightIcon"
             @click.stop="
@@ -159,6 +187,7 @@
     v-model:list="tasks"
     :rows="rows"
     :columns="columns"
+    :isOverdue="isOverdueTask"
     :options="{
       showTooltip: false,
       resizeColumn: true,
@@ -202,8 +231,9 @@ import { formatDate } from '@/utils'
 import { timestampCell } from '@/composables/useTimelinePreferences'
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
 import { Tooltip, Avatar, TextEditor, Dropdown, call } from 'frappe-ui'
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { sessionStore } from '@/stores/session'
 
 const { getFormattedPercent, getFormattedFloat, getFormattedCurrency } =
   getMeta('CRM Task')
@@ -212,6 +242,8 @@ const { updateOnboardingStep } = useOnboarding('frappecrm')
 const { capture } = useTelemetry()
 
 const router = useRouter()
+const route = useRoute()
+const { user } = sessionStore()
 
 const tasksListView = ref(null)
 
@@ -221,6 +253,71 @@ const loadMore = ref(1)
 const triggerResize = ref(1)
 const updatedPageCount = ref(20)
 const viewControls = ref(null)
+const taskStatuses = ['Backlog', 'Todo', 'In Progress', 'Done', 'Canceled']
+const myTasksOnly = ref(route.query.my_tasks !== '0')
+const statusFilter = ref('')
+const dueDateFilter = ref(route.query.due_date_filter || 'All')
+const taskFilterKeys = ['assigned_to', 'status', 'due_date', 'due_date_end']
+
+function localDateTime(date) {
+  const pad = (value) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+function applyTaskFilters() {
+  if (!tasks.value?.params) return
+  const filters = { ...(tasks.value.params.filters || {}) }
+  taskFilterKeys.forEach((key) => delete filters[key])
+
+  if (myTasksOnly.value && user.value) filters.assigned_to = user.value
+
+  if (dueDateFilter.value === 'Overdue') {
+    filters.due_date = ['<', localDateTime(new Date())]
+    if (['Done', 'Canceled'].includes(statusFilter.value)) {
+      filters.status = '__no_matching_status__'
+    } else if (statusFilter.value) {
+      filters.status = statusFilter.value
+    } else {
+      filters.status = ['not in', ['Done', 'Canceled']]
+    }
+  } else if (dueDateFilter.value === 'Due Today') {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const localDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`
+    filters.due_date = ['between', [localDate, localDate]]
+    if (statusFilter.value) filters.status = statusFilter.value
+  } else if (dueDateFilter.value === 'Upcoming') {
+    filters.due_date = ['>', localDateTime(new Date())]
+    if (statusFilter.value) filters.status = statusFilter.value
+  } else if (statusFilter.value) {
+    filters.status = statusFilter.value
+  }
+
+  const current = tasks.value.params.filters || {}
+  if (JSON.stringify(current) === JSON.stringify(filters)) return
+  tasks.value.params.filters = filters
+  tasks.value.reload()
+}
+
+watch([myTasksOnly, statusFilter, dueDateFilter], () => {
+  if (route.query.due_date_filter !== dueDateFilter.value) {
+    router.replace({
+      query: { ...route.query, due_date_filter: dueDateFilter.value },
+    })
+  }
+  applyTaskFilters()
+})
+onMounted(() => applyTaskFilters())
+watch(
+  () => tasks.value?.params,
+  () => applyTaskFilters(),
+)
+
+function isOverdueTask(task) {
+  if (!task?.due_date || ['Done', 'Canceled'].includes(task.status)) return false
+  const dueDate = new Date(task.due_date)
+  return !Number.isNaN(dueDate.getTime()) && dueDate < new Date()
+}
 
 function getRow(name, field) {
   function getValue(value) {
@@ -229,7 +326,15 @@ function getRow(name, field) {
     }
     return { label: value }
   }
-  return getValue(rows.value?.find((row) => row.name == name)[field])
+  return getValue(rows.value?.find((row) => row.name == name)?.[field])
+}
+
+function getTask(name) {
+  const row = rows.value?.find((item) => item.name == name)
+  if (row?._task) return row._task
+  const data = tasks.value?.data?.data || []
+  return data.find((task) => task.name == name) ||
+    data.flatMap((column) => column.data || []).find((task) => task.name == name)
 }
 
 const rows = computed(() => {
@@ -240,7 +345,7 @@ const rows = computed(() => {
   }
 
   openTaskFromURL()
-  return parseRows(tasks.value?.data.data, tasks.value?.data.columns)
+  return parseRows(tasks.value.data.data, tasks.value?.data.columns)
 })
 
 const columns = computed(() => {
@@ -276,6 +381,7 @@ function parseRows(rows, columns = []) {
 
   return rows.map((task) => {
     let _rows = {}
+    _rows._task = task
     tasks.value?.data.rows.forEach((row) => {
       _rows[row] = task[row]
 
@@ -377,14 +483,40 @@ async function deleteTask(name) {
   })
 }
 
+const relatedRecordRoutes = {
+  'CRM Lead': (docname) => ({ name: 'LeadDetail', params: { leadId: docname } }),
+  'CRM Deal': (docname) => ({ name: 'DealDetail', params: { dealId: docname } }),
+  'DoubleT Lead': (docname) => ({
+    name: 'LeadDetail',
+    params: { leadId: docname },
+  }),
+  'DoubleT Deal': (docname) => ({
+    name: 'DealDetail',
+    params: { dealId: docname },
+  }),
+  'DoubleT Contact': (docname) => ({
+    name: 'ContactDetail',
+    params: { contactId: docname },
+  }),
+  'DoubleT Company': (docname) => ({
+    name: 'CompanyDetail',
+    params: { companyId: docname },
+  }),
+}
+
+const relatedRecordLabels = {
+  'CRM Lead': 'Lead',
+  'CRM Deal': 'Deal',
+  'DoubleT Lead': 'Lead',
+  'DoubleT Deal': 'Deal',
+  'DoubleT Contact': 'Contact',
+  'DoubleT Company': 'Company',
+}
+
 function redirect(doctype, docname) {
   if (!docname) return
-  let name = doctype == 'CRM Deal' ? 'Deal' : 'Lead'
-  let params = { leadId: docname }
-  if (name == 'Deal') {
-    params = { dealId: docname }
-  }
-  router.push({ name: name, params: params })
+  const route = relatedRecordRoutes[doctype]?.(docname)
+  if (route) router.push(route)
 }
 
 const openTaskFromURL = () => {

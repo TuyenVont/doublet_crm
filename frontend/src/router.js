@@ -10,6 +10,7 @@ const ContactDetailView = () => import('@/pages/ContactDetailView.vue')
 import CompaniesView from '@/pages/CompaniesView.vue'
 const CompanyDetailView = () => import('@/pages/CompanyDetailView.vue')
 import PlaceholderView from '@/pages/PlaceholderView.vue'
+const TasksView = () => import('@/pages/Tasks.vue')
 
 const routes = [
   {
@@ -86,15 +87,11 @@ const routes = [
       description: 'DoubleT CRM Notes Management',
     },
   },
-  {
-    path: '/tasks',
-    name: 'Tasks',
-    component: PlaceholderView,
-    props: {
-      title: 'Tasks',
-      description: 'DoubleT CRM Tasks Management',
-    },
-  },
+{
+  path: '/tasks',
+  name: 'Tasks',
+  component: TasksView,
+},
   {
     path: '/call-logs',
     name: 'Call Logs',

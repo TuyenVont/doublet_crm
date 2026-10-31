@@ -120,25 +120,7 @@
           />
         </div>
 
-        <label class="block space-y-1">
-          <span class="text-xs text-ink-gray-5">
-            {{ __('Deal Type') }}
-          </span>
 
-          <select
-            v-model="detailsForm.deal_type"
-            class="w-full rounded-lg border border-outline-gray-2 bg-white px-3 py-2 text-sm"
-            @change="onDealTypeChange"
-          >
-            <option value="PERSONAL">
-              {{ __('Personal') }}
-            </option>
-
-            <option value="COMPANY">
-              {{ __('Company') }}
-            </option>
-          </select>
-        </label>
 
         <label
           v-if="detailsStageType === 'LOST'"
@@ -634,15 +616,6 @@ async function loadStages() {
   }
 }
 
-function onDealTypeChange() {
-  if (
-    detailsForm.deal_type ===
-    'PERSONAL'
-  ) {
-    relatedForm.company = ''
-  }
-}
-
 async function onContactChange(
   value
 ) {
@@ -780,20 +753,6 @@ async function saveDetails() {
   }
 
   if (
-    ![
-      'PERSONAL',
-      'COMPANY',
-    ].includes(
-      detailsForm.deal_type
-    )
-  ) {
-    detailsError.value =
-      'Deal Type is required.'
-
-    return
-  }
-
-  if (
     detailsStageType.value ===
       'LOST' &&
     !detailsForm.lost_reason.trim()
@@ -825,9 +784,6 @@ async function saveDetails() {
       deal_owner:
         detailsForm.deal_owner ||
         null,
-
-      deal_type:
-        detailsForm.deal_type,
 
       lost_reason:
         detailsStageType.value ===
