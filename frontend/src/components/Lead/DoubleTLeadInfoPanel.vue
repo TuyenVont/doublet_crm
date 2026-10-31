@@ -101,7 +101,8 @@
 
           <select
             v-model="detailsForm.status"
-            class="w-full rounded-lg border border-outline-gray-2 bg-white px-3 py-2 text-sm"
+            :disabled="isConverted"
+            class="w-full rounded-lg border border-outline-gray-2 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-surface-gray-1 disabled:text-ink-gray-5"
           >
             <option
               v-for="status in statuses"
@@ -401,7 +402,6 @@ const statuses = [
   'CONTACTED',
   'NURTURE',
   'QUALIFIED',
-  'CONVERTED',
   'UNQUALIFIED',
   'JUNK',
 ]

@@ -40,7 +40,7 @@ async function deleteTask(name) {
     doctype: 'CRM Task',
     name,
   })
-  activities.value.reload()
+  activities.value?.reload?.()
 }
 
 function updateTaskStatus(status, task) {
@@ -50,7 +50,7 @@ function updateTaskStatus(status, task) {
     fieldname: 'status',
     value: status,
   }).then(() => {
-    activities.value.reload()
+    activities.value?.reload?.()
   })
 }
 
@@ -118,7 +118,11 @@ const route = useRoute()
 const router = useRouter()
 
 function redirect(tabName) {
-  if (route.name == 'Lead' || route.name == 'Deal') {
+  if (
+    ['Lead', 'Deal', 'LeadDetail', 'DealDetail', 'ContactDetail', 'CompanyDetail'].includes(
+      route.name,
+    )
+  ) {
     let hash = '#' + tabName
     if (route.hash != hash) {
       router.push({ ...route, hash })

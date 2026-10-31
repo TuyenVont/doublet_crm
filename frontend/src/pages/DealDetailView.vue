@@ -338,8 +338,8 @@ import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 
 import {
   formatCurrency,
+  parseAssignees,
 } from '@/utils'
-
 import {
   useActiveTabManager,
 } from '@/composables/useActiveTabManager'
@@ -375,6 +375,20 @@ const reloadActivities = ref(false)
  * Primary Owner nằm ở deal_owner.
  */
 const assignees = ref([])
+
+function parseAssigneesFromJson(value) {
+  if (!value) return []
+  let names = value
+  if (typeof value === 'string') {
+    try {
+      names = JSON.parse(value)
+    } catch {
+      names = []
+    }
+  }
+  if (!Array.isArray(names)) return []
+  return parseAssignees(names)
+}
 
 /* =====================================================
  * DEAL STAGE
@@ -608,6 +622,9 @@ async function loadDeal() {
     )
 
     deal.value = result
+    assignees.value = parseAssigneesFromJson(
+      result?._assign
+    )
 
     selectedStage.value =
       result?.stage ||
