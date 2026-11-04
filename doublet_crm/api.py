@@ -19,7 +19,7 @@ def get_linked_tasks(doctype: str, docname: str):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
     tasks = frappe.get_list(
-        "CRM Task",
+        "DoubleT Task",
         filters={"reference_doctype": doctype, "reference_docname": docname},
         fields=[
             "name",
