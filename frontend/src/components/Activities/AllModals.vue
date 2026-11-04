@@ -1,60 +1,90 @@
+
 <template>
-  <div></div>
+  <TaskModal
+    v-model="taskModal.show"
+    :name="taskModal.name"
+    :defaults="taskModal.defaults"
+    :doctype="doctype"
+    :doc="doc"
+    @after-insert="(d) => afterDoctype(d, true)"
+    @after-update="(d) => afterDoctype(d, false)"
+  />
 </template>
+
 <script setup>
-import { useDoctypeModal } from '@/composables/doctypeModal'
-import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
-import { call } from 'frappe-ui'
+import { reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { call } from 'frappe-ui'
+import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
+import { useDoctypeModal } from '@/composables/doctypeModal'
+import TaskModal from '@/components/Modals/TaskModal.vue'
 
 const props = defineProps({
   doctype: { type: String, default: '' },
   doc: { type: Object, default: () => ({}) },
+  docname: { type: String, default: '' },
 })
 
 const activities = defineModel({ type: Object })
 
+const emit = defineEmits(['task-changed'])
+
 const { showModal } = useDoctypeModal()
-const { updateOnboardingStep } = useOnboarding('frappecrm')
+const onboarding = useOnboarding('frappecrm')
 const { capture } = useTelemetry()
 
-// Tasks
+const route = useRoute()
+const router = useRouter()
+
+const taskModal = reactive({
+  show: false,
+  name: '',
+  defaults: {},
+})
+
+function referenceDocname() {
+  return props.doc?.name || props.docname || ''
+}
+
+// ==============================
+// TASKS
+// ==============================
+
 function showTask(task) {
-  showModal({
-    name: task?.name,
-    doctype: 'CRM Task',
-    title: 'Task',
-    defaults: {
-      reference_doctype: props.doctype,
-      reference_docname: props.doc?.name,
-    },
-    callbacks: {
-      afterInsert: (d) => afterDoctype(d, true),
-      afterUpdate: afterDoctype,
-    },
-  })
+  taskModal.name = task?.name || ''
+
+  taskModal.defaults = {
+    reference_doctype: props.doctype,
+    reference_docname: referenceDocname(),
+  }
+
+  taskModal.show = true
 }
 
 async function deleteTask(name) {
   await call('frappe.client.delete', {
-    doctype: 'CRM Task',
+    doctype: 'DoubleT Task',
     name,
   })
-  activities.value?.reload?.()
+
+  emit('task-changed')
 }
 
-function updateTaskStatus(status, task) {
-  call('frappe.client.set_value', {
-    doctype: 'CRM Task',
+async function updateTaskStatus(status, task) {
+  await call('frappe.client.set_value', {
+    doctype: 'DoubleT Task',
     name: task.name,
     fieldname: 'status',
     value: status,
-  }).then(() => {
-    activities.value?.reload?.()
   })
+
+  emit('task-changed')
 }
 
-// Notes
+// ==============================
+// NOTES
+// ==============================
+
 function showNote(note) {
   showModal({
     name: note?.name,
@@ -62,73 +92,117 @@ function showNote(note) {
     title: 'Note',
     defaults: {
       reference_doctype: props.doctype,
-      reference_docname: props.doc?.name,
+      reference_docname: referenceDocname(),
     },
     callbacks: {
       afterInsert: (d) => afterDoctype(d, true),
-      afterUpdate: afterDoctype,
+      afterUpdate: (d) => afterDoctype(d, false),
     },
   })
 }
 
+// ==============================
+// AFTER SAVE / UPDATE
+// ==============================
+
 function afterDoctype(d, isInsert = false) {
-  activities.value.reload()
+  if (!d) return
 
-  let name =
-    d.doctype == 'FCRM Note'
-      ? 'note'
-      : d.doctype == 'CRM Task'
-        ? 'task'
-        : 'call_log'
-
-  let redirectHash = name + 's'
-  if (d.doctype == 'CRM Call Log') {
-    redirectHash = 'calls'
+  // DoubleT Task uses its own resource.
+  if (d.doctype === 'DoubleT Task') {
+    emit('task-changed')
+    redirect('tasks')
+    return
   }
 
+  // Preserve legacy Notes / Call Logs behavior.
+  activities.value?.reload?.()
+
+  const name =
+    d.doctype === 'FCRM Note'
+      ? 'note'
+      : 'call_log'
+
+  const redirectHash =
+    d.doctype === 'CRM Call Log'
+      ? 'calls'
+      : name + 's'
+
   if (isInsert) {
-    updateOnboardingStep('create_first_' + name)
-    capture(name + '_created')
+    try {
+      onboarding?.updateOnboardingStep?.(
+        'create_first_' + name,
+      )
+    } catch (error) {
+      console.warn('Onboarding update failed:', error)
+    }
+
+    try {
+      capture(name + '_created')
+    } catch (error) {
+      console.warn('Telemetry failed:', error)
+    }
   } else {
-    capture(name + '_updated')
+    try {
+      capture(name + '_updated')
+    } catch (error) {
+      console.warn('Telemetry failed:', error)
+    }
   }
 
   redirect(redirectHash)
 }
 
-// Call Logs
+// ==============================
+// CALL LOGS
+// ==============================
+
 function createCallLog() {
   showModal({
     doctype: 'CRM Call Log',
     title: 'Call Log',
     defaults: {
       reference_doctype: props.doctype,
-      reference_docname: props.doc?.name,
+      reference_docname: referenceDocname(),
       reference_doc: { ...props.doc },
     },
     callbacks: {
       afterInsert: (d) => afterDoctype(d, true),
-      afterUpdate: afterDoctype,
+      afterUpdate: (d) => afterDoctype(d, false),
     },
   })
 }
 
-// common
-const route = useRoute()
-const router = useRouter()
+// ==============================
+// NAVIGATION
+// ==============================
 
 function redirect(tabName) {
-  if (
-    ['Lead', 'Deal', 'LeadDetail', 'DealDetail', 'ContactDetail', 'CompanyDetail'].includes(
-      route.name,
-    )
-  ) {
-    let hash = '#' + tabName
-    if (route.hash != hash) {
-      router.push({ ...route, hash })
-    }
+  const supportedRoutes = [
+    'Lead',
+    'Deal',
+    'LeadDetail',
+    'DealDetail',
+    'ContactDetail',
+    'CompanyDetail',
+  ]
+
+  if (!supportedRoutes.includes(route.name)) return
+
+  const hash = '#' + tabName
+
+  if (route.hash !== hash) {
+    router.push({
+      path: route.path,
+      query: route.query,
+      hash,
+    })
   }
 }
+
+// ==============================
+// EXPOSE TO ACTIVITY HEADER
+// ==============================
 
 defineExpose({
   showTask,

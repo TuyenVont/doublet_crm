@@ -420,12 +420,16 @@
     :doctype="doctype"
     @send="(t) => sendTemplate(t)"
   />
-  <AllModals
-    ref="modalRef"
+
+<AllModals
+  ref="modalRef"
   v-model="all_activities"
-    :doctype="doctype"
-    :doc="doc"
-  />
+  :doctype="doctype"
+  :doc="doc"
+  :docname="docname"
+  @task-changed="() => linkedTasks.reload()"
+/>
+
   <FilesUploader
     v-model="showFilesUploader"
     :doctype="doctype"
@@ -691,7 +695,7 @@ const activities = computed(() => {
     return sortByCreation(all_activities.data.calls, isNewestFirst.value)
   } else if (title.value == 'Tasks') {
     const tasks = supportedTaskDoctypes.includes(props.doctype)
-      ? linkedTasks.data
+      ? linkedTasks.data?.tasks
       : all_activities.data?.tasks
     if (!tasks) return []
     return sortByModified(tasks)

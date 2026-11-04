@@ -1,0 +1,88 @@
+{
+ "doctype": "DocType",
+ "name": "DoubleT Task",
+ "module": "DoubleT CRM",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "field_order": [
+  "title",
+  "description",
+  "status",
+  "priority",
+  "due_date",
+  "assigned_to",
+  "reference_doctype",
+  "reference_docname"
+ ],
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Backlog\nTodo\nIn Progress\nDone\nCanceled",
+   "default": "Backlog",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Select",
+   "label": "Priority",
+   "options": "Low\nMedium\nHigh\nUrgent",
+   "default": "Low"
+  },
+  {
+   "fieldname": "due_date",
+   "fieldtype": "Datetime",
+   "label": "Due Date",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "assigned_to",
+   "fieldtype": "Link",
+   "label": "Assign To",
+   "options": "User",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Select",
+   "label": "Related Type",
+   "options": "\nDoubleT Lead\nDoubleT Deal\nDoubleT Contact\nDoubleT Company"
+  },
+  {
+   "fieldname": "reference_docname",
+   "fieldtype": "Dynamic Link",
+   "label": "Related Record",
+   "options": "reference_doctype"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1
+  }
+ ],
+ "title_field": "title",
+ "search_fields": "title,assigned_to,reference_docname",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}
