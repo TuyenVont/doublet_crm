@@ -11,6 +11,7 @@ import CompaniesView from '@/pages/CompaniesView.vue'
 const CompanyDetailView = () => import('@/pages/CompanyDetailView.vue')
 import PlaceholderView from '@/pages/PlaceholderView.vue'
 const TasksView = () => import('@/pages/Tasks.vue')
+const NotesView = () => import('@/pages/Notes.vue')
 
 const routes = [
   {
@@ -81,11 +82,7 @@ const routes = [
   {
     path: '/notes',
     name: 'Notes',
-    component: PlaceholderView,
-    props: {
-      title: 'Notes',
-      description: 'DoubleT CRM Notes Management',
-    },
+    component: NotesView,
   },
 {
   path: '/tasks',

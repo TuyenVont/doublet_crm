@@ -117,6 +117,12 @@
     @saved="onLeadDataSaved"
   />
 
+  <SharedNotes
+    v-else-if="activeTabName === 'Notes'"
+    reference-doctype="DoubleT Lead"
+    :reference-name="leadId"
+  />
+
   <!-- NORMAL ACTIVITY TABS -->
   <Activities
     v-else
@@ -436,6 +442,7 @@ import DoubleTLeadInfoPanel from '@/components/Lead/DoubleTLeadInfoPanel.vue'
 import DoubleTLeadDataPanel from '@/components/Lead/DoubleTLeadDataPanel.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
+import SharedNotes from '@/components/Notes/SharedNotes.vue'
 import AssignTo from '@/components/AssignTo.vue'
 import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
 import SLASection from '@/components/SLASection.vue'
