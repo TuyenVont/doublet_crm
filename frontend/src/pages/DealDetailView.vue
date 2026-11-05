@@ -144,6 +144,12 @@
             @saved="onDealSaved"
           />
 
+          <SharedNotes
+            v-else-if="activeTabName === 'Notes'"
+            reference-doctype="DoubleT Deal"
+            :reference-name="dealId"
+          />
+
           <Activities
             v-else
             ref="activities"
@@ -321,6 +327,7 @@ import {
 
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
+import SharedNotes from '@/components/Notes/SharedNotes.vue'
 import Resizer from '@/components/Resizer.vue'
 import AssignTo from '@/components/AssignTo.vue'
 

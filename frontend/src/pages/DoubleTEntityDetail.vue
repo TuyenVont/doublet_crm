@@ -49,6 +49,9 @@
           <h2 class="mb-3 text-lg font-semibold">Tasks</h2>
           <Activities :doctype="doctype" :docname="recordName" :tabs="taskTabs" />
         </section>
+        <section v-if="!isNew && !editing" class="rounded border border-outline-gray-2">
+          <SharedNotes :reference-doctype="doctype" :reference-name="recordName" />
+        </section>
       </template>
     </div>
   </div>
@@ -60,6 +63,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { call, Button } from 'frappe-ui'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
+import SharedNotes from '@/components/Notes/SharedNotes.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 
 const props = defineProps({ kind: { type: String, required: true } })
