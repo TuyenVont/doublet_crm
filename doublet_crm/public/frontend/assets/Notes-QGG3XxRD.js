@@ -1,0 +1,2 @@
+import{a,c as s,g as e,i as o,b as _,t as c,C as r}from"./index-CvqbEOAF.js";import{_ as i}from"./SharedNotes-DPrOHl1H.js";const l={class:"flex h-full flex-col overflow-hidden bg-surface-white"},n={class:"text-lg-medium text-ink-gray-9"},p={__name:"Notes",setup(m){return(t,f)=>(a(),s("div",l,[e(r,null,{"left-header":o(()=>[_("div",n,c(t.__("Notes")),1)]),_:1}),e(i,{management:""})]))}};export{p as default};
+//# sourceMappingURL=Notes-QGG3XxRD.js.map
