@@ -10,6 +10,7 @@ const ContactDetailView = () => import('@/pages/ContactDetailView.vue')
 import CompaniesView from '@/pages/CompaniesView.vue'
 const CompanyDetailView = () => import('@/pages/CompanyDetailView.vue')
 import PlaceholderView from '@/pages/PlaceholderView.vue'
+import CallLogs from '@/pages/CallLogs.vue'
 
 const routes = [
   {
@@ -98,7 +99,7 @@ const routes = [
   {
     path: '/call-logs',
     name: 'Call Logs',
-    component: PlaceholderView,
+    component: CallLogs,
     props: {
       title: 'Call Logs',
       description: 'DoubleT CRM Call Logs Management',
