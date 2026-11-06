@@ -5,7 +5,39 @@ from frappe.utils import cint, cstr, now_datetime
 
 
 class DoubleTLead(Document):
-	pass
+	def validate(self):
+		previous = self.get_doc_before_save()
+		# CONVERTED là trạng thái do hệ thống quản lý.
+		# Chỉ convert_lead() được phép chuyển Lead sang trạng thái này.
+		if (
+			self.status == "CONVERTED"
+			and (
+				not previous
+				or previous.status != "CONVERTED"
+			)
+			and not self.flags.get(
+				"allow_conversion_status"
+			)
+		):
+			frappe.throw(
+				_(
+					"Use Convert Lead to mark a Lead as converted."
+				),
+				frappe.ValidationError,
+			)
+		# Lead đã converted không được đổi ngược
+		# về trạng thái thông thường.
+		if (
+			previous
+			and previous.status == "CONVERTED"
+			and self.status != "CONVERTED"
+		):
+			frappe.throw(
+				_(
+					"A converted Lead cannot be moved back to another status."
+				),
+				frappe.ValidationError,
+			)
 
 
 @frappe.whitelist()
@@ -231,12 +263,27 @@ def convert_lead(
 			company.check_permission("read")
 
 		elif create_company:
-			company = frappe.get_doc({
-				"doctype": "DoubleT Company",
-				"company_name": company_name,
-			}).insert()
+			# Reuse an existing company with the same name instead of
+			# creating a duplicate master record.
+			existing_company_name = frappe.db.get_value(
+				"DoubleT Company",
+				{"company_name": company_name},
+				"name",
+			)
 
-			company_created = True
+			if existing_company_name:
+				company = frappe.get_doc(
+					"DoubleT Company",
+					existing_company_name,
+				)
+				company.check_permission("read")
+			else:
+				company = frappe.get_doc({
+					"doctype": "DoubleT Company",
+					"company_name": company_name,
+				}).insert()
+
+				company_created = True
 
 		# --------------------------------
 		# CONTACT
@@ -313,6 +360,7 @@ def convert_lead(
 		# --------------------------------
 
 		lead.status = "CONVERTED"
+		lead.flags.allow_conversion_status = True
 
 		lead.converted_on = (
 			now_datetime()

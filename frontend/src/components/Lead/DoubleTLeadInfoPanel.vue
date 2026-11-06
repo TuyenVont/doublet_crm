@@ -56,8 +56,19 @@
           <input
             v-model="detailsForm.company_name"
             type="text"
+            list="doublet-lead-sidebar-company-options"
+            autocomplete="off"
             class="w-full rounded-lg border border-outline-gray-2 px-3 py-2 text-sm"
+            :placeholder="__('Type a new company or choose an existing one')"
           />
+
+          <datalist id="doublet-lead-sidebar-company-options">
+            <option
+              v-for="item in companies"
+              :key="item.name"
+              :value="item.company_name || item.name"
+            />
+          </datalist>
         </label>
 
         <label class="block space-y-1">
@@ -90,7 +101,8 @@
 
           <select
             v-model="detailsForm.status"
-            class="w-full rounded-lg border border-outline-gray-2 bg-white px-3 py-2 text-sm"
+            :disabled="isConverted"
+            class="w-full rounded-lg border border-outline-gray-2 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-surface-gray-1 disabled:text-ink-gray-5"
           >
             <option
               v-for="status in statuses"
@@ -104,7 +116,7 @@
 
         <label class="block space-y-1">
           <span class="text-xs text-ink-gray-5">
-            {{ __('Lead Owner') }}
+            {{ __('Primary Owner') }}
           </span>
 
           <select
@@ -390,13 +402,13 @@ const statuses = [
   'CONTACTED',
   'NURTURE',
   'QUALIFIED',
-  'CONVERTED',
   'UNQUALIFIED',
   'JUNK',
 ]
 
 const sources = ref([])
 const users = ref([])
+const companies = ref([])
 
 const detailsEditing = ref(false)
 const personEditing = ref(false)
@@ -831,6 +843,34 @@ async function loadSources() {
   }
 }
 
+
+async function loadCompanies() {
+  try {
+    const result = await call(
+      'frappe.client.get_list',
+      {
+        doctype: 'DoubleT Company',
+        fields: [
+          'name',
+          'company_name',
+        ],
+        order_by: 'company_name asc',
+        limit_page_length: 200,
+      }
+    )
+
+    companies.value =
+      Array.isArray(result)
+        ? result
+        : []
+  } catch (e) {
+    console.error(
+      'Load companies failed:',
+      e
+    )
+  }
+}
+
 async function loadUsers() {
   try {
     const result = await call(
@@ -889,6 +929,7 @@ watch(
 onMounted(() => {
   loadSources()
   loadUsers()
+  loadCompanies()
 })
 
 /* =====================================================

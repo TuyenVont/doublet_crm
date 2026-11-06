@@ -33,7 +33,7 @@
       />
 
       <Dropdown
-        v-if="doc && document.statuses"
+        v-if="doc && !isConverted"
         :options="statuses"
         placement="right"
       >
@@ -50,7 +50,7 @@
             <template #prefix>
               <IndicatorIcon
                 :class="
-                  getLeadStatus(doc.status).color
+                  getDoubleTLeadStatus(doc.status).color
                 "
               />
             </template>
@@ -115,6 +115,12 @@
     v-if="activeTabName === 'Data'"
     :lead="doc"
     @saved="onLeadDataSaved"
+  />
+
+  <SharedNotes
+    v-else-if="activeTabName === 'Notes'"
+    reference-doctype="DoubleT Lead"
+    :reference-name="leadId"
   />
 
   <!-- NORMAL ACTIVITY TABS -->
@@ -383,13 +389,6 @@
     name="Leads"
   />
 
-  <!-- LOST REASON -->
-  <LostReasonModal
-    v-if="showLostReasonModal"
-    v-model="showLostReasonModal"
-    doctype="DoubleT Lead"
-    :document="document"
-  />
 </template>
 
 <script setup>
@@ -437,13 +436,13 @@ import CameraIcon from '@/components/Icons/CameraIcon.vue'
 import LinkIcon from '@/components/Icons/LinkIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 
-import LostReasonModal from '@/components/Modals/LostReasonModal.vue'
 import DoubleTConvertToDealModal from '@/components/Modals/DoubleTConvertToDealModal.vue'
 
 import DoubleTLeadInfoPanel from '@/components/Lead/DoubleTLeadInfoPanel.vue'
 import DoubleTLeadDataPanel from '@/components/Lead/DoubleTLeadDataPanel.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
+import SharedNotes from '@/components/Notes/SharedNotes.vue'
 import AssignTo from '@/components/AssignTo.vue'
 import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
 import SLASection from '@/components/SLASection.vue'
@@ -454,13 +453,11 @@ import {
   setupCustomizations,
   copyToClipboard,
   validateIsImageFile,
-  isTranslatable,
 } from '@/utils'
 
 import { getView } from '@/utils/view'
 import { getSettings } from '@/stores/settings'
 import { globalStore } from '@/stores/global'
-import { statusesStore } from '@/stores/statuses'
 import { getMeta } from '@/stores/meta'
 import { useDocument } from '@/data/document'
 import { whatsappEnabled } from '@/composables/whatsapp'
@@ -475,11 +472,6 @@ const {
   $socket,
   makeCall,
 } = globalStore()
-
-const {
-  statusOptions,
-  getLeadStatus,
-} = statusesStore()
 
 const {
   doctypeMeta,
@@ -719,7 +711,7 @@ const breadcrumbs = computed(() => {
     label: title.value,
 
     route: {
-      name: 'Lead',
+      name: 'LeadDetail',
 
       params: {
         leadId:
@@ -777,19 +769,32 @@ const title = computed(() => {
  * STATUS
  * -------------------------------- */
 
-const statuses = computed(() => {
-  const customStatuses =
-    document.statuses?.length
-      ? document.statuses
-      : document._statuses ||
-        []
+const DOUBLET_LEAD_STATUSES = [
+  { name: 'NEW', color: 'text-blue-500' },
+  { name: 'CONTACTED', color: 'text-cyan-500' },
+  { name: 'NURTURE', color: 'text-orange-500' },
+  { name: 'QUALIFIED', color: 'text-green-500' },
+  { name: 'CONVERTED', color: 'text-green-600' },
+  { name: 'UNQUALIFIED', color: 'text-gray-500' },
+  { name: 'JUNK', color: 'text-red-500' },
+]
 
-  return statusOptions(
-    'lead',
-    customStatuses,
-    triggerStatusChange
+function getDoubleTLeadStatus(status) {
+  return (
+    DOUBLET_LEAD_STATUSES.find((item) => item.name === status) ||
+    { name: status || 'NEW', color: 'text-gray-500' }
   )
-})
+}
+
+const statuses = computed(() =>
+  DOUBLET_LEAD_STATUSES
+    .filter((status) => status.name !== 'CONVERTED')
+    .map((status) => ({
+      label: __(status.name),
+      value: status.name,
+      onClick: () => triggerStatusChange(status.name),
+    }))
+)
 
 
 /* --------------------------------
@@ -920,12 +925,50 @@ async function onLeadDataSaved(data) {
 async function triggerStatusChange(
   value
 ) {
-  await triggerOnChange(
-    'status',
-    value
-  )
+  if (
+    isConverted.value ||
+    value === 'CONVERTED' ||
+    value === doc.value?.status
+  ) {
+    return
+  }
 
-  setLostReason()
+  const oldStatus = doc.value?.status
+
+  try {
+    await triggerOnChange(
+      'status',
+      value
+    )
+
+    document.save.submit(
+      null,
+      {
+        onSuccess: () => {
+          reload.value = true
+        },
+
+        onError: () => {
+          if (document.doc) {
+            document.doc.status =
+              oldStatus
+          }
+        },
+      }
+    )
+  } catch (e) {
+    if (document.doc) {
+      document.doc.status =
+        oldStatus
+    }
+
+    toast.error(
+      e?.message ||
+        __(
+          'Unable to update Lead status'
+        )
+    )
+  }
 }
 
 
@@ -1122,62 +1165,7 @@ async function handleConverted(result) {
  * -------------------------------- */
 
 function statusLabel(status) {
-  if (
-    isTranslatable(
-      'CRM Lead Status'
-    )
-  ) {
-    return __(status)
-  }
-
-  return status
-}
-
-
-/* --------------------------------
- * LOST REASON
- * -------------------------------- */
-
-const showLostReasonModal =
-  ref(false)
-
-
-function setLostReason() {
-  if (
-    getLeadStatus(
-      document.doc.status
-    ).type !== 'Lost' ||
-
-    (
-      document.doc
-        .lost_reason &&
-      document.doc
-        .lost_reason !==
-        'Other'
-    ) ||
-
-    (
-      document.doc
-        .lost_reason ===
-        'Other' &&
-      document.doc
-        .lost_notes
-    )
-  ) {
-    document.save.submit(
-      null,
-      {
-        onSuccess: () => {
-          reload.value = true
-        },
-      }
-    )
-
-    return
-  }
-
-  showLostReasonModal.value =
-    true
+  return __(status)
 }
 
 
@@ -1188,28 +1176,15 @@ function setLostReason() {
 function beforeStatusChange(
   data
 ) {
-  if (
-    Object.hasOwn(
-      data ?? {},
-      'status'
-    ) &&
-
-    getLeadStatus(
-      data.status
-    ).type === 'Lost'
-  ) {
-    setLostReason()
-  } else {
-    document.save.submit(
-      null,
-      {
-        onSuccess: () =>
-          reloadResources(
-            data
-          ),
-      }
-    )
-  }
+  document.save.submit(
+    null,
+    {
+      onSuccess: () =>
+        reloadResources(
+          data
+        ),
+    }
+  )
 }
 
 

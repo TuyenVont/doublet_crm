@@ -34,14 +34,17 @@
       </ListHeaderItem>
     </ListHeader>
     <ListRows
-      v-slot="{ idx, column, item }"
+      v-slot="{ idx, column, item, row }"
       class="mx-3 sm:mx-5"
       :rows="rows"
       doctype="CRM Task"
     >
       <div v-if="column.key === 'due_date' && item">
         <Tooltip :text="item && formatDate(item, 'ddd, MMM D, YYYY | hh:mm a')">
-          <div class="flex items-center gap-2 truncate text-base">
+          <div
+            class="flex items-center gap-2 truncate text-base"
+            :class="isOverdue?.(row?._task) ? 'font-semibold text-ink-red-6' : ''"
+          >
             <div><CalendarIcon /></div>
             <div class="truncate">
               {{ formatDate(item, 'D MMM, hh:mm a') }}
@@ -49,11 +52,17 @@
           </div>
         </Tooltip>
       </div>
+      <div v-else-if="column.key === 'due_date' && isOverdue?.(row?._task)" class="text-sm font-medium text-ink-red-6">
+        {{ __('Overdue') }}
+      </div>
       <ListRowItem
         v-else
         :item="item"
         :align="column.align"
-        class="overflow-hidden"
+        :class="[
+          'overflow-hidden',
+          isOverdue?.(row?._task) ? 'bg-surface-red-1' : '',
+        ]"
       >
         <template #prefix>
           <div v-if="column.key === 'status'">
@@ -211,6 +220,7 @@ import { ref, computed, watch } from 'vue'
 defineProps({
   rows: { type: Array, required: true },
   columns: { type: Array, required: true },
+  isOverdue: { type: Function, default: null },
   options: {
     type: Object,
     default: () => ({

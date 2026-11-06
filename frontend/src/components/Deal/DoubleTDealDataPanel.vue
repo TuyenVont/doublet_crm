@@ -162,16 +162,17 @@
             />
           </div>
 
-          <!-- OWNER -->
+          <!-- PRIMARY OWNER -->
           <div class="space-y-1">
             <span class="text-sm font-medium text-ink-gray-8">
-              {{ __('Deal Owner') }}
+              {{ __('Primary Owner') }}
             </span>
 
             <Link
               :value="form.deal_owner"
               doctype="User"
-              :placeholder="__('Select Deal Owner')"
+              :hide-me="true"
+              :placeholder="__('Select Primary Owner')"
               @change="value => (form.deal_owner = value || '')"
             />
           </div>
@@ -231,7 +232,34 @@
               doctype="DoubleT Lead"
               :placeholder="__('Select Source Lead')"
               @change="onSourceLeadChange"
-            />
+            >
+              <template #target="{ togglePopover }">
+                <button
+                  type="button"
+                  class="flex w-full items-center justify-between rounded-lg border border-outline-gray-2 bg-surface-gray-2 px-3 py-2 text-left text-sm transition hover:bg-surface-gray-3"
+                  @click="togglePopover"
+                >
+                  <span
+                    class="truncate"
+                    :class="
+                      sourceLeadLabel
+                        ? 'text-ink-gray-9'
+                        : 'text-ink-gray-4'
+                    "
+                  >
+                    {{
+                      sourceLeadLabel ||
+                      __('Select Source Lead')
+                    }}
+                  </span>
+
+                  <span
+                    class="lucide-chevron-down h-4 w-4 shrink-0 text-ink-gray-5"
+                    aria-hidden="true"
+                  />
+                </button>
+              </template>
+            </Link>
           </div>
 
         </div>
@@ -240,15 +268,9 @@
       <!-- OUTCOME -->
       <section class="mt-5 rounded-xl border border-outline-gray-2 bg-white">
         <div class="border-b px-5 py-4">
-          <div class="flex items-center justify-between">
-            <h3 class="font-semibold text-ink-gray-9">
-              {{ __('Outcome') }}
-            </h3>
-
-            <span class="text-xs text-ink-gray-5">
-              {{ __('Lifecycle') }}
-            </span>
-          </div>
+          <h3 class="font-semibold text-ink-gray-9">
+            {{ __('Outcome') }}
+          </h3>
         </div>
 
         <div class="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
@@ -327,6 +349,12 @@ const saving = ref(false)
 const error = ref('')
 const stages = ref([])
 
+/*
+ * Label hiển thị cho Source Lead.
+ * form.source_lead vẫn giữ ID nội bộ để save.
+ */
+const sourceLeadLabel = ref('')
+
 const form = reactive({
   deal_title: '',
   amount: '',
@@ -369,9 +397,7 @@ function fillForm() {
       ''
   }
 
-  if (
-    !form.deal_type
-  ) {
+  if (!form.deal_type) {
     if (form.company) {
       form.deal_type =
         'COMPANY'
@@ -437,6 +463,10 @@ function apiError(e) {
 function resetForm() {
   error.value = ''
   fillForm()
+
+  loadSourceLeadLabel(
+    form.source_lead
+  )
 }
 
 async function loadStages() {
@@ -503,6 +533,54 @@ async function getDoc(
 
     return null
   }
+}
+
+/* --------------------------------
+ * SOURCE LEAD LABEL
+ * -------------------------------- */
+
+async function loadSourceLeadLabel(
+  value = form.source_lead
+) {
+  sourceLeadLabel.value = ''
+
+  if (!value) {
+    return
+  }
+
+  const lead =
+    await getDoc(
+      'DoubleT Lead',
+      value
+    )
+
+  if (!lead) {
+    sourceLeadLabel.value =
+      value
+
+    return
+  }
+
+  /*
+   * Ưu tiên các field label phổ biến.
+   * Nếu Lead hiện tại có first_name / last_name
+   * thì ghép tên.
+   */
+  const fullName =
+    [
+      lead.first_name,
+      lead.last_name,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+
+  sourceLeadLabel.value =
+    fullName ||
+    lead.lead_name ||
+    lead.title ||
+    lead.full_name ||
+    lead.name
 }
 
 /* --------------------------------
@@ -581,6 +659,7 @@ async function onSourceLeadChange(
     value || ''
 
   if (!value) {
+    sourceLeadLabel.value = ''
     return
   }
 
@@ -591,8 +670,27 @@ async function onSourceLeadChange(
     )
 
   if (!lead) {
+    sourceLeadLabel.value =
+      value
+
     return
   }
+
+  const fullName =
+    [
+      lead.first_name,
+      lead.last_name,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+
+  sourceLeadLabel.value =
+    fullName ||
+    lead.lead_name ||
+    lead.title ||
+    lead.full_name ||
+    lead.name
 
   const contactName =
     lead.converted_contact ||
@@ -754,6 +852,10 @@ async function save() {
       deal_type:
         form.deal_type,
 
+      /*
+       * deal_owner = primary owner.
+       * Không liên quan tới AssignTo / _assign.
+       */
       deal_owner:
         form.deal_owner ||
         null,
@@ -770,6 +872,10 @@ async function save() {
         form.company ||
         null,
 
+      /*
+       * Vẫn save ID nội bộ.
+       * UI chỉ hiển thị sourceLeadLabel.
+       */
       source_lead:
         form.source_lead ||
         null,
@@ -824,6 +930,10 @@ watch(
   () => props.deal,
   () => {
     fillForm()
+
+    loadSourceLeadLabel(
+      props.deal?.source_lead
+    )
   },
   {
     immediate: true,

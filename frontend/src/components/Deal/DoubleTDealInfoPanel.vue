@@ -42,8 +42,8 @@
         />
 
         <InfoRow
-          :label="__('Deal Owner')"
-          :value="deal.deal_owner"
+          :label="__('Primary Owner')"
+          :value="labels.deal_owner || deal.deal_owner"
         />
 
         <InfoRow
@@ -57,7 +57,6 @@
         v-else
         class="space-y-4 px-5 pb-5"
       >
-
         <label class="block space-y-1">
           <span class="text-xs text-ink-gray-5">
             {{ __('Stage') }} *
@@ -105,13 +104,14 @@
 
         <div class="space-y-1">
           <span class="text-xs text-ink-gray-5">
-            {{ __('Deal Owner') }}
+            {{ __('Primary Owner') }}
           </span>
 
           <Link
             :value="detailsForm.deal_owner"
             doctype="User"
-            :placeholder="__('Select Deal Owner')"
+            :hide-me="true"
+            :placeholder="__('Select Primary Owner')"
             @change="
               value =>
                 (detailsForm.deal_owner =
@@ -120,25 +120,7 @@
           />
         </div>
 
-        <label class="block space-y-1">
-          <span class="text-xs text-ink-gray-5">
-            {{ __('Deal Type') }}
-          </span>
 
-          <select
-            v-model="detailsForm.deal_type"
-            class="w-full rounded-lg border border-outline-gray-2 bg-white px-3 py-2 text-sm"
-            @change="onDealTypeChange"
-          >
-            <option value="PERSONAL">
-              {{ __('Personal') }}
-            </option>
-
-            <option value="COMPANY">
-              {{ __('Company') }}
-            </option>
-          </select>
-        </label>
 
         <label
           v-if="detailsStageType === 'LOST'"
@@ -213,7 +195,6 @@
         v-if="!relatedEditing"
         class="space-y-4 px-5 pb-5"
       >
-
         <LinkedRow
           :label="__('Contact')"
           :value="deal.contact"
@@ -239,7 +220,6 @@
           :label="__('Source')"
           :value="deal.source"
         />
-
       </div>
 
       <!-- EDIT -->
@@ -247,7 +227,6 @@
         v-else
         class="space-y-4 px-5 pb-5"
       >
-
         <div class="space-y-1">
           <span class="text-xs text-ink-gray-5">
             {{ __('Contact') }}
@@ -342,7 +321,7 @@
     </details>
 
     <!-- OUTCOME -->
-    <details open class="border-b">
+    <details open>
       <summary
         class="cursor-pointer px-5 py-4 text-sm font-semibold text-ink-gray-9"
       >
@@ -371,8 +350,6 @@
 </template>
 
 <script setup>
-import Link from '@/components/Controls/Link.vue'
-
 import {
   computed,
   defineComponent,
@@ -391,6 +368,8 @@ import {
   call,
   toast,
 } from 'frappe-ui'
+
+import Link from '@/components/Controls/Link.vue'
 
 import {
   formatCurrency,
@@ -440,14 +419,13 @@ const labels = reactive({
   contact: '',
   company: '',
   source_lead: '',
+  deal_owner: '',
 })
 
 const displayAmount = computed(() => {
   if (
-    props.deal?.amount ===
-      null ||
-    props.deal?.amount ===
-      undefined ||
+    props.deal?.amount === null ||
+    props.deal?.amount === undefined ||
     props.deal?.amount === ''
   ) {
     return '-'
@@ -572,6 +550,32 @@ function cancelEdit(section) {
   }
 }
 
+async function getDoc(
+  doctype,
+  name
+) {
+  if (!name) {
+    return null
+  }
+
+  try {
+    return await call(
+      'frappe.client.get',
+      {
+        doctype,
+        name,
+      }
+    )
+  } catch (e) {
+    console.error(
+      `Unable to load ${doctype}:`,
+      e
+    )
+
+    return null
+  }
+}
+
 async function loadStages() {
   try {
     const result = await call(
@@ -585,6 +589,7 @@ async function loadStages() {
           'stage_name',
           'stage_type',
           'sort_order',
+          'enabled',
         ],
 
         filters: {
@@ -605,39 +610,9 @@ async function loadStages() {
         : []
   } catch (e) {
     console.error(
-      'Load stages failed:',
+      'Load Deal Stages failed:',
       e
     )
-  }
-}
-
-async function getDoc(
-  doctype,
-  name
-) {
-  if (!name) {
-    return null
-  }
-
-  try {
-    return await call(
-      'frappe.client.get',
-      {
-        doctype,
-        name,
-      }
-    )
-  } catch {
-    return null
-  }
-}
-
-function onDealTypeChange() {
-  if (
-    detailsForm.deal_type ===
-    'PERSONAL'
-  ) {
-    relatedForm.company = ''
   }
 }
 
@@ -669,7 +644,6 @@ async function onContactChange(
       'COMPANY'
   } else {
     relatedForm.company = ''
-
     detailsForm.deal_type =
       'PERSONAL'
   }
@@ -681,7 +655,7 @@ function onCompanyChange(
   relatedForm.company =
     value || ''
 
-  if (value) {
+  if (relatedForm.company) {
     detailsForm.deal_type =
       'COMPANY'
   }
@@ -747,6 +721,13 @@ async function onSourceLeadChange(
 }
 
 async function saveDetails() {
+  if (
+    !props.deal?.name ||
+    detailsSaving.value
+  ) {
+    return
+  }
+
   detailsError.value = ''
 
   if (!detailsForm.stage) {
@@ -760,13 +741,9 @@ async function saveDetails() {
     detailsForm.amount !== '' &&
     (
       !Number.isFinite(
-        Number(
-          detailsForm.amount
-        )
+        Number(detailsForm.amount)
       ) ||
-      Number(
-        detailsForm.amount
-      ) < 0
+      Number(detailsForm.amount) < 0
     )
   ) {
     detailsError.value =
@@ -781,7 +758,7 @@ async function saveDetails() {
     !detailsForm.lost_reason.trim()
   ) {
     detailsError.value =
-      'Lost Reason is required.'
+      'Lost Reason is required for a lost deal.'
 
     return
   }
@@ -801,23 +778,17 @@ async function saveDetails() {
             ),
 
       expected_close_date:
-        detailsForm
-          .expected_close_date ||
+        detailsForm.expected_close_date ||
         null,
 
       deal_owner:
         detailsForm.deal_owner ||
         null,
 
-      deal_type:
-        detailsForm.deal_type,
-
       lost_reason:
         detailsStageType.value ===
           'LOST'
-          ? detailsForm
-              .lost_reason
-              .trim()
+          ? detailsForm.lost_reason.trim()
           : null,
     }
 
@@ -854,6 +825,13 @@ async function saveDetails() {
 }
 
 async function saveRelated() {
+  if (
+    !props.deal?.name ||
+    relatedSaving.value
+  ) {
+    return
+  }
+
   relatedError.value = ''
 
   if (
@@ -953,8 +931,25 @@ async function loadLabels() {
   labels.contact = ''
   labels.company = ''
   labels.source_lead = ''
+  labels.deal_owner = ''
 
   const tasks = []
+
+  if (props.deal?.deal_owner) {
+    tasks.push(
+      getDoc(
+        'User',
+        props.deal.deal_owner
+      ).then(doc => {
+        if (!doc) return
+
+        labels.deal_owner =
+          doc.full_name ||
+          doc.first_name ||
+          doc.name
+      })
+    )
+  }
 
   if (props.deal?.contact) {
     tasks.push(
@@ -1006,6 +1001,9 @@ async function loadLabels() {
           ]
             .filter(Boolean)
             .join(' ') ||
+          doc.lead_name ||
+          doc.title ||
+          doc.full_name ||
           doc.name
       })
     )
@@ -1099,7 +1097,7 @@ const InfoRow =
           'div',
           {
             class:
-              'grid grid-cols-[110px_minmax(0,1fr)] gap-3 text-sm',
+              'grid grid-cols-[88px_minmax(0,1fr)] gap-3 text-sm',
           },
           [
             h(
@@ -1115,13 +1113,14 @@ const InfoRow =
               'div',
               {
                 class:
-                  'break-words text-ink-gray-9',
+                  'min-w-0 break-words text-ink-gray-9',
               },
               props.value ===
                   null ||
                 props.value ===
                   undefined ||
-                props.value === ''
+                props.value ===
+                  ''
                 ? '-'
                 : String(
                     props.value
@@ -1146,14 +1145,16 @@ const LinkedRow =
 
     setup(
       props,
-      { emit }
+      {
+        emit,
+      }
     ) {
       return () =>
         h(
           'div',
           {
             class:
-              'grid grid-cols-[110px_minmax(0,1fr)] gap-3 text-sm',
+              'grid grid-cols-[88px_minmax(0,1fr)] gap-3 text-sm',
           },
           [
             h(
@@ -1169,17 +1170,14 @@ const LinkedRow =
               ? h(
                   'button',
                   {
-                    type:
-                      'button',
+                    type: 'button',
 
                     class:
-                      'min-w-0 break-words text-left font-medium text-blue-600 hover:underline',
+                      'min-w-0 truncate text-left text-blue-600 hover:underline',
 
                     onClick:
                       () =>
-                        emit(
-                          'open'
-                        ),
+                        emit('open'),
                   },
                   props.displayValue ||
                     props.value

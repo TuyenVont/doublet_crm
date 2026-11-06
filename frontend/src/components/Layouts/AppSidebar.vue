@@ -112,6 +112,7 @@ const links = [
   { label: 'Deals', icon: DealsIcon, to: 'Deals' },
   { label: 'Contacts', icon: ContactsIcon, to: 'Contacts' },
   { label: 'Companies', icon: OrganizationsIcon, to: 'Companies' },
+  { label: 'Products', icon: 'package', to: 'Products' },
   { label: 'Notes', icon: NoteIcon, to: 'Notes' },
   { label: 'Tasks', icon: TaskIcon, to: 'Tasks' },
   { label: 'Call Logs', icon: PhoneIcon, to: 'Call Logs' },

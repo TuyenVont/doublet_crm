@@ -8,6 +8,8 @@ const FrappeLead = () => import('@/pages/FrappeLead.vue')
 import ContactsView from '@/pages/ContactsView.vue'
 const ContactDetailView = () => import('@/pages/ContactDetailView.vue')
 import CompaniesView from '@/pages/CompaniesView.vue'
+const ProductsView = () => import('@/pages/ProductsView.vue')
+const ProductCategoriesView = () => import('@/pages/ProductCategoriesView.vue')
 const CompanyDetailView = () => import('@/pages/CompanyDetailView.vue')
 import PlaceholderView from '@/pages/PlaceholderView.vue'
 import CallLogs from '@/pages/CallLogs.vue'
@@ -79,23 +81,25 @@ const routes = [
     component: CompanyDetailView,
   },
   {
-    path: '/notes',
-    name: 'Notes',
-    component: PlaceholderView,
-    props: {
-      title: 'Notes',
-      description: 'DoubleT CRM Notes Management',
-    },
+    path: '/products/categories',
+    name: 'ProductCategories',
+    component: ProductCategoriesView,
   },
   {
-    path: '/tasks',
-    name: 'Tasks',
-    component: PlaceholderView,
-    props: {
-      title: 'Tasks',
-      description: 'DoubleT CRM Tasks Management',
-    },
+    path: '/products',
+    name: 'Products',
+    component: ProductsView,
   },
+  {
+    path: '/notes',
+    name: 'Notes',
+    component: NotesView,
+  },
+{
+  path: '/tasks',
+  name: 'Tasks',
+  component: TasksView,
+},
   {
     path: '/call-logs',
     name: 'Call Logs',

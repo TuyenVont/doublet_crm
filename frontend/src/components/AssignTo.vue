@@ -8,9 +8,14 @@
         >
           <MultipleAvatar :avatars="assignees" />
         </component>
-        <Button v-else :label="__('Assign To')" />
+
+        <Button
+          v-else
+          :label="__('Assign To')"
+        />
       </div>
     </template>
+
     <template #body="{ isOpen }">
       <AssignToBody
         v-show="isOpen"
@@ -18,82 +23,41 @@
         :docname="docname"
         :doctype="doctype"
         :open="isOpen"
-        :onUpdate="ownerField && saveAssignees"
       />
     </template>
   </Popover>
 </template>
+
 <script setup>
 import MultipleAvatar from '@/components/MultipleAvatar.vue'
 import AssignToBody from '@/components/AssignToBody.vue'
-import { useDocument } from '@/data/document'
-import { toast, Popover } from 'frappe-ui'
-import { computed } from 'vue'
+import { Popover } from 'frappe-ui'
 
-const props = defineProps({
-  doctype: { type: String, default: '' },
-  docname: { type: String, default: '' },
+defineProps({
+  doctype: {
+    type: String,
+    default: '',
+  },
+
+  docname: {
+    type: String,
+    default: '',
+  },
 })
 
-const { document } = useDocument(props.doctype, props.docname)
-
-const assignees = defineModel({ type: Array, default: () => [] })
-
-const ownerField = computed(() => {
-  if (props.doctype === 'CRM Lead') {
-    return 'lead_owner'
-  } else if (props.doctype === 'CRM Deal') {
-    return 'deal_owner'
-  } else {
-    return null
-  }
+/*
+ * IMPORTANT:
+ *
+ * AssignTo chỉ quản lý collaborator / assignee.
+ *
+ * Nó KHÔNG được cập nhật:
+ * - lead_owner
+ * - deal_owner
+ *
+ * Primary Owner và AssignTo là hai khái niệm độc lập.
+ */
+const assignees = defineModel({
+  type: Array,
+  default: () => [],
 })
-
-async function saveAssignees(
-  addedAssignees,
-  removedAssignees,
-  addAssignees,
-  removeAssignees,
-) {
-  if (removedAssignees.length) await removeAssignees.submit(removedAssignees)
-  if (addedAssignees.length) await addAssignees.submit(addedAssignees)
-
-  const nextAssignee = assignees.value.find(
-    (a) => a.name !== document.doc[ownerField.value],
-  )
-
-  let owner = ownerField.value.replace('_', ' ')
-
-  if (
-    document.doc[ownerField.value] &&
-    removedAssignees.includes(document.doc[ownerField.value])
-  ) {
-    document.doc[ownerField.value] = nextAssignee ? nextAssignee.name : ''
-    document.save.submit()
-
-    if (nextAssignee) {
-      toast.info(
-        __(
-          'Since you removed {0} from the assignee, the {0} has been changed to the next available assignee {1}.',
-          [owner, nextAssignee.label || nextAssignee.name],
-        ),
-      )
-    } else {
-      toast.info(
-        __(
-          'Since you removed {0} from the assignee, the {0} has also been removed.',
-          [owner],
-        ),
-      )
-    }
-  } else if (!document.doc[ownerField.value] && nextAssignee) {
-    document.doc[ownerField.value] = nextAssignee ? nextAssignee.name : ''
-    toast.info(
-      __('Since you added a new assignee, the {0} has been set to {1}.', [
-        owner,
-        nextAssignee.label || nextAssignee.name,
-      ]),
-    )
-  }
-}
 </script>

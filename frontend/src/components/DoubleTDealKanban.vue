@@ -82,7 +82,12 @@
                 v-if="deal.company || deal.contact"
                 class="mt-2 truncate text-sm text-ink-gray-6"
               >
-                {{ deal.company || deal.contact }}
+                {{
+                  deal.company_label ||
+                  deal.contact_label ||
+                  deal.company ||
+                  deal.contact
+                }}
               </div>
 
               <div

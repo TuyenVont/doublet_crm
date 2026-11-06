@@ -183,11 +183,13 @@ import {
   ErrorMessage,
   FormControl,
   Switch,
+  call as frappeCall,
   createResource,
 } from 'frappe-ui'
 
 import {
   computed,
+  onMounted,
   ref,
   watch,
 } from 'vue'
@@ -220,6 +222,7 @@ const stage = ref('')
 const amount = ref(0)
 
 const error = ref('')
+const companies = ref([])
 
 const companyOptions = [
   {
@@ -272,13 +275,64 @@ const convertResource = createResource({
     'doublet_crm.doublet_crm.doctype.doublet_lead.doublet_lead.convert_lead',
 })
 
+async function loadCompanies() {
+  try {
+    const result = await frappeCall(
+      'frappe.client.get_list',
+      {
+        doctype: 'DoubleT Company',
+        fields: ['name', 'company_name'],
+        order_by: 'company_name asc',
+        limit_page_length: 200,
+      }
+    )
+
+    companies.value = Array.isArray(result)
+      ? result
+      : []
+  } catch (e) {
+    console.error('Load Companies failed:', e)
+    companies.value = []
+  }
+}
+
+function applyLeadCompanyDefault() {
+  const leadCompany = String(
+    props.lead?.company_name || ''
+  ).trim()
+
+  if (!leadCompany) {
+    companyMode.value = 'none'
+    existingCompany.value = ''
+    companyName.value = ''
+    return
+  }
+
+  const matched = companies.value.find(
+    item =>
+      String(
+        item.company_name || item.name || ''
+      ).trim().toLowerCase() ===
+      leadCompany.toLowerCase()
+  )
+
+  if (matched) {
+    companyMode.value = 'existing'
+    existingCompany.value = matched.name
+    companyName.value = ''
+    return
+  }
+
+  companyMode.value = 'new'
+  existingCompany.value = ''
+  companyName.value = leadCompany
+}
+
 function resetForm() {
   useExistingContact.value = false
   existingContact.value = ''
 
-  companyMode.value = 'none'
-  existingCompany.value = ''
-  companyName.value = ''
+  applyLeadCompanyDefault()
 
   dealTitle.value =
     props.lead?.company_name
@@ -447,6 +501,14 @@ watch(
     }
   }
 )
+
+onMounted(async () => {
+  await loadCompanies()
+
+  if (show.value) {
+    resetForm()
+  }
+})
 
 watch(
   show,
