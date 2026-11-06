@@ -8,6 +8,8 @@ const FrappeLead = () => import('@/pages/FrappeLead.vue')
 import ContactsView from '@/pages/ContactsView.vue'
 const ContactDetailView = () => import('@/pages/ContactDetailView.vue')
 import CompaniesView from '@/pages/CompaniesView.vue'
+const ProductsView = () => import('@/pages/ProductsView.vue')
+const ProductCategoriesView = () => import('@/pages/ProductCategoriesView.vue')
 const CompanyDetailView = () => import('@/pages/CompanyDetailView.vue')
 import PlaceholderView from '@/pages/PlaceholderView.vue'
 const TasksView = () => import('@/pages/Tasks.vue')
@@ -78,6 +80,16 @@ const routes = [
     path: '/companies/:companyId',
     name: 'CompanyDetail',
     component: CompanyDetailView,
+  },
+  {
+    path: '/products/categories',
+    name: 'ProductCategories',
+    component: ProductCategoriesView,
+  },
+  {
+    path: '/products',
+    name: 'Products',
+    component: ProductsView,
   },
   {
     path: '/notes',
