@@ -33,7 +33,7 @@
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Amount",
-   "permlevel": 1
+   "permlevel": 0
   },
   {
    "fieldname": "deal_owner",
@@ -52,13 +52,13 @@
    "fieldtype": "Link",
    "label": "Source Lead",
    "options": "DoubleT Lead",
-   "permlevel": 1
+   "permlevel": 0
   },
   {
    "fieldname": "expected_close_date",
    "fieldtype": "Date",
    "label": "Expected Close Date",
-   "permlevel": 1
+   "permlevel": 0
   },
   {
    "fieldname": "stage",
@@ -82,7 +82,7 @@
    "label": "Contact",
    "mandatory_depends_on": "eval:doc.deal_type=='PERSONAL'",
    "options": "DoubleT Contact",
-   "permlevel": 1
+   "permlevel": 0
   },
   {
    "depends_on": "eval:doc.deal_type=='COMPANY'",
@@ -92,27 +92,27 @@
    "label": "Company",
    "mandatory_depends_on": "eval:doc.deal_type=='COMPANY'",
    "options": "DoubleT Company",
-   "permlevel": 1
+   "permlevel": 0
   },
   {
    "fieldname": "won_on",
    "fieldtype": "Datetime",
    "label": "Won On",
-   "permlevel": 1,
+   "permlevel": 0,
    "read_only": 1
   },
   {
    "fieldname": "lost_on",
    "fieldtype": "Datetime",
    "label": "Lost On",
-   "permlevel": 1,
+   "permlevel": 0,
    "read_only": 1
   },
   {
    "fieldname": "lost_reason",
    "fieldtype": "Small Text",
    "label": "Lost Reason",
-   "permlevel": 1
+   "permlevel": 0
   }
  ],
  "links": [],

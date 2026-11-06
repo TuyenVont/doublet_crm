@@ -1,0 +1,152 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "agent",
+  "line_number",
+  "call_type",
+  "duration",
+  "start_time",
+  "end_time",
+  "status",
+  "from_number",
+  "to_number",
+  "recording_url",
+  "reference_doctype",
+  "reference_name",
+  "note",
+  "external_call_id"
+ ],
+ "fields": [
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Agent",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "line_number",
+   "fieldtype": "Data",
+   "label": "Line Number"
+  },
+  {
+   "fieldname": "call_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Call Type",
+   "options": "Incoming\nOutgoing\nIncoming Forwarded\nCallback",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "duration",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Duration"
+  },
+  {
+   "fieldname": "start_time",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Start Time",
+   "reqd": 1
+  },
+  {
+   "fieldname": "end_time",
+   "fieldtype": "Datetime",
+   "label": "End Time"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Completed\nMissed\nCanceled\nFailed\nBusy\nNo Answer",
+   "reqd": 1
+  },
+  {
+   "fieldname": "from_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "From Number"
+  },
+  {
+   "fieldname": "to_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "To Number"
+  },
+  {
+   "fieldname": "recording_url",
+   "fieldtype": "Data",
+   "label": "Recording URL",
+   "options": "URL"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Name",
+   "options": "reference_doctype"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Note"
+  },
+  {
+   "fieldname": "external_call_id",
+   "fieldtype": "Data",
+   "label": "External Call ID",
+   "unique": 1
+  }
+ ],
+ "links": [],
+ "module": "DoubleT CRM",
+ "name": "DoubleT Call Log",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Sales User"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Call Log Viewer"
+  },
+  {
+   "create": 1,
+   "role": "Call Log API"
+  }
+ ],
+ "sort_field": "start_time",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

@@ -1,413 +1,378 @@
-<!-- eslint-disable vue/no-v-html -->
 <template>
-  <Dialog v-model:open="show">
-    <template #body>
-      <div class="bg-surface-elevation-1 px-4 pb-6 pt-5 sm:px-6">
-        <div class="mb-5 flex items-center justify-between">
-          <div>
-            <h3 class="text-3xl-semibold leading-6 text-ink-gray-9">
-              {{ __('Call Details') }}
-            </h3>
-          </div>
-          <div class="flex items-center gap-1">
-            <Dropdown
-              :options="[
-                {
-                  group: __('Options'),
-                  hideLabel: true,
-                  items: [
-                    {
-                      label: note ? __('Edit Note') : __('Add Note'),
-                      icon: NoteIcon,
-                      onClick: () => showNote(note),
-                    },
-                    {
-                      label: task ? __('Edit Task') : __('Add Task'),
-                      icon: TaskIcon,
-                      onClick: () => showTask(task),
-                    },
-                  ],
-                },
-              ]"
-            >
-              <template #default>
-                <Button variant="ghost" icon="lucide-more-horizontal" />
-              </template>
-            </Dropdown>
-            <Button
-              v-if="!isMobileView"
-              variant="ghost"
-              :tooltip="__('Edit Call Log')"
-              :icon="EditIcon"
-              class="w-7"
-              @click="openCallLogModal"
-            />
-            <Button
-              icon="lucide-x"
-              variant="ghost"
-              class="w-7"
-              @click="show = false"
-            />
-          </div>
-        </div>
-        <div class="flex flex-col gap-3.5">
-          <div
-            v-for="field in detailFields"
-            :key="field.name"
-            class="flex gap-2 text-base text-ink-gray-8"
-          >
-            <div class="grid size-7 place-content-center">
-              <component :is="field.icon" />
-            </div>
-            <div class="flex min-h-7 w-full items-center gap-2">
-              <div
-                v-if="field.name == 'receiver'"
-                class="flex items-center gap-1"
-              >
-                <Avatar
-                  :image="field.value.caller.image"
-                  :label="field.value.caller.label"
-                  size="sm"
-                />
-                <div class="ml-1 flex flex-col gap-1">
-                  {{ field.value.caller.label }}
-                </div>
-                <span
-                  class="lucide-arrow-right mx-1 h-4 w-4 text-ink-gray-5"
-                  aria-hidden="true"
-                />
-                <Avatar
-                  :image="field.value.receiver.image"
-                  :label="field.value.receiver.label"
-                  size="sm"
-                />
-                <div class="ml-1 flex flex-col gap-1">
-                  {{ field.value.receiver.label }}
-                </div>
-              </div>
-              <Tooltip v-else-if="field.tooltip" :text="field.tooltip">
-                {{ field.value }}
-              </Tooltip>
-              <div
-                v-else-if="field.name == 'recording_url_path'"
-                class="w-full"
-              >
-                <audio
-                  class="audio-control w-full"
-                  controls
-                  :src="field.value"
-                ></audio>
-              </div>
-              <div
-                v-else-if="field.name == 'note'"
-                class="w-full cursor-pointer rounded border px-2 pt-1.5 text-base text-ink-gray-7"
-                @click="() => showNote(field.value?.name)"
-              >
-                <FadedScrollableDiv class="max-h-24 min-h-16 overflow-y-auto">
-                  <div
-                    v-if="field.value?.title"
-                    :class="[field.value?.content ? 'mb-1 font-bold' : '']"
-                    v-html="sanitizeHTML(field.value?.title)"
-                  />
-                  <div
-                    v-if="field.value?.content"
-                    v-html="sanitizeHTML(field.value?.content)"
-                  />
-                </FadedScrollableDiv>
-              </div>
-              <div
-                v-else-if="field.name == 'task'"
-                class="w-full cursor-pointer rounded border px-2 pt-1.5 text-base text-ink-gray-7"
-                @click="() => showTask(field.value?.name)"
-              >
-                <FadedScrollableDiv class="max-h-24 min-h-16 overflow-y-auto">
-                  <div
-                    v-if="field.value?.title"
-                    :class="[field.value?.description ? 'mb-1 font-bold' : '']"
-                    v-html="sanitizeHTML(field.value?.title)"
-                  />
-                  <div
-                    v-if="field.value?.description"
-                    v-html="sanitizeHTML(field.value?.description)"
-                  />
-                </FadedScrollableDiv>
-              </div>
-              <div v-else :class="field.color ? `text-${field.color}-600` : ''">
-                {{ field.value }}
-              </div>
-              <div v-if="field.link">
-                <ArrowUpRightIcon
-                  class="h-4 w-4 shrink-0 cursor-pointer text-ink-gray-5 hover:text-ink-gray-8"
-                  @click="() => field.link()"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+  <Teleport to="body">
+    <Transition name="call-log-drawer">
       <div
-        v-if="!callLog?.data?._lead && !callLog?.data?._deal"
-        class="px-4 pb-7 pt-4 sm:px-6"
+        v-if="show"
+        class="fixed inset-0 z-[100] flex justify-end bg-black/25 backdrop-blur-[1px]"
+        @click.self="show = false"
       >
-        <Button
-          class="w-full"
-          variant="solid"
-          :label="__('Create Lead')"
-          @click="createLead"
-        />
+        <div
+          class="flex h-full w-full flex-col bg-white shadow-2xl sm:max-w-xl"
+        >
+          <!-- Header -->
+          <div class="border-b px-5 py-4 sm:px-6">
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex min-w-0 items-center gap-3">
+                <div
+                  class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700"
+                >
+                  <FeatherIcon
+                    :name="callTypeIcon(callLog.call_type)"
+                    class="h-5 w-5"
+                  />
+                </div>
+
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="text-lg font-semibold text-ink-gray-9">
+                      {{ __(callLog.call_type || 'Call') }}
+                    </h2>
+
+                    <span
+                      class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
+                      :class="statusClass(callLog.status)"
+                    >
+                      {{ __(callLog.status || 'Unknown') }}
+                    </span>
+                  </div>
+
+                  <div class="mt-1 text-sm text-ink-gray-5">
+                    {{ formatDateTime(callLog.start_time) }}
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                variant="ghost"
+                icon="x"
+                @click="show = false"
+              />
+            </div>
+          </div>
+
+          <!-- Body -->
+          <div class="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+            <div class="flex flex-col gap-5">
+              <!-- Call summary -->
+              <div class="grid grid-cols-2 gap-3">
+                <InfoCard
+                  :label="__('Duration')"
+                  :value="formatDuration(callLog.duration)"
+                  icon="clock"
+                />
+                <InfoCard
+                  :label="__('Agent')"
+                  :value="callLog.agent || '—'"
+                  icon="user"
+                />
+              </div>
+
+              <!-- Phone flow -->
+              <section class="rounded-2xl border bg-gray-50/60 p-4">
+                <div class="mb-4 text-xs font-semibold uppercase tracking-wide text-ink-gray-5">
+                  {{ __('Call route') }}
+                </div>
+
+                <div class="flex items-center gap-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="text-xs text-ink-gray-5">
+                      {{ __('From') }}
+                    </div>
+                    <div class="mt-1 truncate text-base font-semibold text-ink-gray-9">
+                      {{ callLog.from_number || '—' }}
+                    </div>
+                  </div>
+
+                  <div
+                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-sky-700 shadow-sm ring-1 ring-gray-200"
+                  >
+                    <FeatherIcon name="arrow-right" class="h-4 w-4" />
+                  </div>
+
+                  <div class="min-w-0 flex-1 text-right">
+                    <div class="text-xs text-ink-gray-5">
+                      {{ __('To') }}
+                    </div>
+                    <div class="mt-1 truncate text-base font-semibold text-ink-gray-9">
+                      {{ callLog.to_number || '—' }}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  v-if="callLog.line_number"
+                  class="mt-4 border-t pt-3 text-xs text-ink-gray-5"
+                >
+                  {{ __('Line') }}:
+                  <span class="font-medium text-ink-gray-8">
+                    {{ callLog.line_number }}
+                  </span>
+                </div>
+              </section>
+
+              <!-- Related customer -->
+              <section
+                v-if="callLog.reference_name"
+                class="rounded-2xl border bg-white p-4"
+              >
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-gray-5">
+                  {{ __('Related customer') }}
+                </div>
+
+                <div class="mt-3 flex items-center gap-3">
+                  <div
+                    class="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-700"
+                  >
+                    <FeatherIcon
+                      :name="callLog.reference_doctype === 'DoubleT Lead' ? 'user' : 'contact'"
+                      class="h-4 w-4"
+                    />
+                  </div>
+
+                  <div class="min-w-0">
+                    <div class="truncate text-sm font-semibold text-ink-gray-9">
+                      {{ callLog.reference_name }}
+                    </div>
+                    <div class="text-xs text-ink-gray-5">
+                      {{ callLog.reference_doctype }}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Recording -->
+              <section
+                v-if="callLog.recording_url"
+                class="rounded-2xl border bg-white p-4"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <div class="text-xs font-semibold uppercase tracking-wide text-ink-gray-5">
+                      {{ __('Recording') }}
+                    </div>
+                    <div class="mt-1 text-sm text-ink-gray-7">
+                      {{ __('Call recording URL') }}
+                    </div>
+                  </div>
+
+                  <a
+                    :href="callLog.recording_url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-sm font-medium text-sky-700 hover:underline"
+                  >
+                    {{ __('Open') }}
+                  </a>
+                </div>
+
+                <audio
+                  class="mt-4 h-9 w-full"
+                  controls
+                  preload="none"
+                  :src="callLog.recording_url"
+                ></audio>
+              </section>
+
+              <!-- Note -->
+              <section class="rounded-2xl border bg-white p-4">
+                <div class="flex items-center gap-2">
+                  <FeatherIcon
+                    name="file-text"
+                    class="h-4 w-4 text-ink-gray-5"
+                  />
+                  <div class="text-xs font-semibold uppercase tracking-wide text-ink-gray-5">
+                    {{ __('Note') }}
+                  </div>
+                </div>
+
+                <div
+                  v-if="callLog.note"
+                  class="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink-gray-8"
+                >
+                  {{ callLog.note }}
+                </div>
+
+                <div
+                  v-else
+                  class="mt-3 text-sm italic text-ink-gray-4"
+                >
+                  {{ __('No note for this call.') }}
+                </div>
+              </section>
+
+              <!-- Technical -->
+              <section class="rounded-2xl border bg-gray-50/60 p-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-ink-gray-5">
+                  {{ __('Technical details') }}
+                </div>
+
+                <dl class="mt-3 space-y-3 text-sm">
+                  <div class="flex items-start justify-between gap-4">
+                    <dt class="text-ink-gray-5">
+                      {{ __('Call ID') }}
+                    </dt>
+                    <dd class="max-w-[65%] break-all text-right font-mono text-xs text-ink-gray-8">
+                      {{ callLog.external_call_id || '—' }}
+                    </dd>
+                  </div>
+
+                  <div class="flex items-start justify-between gap-4">
+                    <dt class="text-ink-gray-5">
+                      {{ __('Started') }}
+                    </dt>
+                    <dd class="text-right text-ink-gray-8">
+                      {{ formatDateTime(callLog.start_time) }}
+                    </dd>
+                  </div>
+
+                  <div class="flex items-start justify-between gap-4">
+                    <dt class="text-ink-gray-5">
+                      {{ __('Ended') }}
+                    </dt>
+                    <dd class="text-right text-ink-gray-8">
+                      {{ formatDateTime(callLog.end_time) }}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
+          </div>
+        </div>
       </div>
-    </template>
-  </Dialog>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
-import EditIcon from '@/components/Icons/EditIcon.vue'
-import ArrowUpRightIcon from '@/components/Icons/ArrowUpRightIcon.vue'
-import DurationIcon from '@/components/Icons/DurationIcon.vue'
-import ContactsIcon from '@/components/Icons/ContactsIcon.vue'
-import LeadsIcon from '@/components/Icons/LeadsIcon.vue'
-import Dealsicon from '@/components/Icons/DealsIcon.vue'
-import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
-import NoteIcon from '@/components/Icons/NoteIcon.vue'
-import TaskIcon from '@/components/Icons/TaskIcon.vue'
-import CheckCircleIcon from '@/components/Icons/CheckCircleIcon.vue'
-import FadedScrollableDiv from '@/components/FadedScrollableDiv.vue'
-import { getCallLogDetail } from '@/utils/callLog'
-import { sanitizeHTML } from '@/utils'
-import { isMobileView } from '@/composables/settings'
-import { useDoctypeModal } from '@/composables/doctypeModal'
-import { useDocument } from '@/data/document'
-import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
-import { FeatherIcon, Dropdown, Avatar, Tooltip, call, toast } from 'frappe-ui'
-import { ref, computed, h, watch } from 'vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
+import { Button, FeatherIcon } from 'frappe-ui'
+import { defineComponent, h } from 'vue'
 
 const show = defineModel({ type: Boolean })
-
-const callLog = defineModel('callLog', { type: Object })
-
-const { updateOnboardingStep } = useOnboarding('frappecrm')
-const { capture } = useTelemetry()
-const { showModal } = useDoctypeModal()
-
-const note = ref('')
-const task = ref('')
-
-function showNote(name) {
-  showModal({
-    name,
-    doctype: 'FCRM Note',
-    title: 'Note',
-    callbacks: {
-      afterInsert: (d) => addNoteToCallLog(d, true),
-      afterUpdate: (d) => addNoteToCallLog(d, false),
-    },
-  })
-}
-
-function showTask(name) {
-  showModal({
-    name,
-    doctype: 'CRM Task',
-    title: 'Task',
-    defaults: { status: 'Backlog', priority: 'Low' },
-    callbacks: {
-      afterInsert: (d) => addTaskToCallLog(d, true),
-      afterUpdate: (d) => addTaskToCallLog(d, false),
-    },
-  })
-}
-
-async function addNoteToCallLog(_note, isInsert = false) {
-  if (isInsert && _note.name) {
-    await call('crm.integrations.api.add_note_to_call_log', {
-      call_sid: callLog.value?.data?.id,
-      note: _note,
-    })
-    updateOnboardingStep('create_first_note')
-    capture('note_created')
-  } else {
-    capture('note_updated')
-  }
-  callLog.value?.reload?.()
-}
-
-async function addTaskToCallLog(_task, isInsert = false) {
-  if (isInsert && _task.name) {
-    await call('crm.integrations.api.add_task_to_call_log', {
-      call_sid: callLog.value?.data?.id,
-      task: _task,
-    })
-    updateOnboardingStep('create_first_task')
-    capture('task_created')
-  } else {
-    capture('task_updated')
-  }
-  callLog.value?.reload?.()
-}
-
-const detailFields = computed(() => {
-  if (!callLog.value?.data) return []
-
-  let data = JSON.parse(JSON.stringify(callLog.value?.data))
-
-  for (const key in data) {
-    data[key] = getCallLogDetail(key, data)
-  }
-  let details = [
-    {
-      icon: h(FeatherIcon, {
-        name: data.type.icon,
-        class: 'h-3.5 w-3.5',
-      }),
-      name: 'type',
-      value: data.type.label + ' Call',
-    },
-    {
-      icon: ContactsIcon,
-      name: 'receiver',
-      value: {
-        receiver: data.receiver,
-        caller: data.caller,
-      },
-    },
-    {
-      icon: data._lead ? LeadsIcon : Dealsicon,
-      name: 'reference_doc',
-      value: data._lead ? 'Lead' : 'Deal',
-      link: () => {
-        if (data._lead) {
-          router.push({
-            name: 'Lead',
-            params: { leadId: data._lead },
-          })
-        } else {
-          router.push({
-            name: 'Deal',
-            params: { dealId: data._deal },
-          })
-        }
-      },
-      condition: () => data._lead || data._deal,
-    },
-    {
-      icon: CalendarIcon,
-      name: 'creation',
-      value: data.creation.label,
-      tooltip: data.creation.label,
-    },
-    {
-      icon: DurationIcon,
-      name: 'duration',
-      value: data.duration.label,
-    },
-    {
-      icon: CheckCircleIcon,
-      name: 'status',
-      value: data.status.label,
-      color: data.status.color,
-    },
-    {
-      icon: h(FeatherIcon, {
-        name: 'play-circle',
-        class: 'h-4 w-4 mt-2',
-      }),
-      name: 'recording_url_path',
-      value: data.recording_url_path,
-    },
-    {
-      icon: NoteIcon,
-      name: 'note',
-      value: data._notes?.[0] ?? null,
-    },
-    {
-      icon: TaskIcon,
-      name: 'task',
-      value: data._tasks?.[0] ?? null,
-    },
-  ]
-
-  return details
-    .filter((detail) => detail.value)
-    .filter((detail) => (detail.condition ? detail.condition() : true))
+const callLog = defineModel('callLog', {
+  type: Object,
+  default: () => ({}),
 })
 
-const d = ref({})
-const leadDetails = ref({})
-
-async function createLead() {
-  await d.value.triggerOnCreateLead?.(
-    callLog.value?.data,
-    leadDetails.value,
-    () => (show.value = false),
-  )
-
-  call('crm.fcrm.doctype.crm_call_log.crm_call_log.create_lead_from_call_log', {
-    call_log: callLog.value?.data,
-    lead_details: leadDetails.value,
-  })
-    .then((d) => {
-      if (d) {
-        router.push({ name: 'Lead', params: { leadId: d } })
-      }
-    })
-    .catch((err) => {
-      toast.error(
-        __('Error creating lead: {0}', [err.messages?.[0] || err.message]),
+const InfoCard = defineComponent({
+  props: {
+    label: String,
+    value: [String, Number],
+    icon: String,
+  },
+  setup(props) {
+    return () =>
+      h(
+        'div',
+        {
+          class:
+            'rounded-2xl border bg-white p-4 shadow-sm',
+        },
+        [
+          h(
+            'div',
+            {
+              class:
+                'flex items-center gap-2 text-xs font-medium text-ink-gray-5',
+            },
+            [
+              h(FeatherIcon, {
+                name: props.icon,
+                class: 'h-3.5 w-3.5',
+              }),
+              props.label,
+            ],
+          ),
+          h(
+            'div',
+            {
+              class:
+                'mt-2 truncate text-base font-semibold text-ink-gray-9',
+            },
+            props.value || '—',
+          ),
+        ],
       )
-    })
+  },
+})
+
+function callTypeIcon(type) {
+  return ['Incoming', 'Incoming Forwarded'].includes(type)
+    ? 'phone-incoming'
+    : 'phone-outgoing'
 }
 
-function openCallLogModal() {
-  showModal({
-    name: callLog.value?.data?.name,
-    doctype: 'CRM Call Log',
-    title: 'Call Log',
-    callbacks: {
-      afterUpdate: () => {
-        callLog.value.reload()
-        capture('call_log_updated')
-      },
-    },
-  })
+function statusClass(status) {
+  const classes = {
+    Completed: 'bg-emerald-50 text-emerald-700',
+    Missed: 'bg-red-50 text-red-700',
+    'No Answer': 'bg-red-50 text-red-700',
+    Failed: 'bg-red-50 text-red-700',
+    Busy: 'bg-amber-50 text-amber-700',
+    Canceled: 'bg-gray-100 text-gray-600',
+  }
+
+  return classes[status] || 'bg-gray-100 text-gray-600'
 }
 
-watch(
-  () => callLog.value?.data,
-  (data) => {
-    if (!data) return
-    const parsed = JSON.parse(JSON.stringify(data))
-    note.value = parsed._notes?.[0]?.name ?? null
-    task.value = parsed._tasks?.[0]?.name ?? null
-  },
-  { immediate: true, deep: true },
-)
+function formatDuration(seconds) {
+  const total = Math.max(0, Number(seconds || 0))
 
-watch(
-  () => callLog.value?.data?.name,
-  (value) => {
-    if (!value) return
-    d.value = useDocument('CRM Call Log', value)
-  },
-)
+  if (!Number.isFinite(total)) return '00:00'
+
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const secs = Math.floor(total % 60)
+
+  if (hours) {
+    return [
+      hours,
+      String(minutes).padStart(2, '0'),
+      String(secs).padStart(2, '0'),
+    ].join(':')
+  }
+
+  return [
+    String(minutes).padStart(2, '0'),
+    String(secs).padStart(2, '0'),
+  ].join(':')
+}
+
+function formatDateTime(value) {
+  if (!value) return '—'
+
+  const parsed = new Date(String(value).replace(' ', 'T'))
+
+  if (Number.isNaN(parsed.getTime())) return value
+
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(parsed)
+}
 </script>
 
 <style scoped>
-.audio-control {
-  height: 36px;
-  outline: none;
-  border-radius: 10px;
-  cursor: pointer;
-  background-color: rgb(237, 237, 237);
+.call-log-drawer-enter-active,
+.call-log-drawer-leave-active {
+  transition: opacity 0.18s ease;
 }
 
-audio::-webkit-media-controls-panel {
-  background-color: rgb(237, 237, 237) !important;
+.call-log-drawer-enter-active > div,
+.call-log-drawer-leave-active > div {
+  transition: transform 0.2s ease;
 }
 
-.audio-control::-webkit-media-controls-panel {
-  background-color: white;
+.call-log-drawer-enter-from,
+.call-log-drawer-leave-to {
+  opacity: 0;
+}
+
+.call-log-drawer-enter-from > div,
+.call-log-drawer-leave-to > div {
+  transform: translateX(28px);
 }
 </style>
