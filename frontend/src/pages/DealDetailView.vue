@@ -150,6 +150,11 @@
             :reference-name="dealId"
           />
 
+          <DealQuotations
+            v-else-if="activeTabName === 'Quotations'"
+            :deal-id="dealId"
+          />
+
           <Activities
             v-else
             ref="activities"
@@ -328,6 +333,7 @@ import {
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import SharedNotes from '@/components/Notes/SharedNotes.vue'
+import DealQuotations from '@/components/Deal/DealQuotations.vue'
 import Resizer from '@/components/Resizer.vue'
 import AssignTo from '@/components/AssignTo.vue'
 
@@ -550,6 +556,12 @@ const tabs = computed(() => {
       name: 'Notes',
       label: __('Notes'),
       icon: NoteIcon,
+    },
+
+    {
+      name: 'Quotations',
+      label: __('Quotations'),
+      icon: DetailsIcon,
     },
 
     {

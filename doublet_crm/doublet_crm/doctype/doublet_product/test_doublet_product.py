@@ -1,4 +1,9 @@
 import frappe
+import json
+from pathlib import Path
+from unittest.mock import patch
+
+from frappe.permissions import get_role_permissions
 from frappe.tests.utils import FrappeTestCase
 
 
@@ -80,3 +85,22 @@ class TestDoubleTProduct(FrappeTestCase):
 		product = self.make_product().insert()
 		reloaded = frappe.get_doc("DoubleT Product", product.name)
 		self.assertEqual(reloaded.category, self.category.name)
+
+	def test_product_and_category_source_role_permissions(self):
+		base = Path(__file__).resolve().parent.parent
+		for folder, doctype in (
+			("doublet_product", "DoubleT Product"),
+			("doublet_product_category", "DoubleT Product Category"),
+		):
+			with (base / folder / f"{folder}.json").open(encoding="utf-8") as source:
+				metadata = json.load(source)
+			meta = frappe._dict(name=doctype, permissions=[frappe._dict(row) for row in metadata["permissions"]])
+			for role, expected in (
+				("System Manager", (1, 1, 1, 1)),
+				("Sales Manager", (1, 1, 1, 1)),
+				("Sales User", (1, 1, 1, 0)),
+				("Guest", (0, 0, 0, 0)),
+			):
+				with self.subTest(doctype=doctype, role=role), patch("frappe.get_roles", return_value=[role]):
+					permissions = get_role_permissions(meta, user="permission-test@example.invalid", debug=True)
+					self.assertEqual(tuple(permissions[key] for key in ("read", "create", "write", "delete")), expected)

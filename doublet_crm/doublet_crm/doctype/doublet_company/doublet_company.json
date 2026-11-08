@@ -81,6 +81,14 @@
    "print": 1,
    "email": 1,
    "share": 1
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1
+  },
+  {
+   "role": "Sales User",
+   "read": 1
   }
  ],
  "sort_field": "modified",

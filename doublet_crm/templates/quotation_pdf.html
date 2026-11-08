@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: "DejaVu Sans", sans-serif; color: #262626; font-size: 10pt; line-height: 1.45; }
+    h1 { font-size: 19pt; margin: 22px 0 8px; }
+    h2 { font-size: 11pt; margin: 20px 0 6px; }
+    .brand { font-size: 12pt; font-weight: bold; border-bottom: 1px solid #aaa; padding-bottom: 10px; }
+    .meta { color: #555; margin-bottom: 20px; }
+    .customer { margin-bottom: 22px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 4px; text-align: left; vertical-align: top; border-bottom: 1px solid #ddd; }
+    th { font-size: 8pt; color: #555; }
+    .number { text-align: right; white-space: nowrap; }
+    .totals { width: 46%; margin: 20px 0 0 auto; }
+    .totals td { padding: 5px 4px; border: 0; }
+    .grand td { border-top: 1px solid #aaa; font-weight: bold; }
+    .notes { white-space: pre-wrap; word-wrap: break-word; }
+    .footer { border-top: 1px solid #aaa; margin-top: 28px; padding-top: 10px; color: #555; }
+  </style>
+</head>
+<body>
+  <div class="brand">DoubleT CRM</div>
+  <h1>BÁO GIÁ / QUOTATION</h1>
+  <div class="meta">{{ doc.name | e }}<br>Ngày báo giá: {{ format_date(doc.get('quotation_date')) | e }}<br>Hiệu lực đến: {{ format_date(doc.get('valid_until')) | e }}</div>
+  <div class="customer"><h2>Khách hàng / Customer</h2>
+    {% if company_name %}<div>{{ company_name | e }}</div>{% endif %}
+    {% if contact_name %}<div>{{ contact_name | e }}</div>{% endif %}
+    {% if not company_name and not contact_name %}<div>—</div>{% endif %}
+  </div>
+  <table>
+    <thead><tr><th>STT</th><th>Sản phẩm / Dịch vụ</th><th>SKU</th><th class="number">Số lượng</th><th class="number">Đơn giá<br>VND</th><th class="number">Giảm<br>%</th><th class="number">Thành tiền<br>VND</th></tr></thead>
+    <tbody>{% for item in doc.get('items') or [] %}
+      <tr><td>{{ loop.index }}</td><td>{{ (item.get('product_name') or '—') | e }}</td><td>{{ (item.get('sku') or '—') | e }}</td><td class="number">{{ (item.get('quantity') if item.get('quantity') is not none else '—') | e }}</td><td class="number">{{ currency(item.get('unit_price')) | e }}</td><td class="number">{{ (item.get('discount_percent') if item.get('discount_percent') is not none else '—') | e }}</td><td class="number">{{ currency(item.get('line_total')) | e }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  <table class="totals"><tr><td>Tạm tính</td><td class="number">{{ currency(doc.get('subtotal')) }} VND</td></tr><tr><td>Tổng giảm giá</td><td class="number">{{ currency(doc.get('total_discount')) }} VND</td></tr><tr class="grand"><td>Tổng cộng</td><td class="number">{{ currency(doc.get('grand_total')) }} VND</td></tr></table>
+  {% if doc.get('notes') %}<h2>Ghi chú / Notes</h2><div class="notes">{{ doc.get('notes') | e }}</div>{% endif %}
+  <div class="footer">Trân trọng cảm ơn / Thank you.</div>
+</body>
+</html>

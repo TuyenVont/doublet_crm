@@ -59,6 +59,7 @@ declare module 'vue' {
     DataFields: typeof import('./src/components/Activities/DataFields.vue')['default']
     DataFieldsModal: typeof import('./src/components/Modals/DataFieldsModal.vue')['default']
     DealModal: typeof import('./src/components/Modals/DealModal.vue')['default']
+    DealQuotations: typeof import('./src/components/Deal/DealQuotations.vue')['default']
     DealsIcon: typeof import('./src/components/Icons/DealsIcon.vue')['default']
     DealsListView: typeof import('./src/components/ListViews/DealsListView.vue')['default']
     DeclinedCallIcon: typeof import('./src/components/Icons/DeclinedCallIcon.vue')['default']
