@@ -1,0 +1,17 @@
+{
+ "doctype": "DocType",
+ "name": "DoubleT Quotation Item",
+ "module": "DoubleT CRM",
+ "istable": 1,
+ "engine": "InnoDB",
+ "field_order": ["product", "product_name", "sku", "unit_price", "quantity", "discount_percent", "line_total"],
+ "fields": [
+  {"fieldname": "product", "fieldtype": "Link", "label": "Product", "options": "DoubleT Product", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "product_name", "fieldtype": "Data", "label": "Product Name", "read_only": 1, "in_list_view": 1},
+  {"fieldname": "sku", "fieldtype": "Data", "label": "SKU", "read_only": 1},
+  {"fieldname": "unit_price", "fieldtype": "Currency", "label": "Unit Price", "precision": "0", "in_list_view": 1},
+  {"fieldname": "quantity", "fieldtype": "Float", "label": "Quantity", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "discount_percent", "fieldtype": "Percent", "label": "Discount Percent", "default": "0"},
+  {"fieldname": "line_total", "fieldtype": "Currency", "label": "Line Total", "precision": "0", "read_only": 1, "in_list_view": 1}
+ ]
+}

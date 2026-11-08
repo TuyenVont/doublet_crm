@@ -67,6 +67,19 @@
       "delete": 1,
       "report": 1,
       "export": 1
+    },
+    {
+      "role": "Sales Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "Sales User",
+      "read": 1,
+      "write": 1,
+      "create": 1
     }
   ],
   "title_field": "product_name",
