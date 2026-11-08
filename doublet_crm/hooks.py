@@ -8,6 +8,16 @@ app_license = "mit"
 # Apps
 # ------------------
 
+fixtures = [
+        {
+                "doctype": "Role",
+                "filters": [
+                        ["name", "in", ["Call Log Viewer", "Call Log API"]],
+                ],
+        },
+]
+
+
 # required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
@@ -126,6 +136,16 @@ after_migrate = [
 # Permissions
 # -----------
 # Permissions evaluated in scripted ways
+
+
+permission_query_conditions = {
+        "DoubleT Call Log": "doublet_crm.permissions.get_doublet_call_log_permission_query_conditions",
+}
+
+has_permission = {
+        "DoubleT Call Log": "doublet_crm.permissions.has_doublet_call_log_permission",
+}
+
 
 # permission_query_conditions = {
 # 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",

@@ -14,8 +14,7 @@ const QuotationsView = () => import('@/pages/QuotationsView.vue')
 const QuotationForm = () => import('@/pages/QuotationForm.vue')
 const CompanyDetailView = () => import('@/pages/CompanyDetailView.vue')
 import PlaceholderView from '@/pages/PlaceholderView.vue'
-const TasksView = () => import('@/pages/Tasks.vue')
-const NotesView = () => import('@/pages/Notes.vue')
+import CallLogs from '@/pages/CallLogs.vue'
 
 const routes = [
   {
@@ -109,7 +108,7 @@ const routes = [
   {
     path: '/call-logs',
     name: 'Call Logs',
-    component: PlaceholderView,
+    component: CallLogs,
     props: {
       title: 'Call Logs',
       description: 'DoubleT CRM Call Logs Management',
