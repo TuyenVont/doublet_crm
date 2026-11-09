@@ -15,7 +15,8 @@ const QuotationForm = () => import('@/pages/QuotationForm.vue')
 const CompanyDetailView = () => import('@/pages/CompanyDetailView.vue')
 import PlaceholderView from '@/pages/PlaceholderView.vue'
 import CallLogs from '@/pages/CallLogs.vue'
-
+import NotesView from './pages/Notes.vue'
+import TasksView from './pages/Tasks.vue'
 const routes = [
   {
     path: '/',
