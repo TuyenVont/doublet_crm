@@ -85,7 +85,9 @@ class DoubleTQuotation(Document):
 				frappe.throw(_("Remove and add an item to change its Product."))
 			product = readable_doc("DoubleT Product", row.product)
 			if not old:
-				if not product.is_active:
+				if not product.is_sellable():
+					if product.product_kind == "Template":
+						frappe.throw(_("Product Templates cannot be added to a quotation."))
 					frappe.throw(_("Inactive Products cannot be added to a quotation."))
 				row.product_name, row.sku = product.product_name, product.sku
 				if row.unit_price is None or row.unit_price == "":

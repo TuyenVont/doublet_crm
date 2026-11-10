@@ -13,6 +13,7 @@
           <label class="space-y-1 sm:col-span-2">
             <span class="text-sm text-ink-gray-7">{{ __('Product Name') }} *</span>
             <TextInput v-model="form.product_name" :placeholder="__('Product Name')" />
+            <span v-if="fieldErrors.product_name" class="block text-xs text-red-600">{{ fieldErrors.product_name }}</span>
           </label>
           <label class="space-y-1">
             <span class="text-sm text-ink-gray-7">{{ __('SKU') }} *</span>
@@ -22,32 +23,73 @@
             </span>
           </label>
           <label class="space-y-1">
-            <span class="text-sm text-ink-gray-7">{{ __('Category') }} *</span>
-            <select v-model="form.category" class="h-8 w-full rounded border border-outline-gray-2 bg-surface-white px-2 text-sm">
+            <span class="text-sm text-ink-gray-7">{{ __('Product Kind') }} *</span>
+            <select v-model="form.product_kind" :disabled="isExistingVariant" class="h-8 w-full rounded border border-outline-gray-2 bg-surface-white px-2 text-sm" @change="handleKindChange">
+              <option value="Standard">{{ __('Standard') }}</option>
+              <option value="Template">{{ __('Template') }}</option>
+              <option value="Variant">{{ __('Variant') }}</option>
+            </select>
+            <span v-if="form.product_kind === 'Template'" class="block text-xs text-amber-700">{{ __('Templates organize variants and cannot be sold directly.') }}</span>
+          </label>
+          <label class="space-y-1">
+            <span class="text-sm text-ink-gray-7">{{ __('Primary Category') }} *</span>
+            <select v-model="form.category" class="h-8 w-full rounded border border-outline-gray-2 bg-surface-white px-2 text-sm" @change="ensurePrimaryCategory">
               <option value="" disabled>{{ __('Select a category') }}</option>
               <option v-for="category in categories" :key="category.name" :value="category.name">
                 {{ category.category_name || category.name }}
               </option>
             </select>
+            <span v-if="fieldErrors.category" class="block text-xs text-red-600">{{ fieldErrors.category }}</span>
+          </label>
+          <label class="space-y-1 sm:col-span-2">
+            <span class="text-sm text-ink-gray-7">{{ __('Categories') }}</span>
+            <select v-model="form.categories" multiple class="min-h-24 w-full rounded border border-outline-gray-2 bg-surface-white px-2 py-1 text-sm">
+              <option v-for="category in categories" :key="category.name" :value="category.name">
+                {{ category.category_name || category.name }}
+              </option>
+            </select>
+            <span class="block text-xs text-ink-gray-5">{{ __('Use Ctrl or Cmd to select additional categories. The primary category is always included.') }}</span>
           </label>
           <label class="space-y-1">
             <span class="text-sm text-ink-gray-7">{{ __('Price') }} *</span>
             <TextInput v-model="form.price" type="number" min="0" step="0.01" :placeholder="__('0')" />
+            <span v-if="fieldErrors.price" class="block text-xs text-red-600">{{ fieldErrors.price }}</span>
           </label>
           <label class="flex items-center gap-2 self-end pb-1 text-sm text-ink-gray-7">
             <input v-model="form.is_active" type="checkbox" class="rounded border-outline-gray-3" />
             {{ __('Active') }}
           </label>
+          <div v-if="form.product_kind === 'Variant'" class="space-y-4 sm:col-span-2">
+            <label class="block space-y-1">
+              <span class="text-sm text-ink-gray-7">{{ __('Template') }} *</span>
+              <select v-model="form.variant_of" :disabled="isExistingVariant" class="h-8 w-full rounded border border-outline-gray-2 bg-surface-white px-2 text-sm">
+                <option value="" disabled>{{ __('Select a template') }}</option>
+                <option v-for="template in availableTemplates" :key="template.name" :value="template.name">
+                  {{ template.product_name || template.name }} — {{ template.sku }}{{ isActive(template.is_active) ? '' : ` (${__('Inactive')})` }}
+                </option>
+              </select>
+              <span v-if="fieldErrors.variant_of" class="block text-xs text-red-600">{{ fieldErrors.variant_of }}</span>
+            </label>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-ink-gray-7">{{ __('Variant Attributes') }} *</span>
+                <Button v-if="!isExistingVariant" variant="subtle" size="sm" :label="__('Add Attribute')" iconLeft="plus" @click="addVariantAttribute" />
+              </div>
+              <div v-for="(attribute, index) in form.variant_attributes" :key="index" class="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <TextInput v-model="attribute.attribute_name" :disabled="isExistingVariant" :placeholder="__('Attribute (for example, Color)')" />
+                <TextInput v-model="attribute.attribute_value" :disabled="isExistingVariant" :placeholder="__('Value (for example, Red)')" />
+                <Button v-if="!isExistingVariant" variant="subtle" icon="trash-2" :aria-label="__('Remove attribute')" @click="removeVariantAttribute(index)" />
+              </div>
+              <span v-if="fieldErrors.variant_attributes" class="block text-xs text-red-600">{{ fieldErrors.variant_attributes }}</span>
+              <span v-if="isExistingVariant" class="block text-xs text-ink-gray-5">{{ __('Variant template and attributes cannot be changed after creation.') }}</span>
+            </div>
+          </div>
           <label class="space-y-1 sm:col-span-2">
             <span class="text-sm text-ink-gray-7">{{ __('Description') }}</span>
             <textarea v-model="form.description" rows="3" class="w-full rounded border border-outline-gray-2 bg-surface-white px-3 py-2 text-sm" />
           </label>
         </div>
 
-        <div v-if="categoriesResource.loading" class="mt-3 text-sm text-ink-gray-5">
-          {{ __('Loading categories...') }}
-        </div>
-        <ErrorMessage v-if="categoriesError" class="mt-4" :message="categoriesError" />
         <ErrorMessage v-if="error" class="mt-4" :message="error" />
         <Button v-if="needsReload" class="mt-3" variant="subtle" :label="__('Reload latest Product')" @click="reloadLatest" />
       </div>
@@ -61,46 +103,39 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { Button, Dialog, TextInput, call, createResource } from 'frappe-ui'
+import { Button, Dialog, TextInput, call } from 'frappe-ui'
 
 const props = defineProps({
   product: { type: Object, default: null },
+  categories: { type: Array, default: () => [] },
+  templates: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['saved', 'reload-latest'])
 const show = defineModel({ type: Boolean })
 const submitting = ref(false)
 const error = ref('')
+const fieldErrors = reactive({})
 const needsReload = ref(false)
 const form = reactive({
   product_name: '',
   sku: '',
+  product_kind: 'Standard',
   category: '',
+  categories: [],
+  variant_of: '',
+  variant_attributes: [],
   price: 0,
   description: '',
   is_active: true,
 })
 
 const isEditMode = computed(() => Boolean(props.product?.name))
-const categoriesResource = createResource({
-  url: 'frappe.client.get_list',
-  params: {
-    doctype: 'DoubleT Product Category',
-    fields: ['name', 'category_name'],
-    order_by: 'category_name asc',
-    limit_page_length: 500,
-  },
-  auto: true,
-})
-const categories = computed(() => categoriesResource.data || [])
-const categoriesError = computed(() => {
-  const resourceError = categoriesResource.error
-  return resourceError?.messages?.[0] || resourceError?.message || resourceError || ''
-})
+const isExistingVariant = computed(() => isEditMode.value && props.product?.product_kind === 'Variant')
+const availableTemplates = computed(() => props.templates.filter((template) => template.name !== props.product?.name))
 
 watch(show, (isOpen) => {
   if (!isOpen) return
   populateForm()
-  categoriesResource.reload()
 })
 
 watch(() => props.product, () => {
@@ -109,11 +144,22 @@ watch(() => props.product, () => {
 
 function populateForm() {
   error.value = ''
+  clearFieldErrors()
   needsReload.value = false
   Object.assign(form, {
     product_name: props.product?.product_name || '',
     sku: props.product?.sku || '',
+    product_kind: props.product?.product_kind || 'Standard',
     category: props.product?.category || '',
+    categories: uniqueCategories([
+      ...(props.product?.categories || []).map((row) => row.category),
+      props.product?.category,
+    ]),
+    variant_of: props.product?.variant_of || '',
+    variant_attributes: (props.product?.variant_attributes || []).map((row) => ({
+      attribute_name: row.attribute_name || '',
+      attribute_value: row.attribute_value || '',
+    })),
     price: props.product?.price ?? 0,
     description: props.product?.description || '',
     is_active: props.product ? isActive(props.product.is_active) : true,
@@ -125,13 +171,28 @@ function isActive(value) {
 }
 
 function validate() {
-  if (!form.product_name.trim() || !form.category) {
-    return __('Product Name and Category are required.')
-  }
+  clearFieldErrors()
+  if (!form.product_name.trim()) fieldErrors.product_name = __('Product Name is required.')
+  if (!form.category) fieldErrors.category = __('Primary Category is required.')
   if (form.price === '' || Number.isNaN(Number(form.price)) || Number(form.price) < 0) {
-    return __('Price must be a nonnegative number.')
+    fieldErrors.price = __('Price must be a nonnegative number.')
   }
-  return ''
+  if (form.product_kind === 'Variant') {
+    if (!form.variant_of) fieldErrors.variant_of = __('Template is required for a Variant.')
+    const attributes = form.variant_attributes.filter((row) => row.attribute_name.trim() || row.attribute_value.trim())
+    const names = new Set()
+    if (!attributes.length || attributes.some((row) => !row.attribute_name.trim() || !row.attribute_value.trim())) {
+      fieldErrors.variant_attributes = __('Add at least one complete attribute and value.')
+    } else if (attributes.some((row) => {
+      const name = row.attribute_name.trim().toLocaleLowerCase()
+      if (names.has(name)) return true
+      names.add(name)
+      return false
+    })) {
+      fieldErrors.variant_attributes = __('Each Variant Attribute can only be used once.')
+    }
+  }
+  return Object.values(fieldErrors)[0] || ''
 }
 
 async function saveProduct() {
@@ -143,6 +204,15 @@ async function saveProduct() {
   const fields = {
     product_name: form.product_name.trim(),
     category: form.category,
+    categories: uniqueCategories([...form.categories, form.category]).map((category) => ({ category })),
+    product_kind: form.product_kind,
+    variant_of: form.product_kind === 'Variant' ? form.variant_of : null,
+    variant_attributes: form.product_kind === 'Variant'
+      ? form.variant_attributes.map((row) => ({
+          attribute_name: row.attribute_name.trim(),
+          attribute_value: row.attribute_value.trim(),
+        }))
+      : [],
     price: Number(form.price),
     description: form.description,
     is_active: form.is_active ? 1 : 0,
@@ -166,6 +236,36 @@ async function saveProduct() {
   } finally {
     submitting.value = false
   }
+}
+
+function clearFieldErrors() {
+  Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
+}
+
+function uniqueCategories(categories) {
+  return [...new Set(categories.filter(Boolean))]
+}
+
+function ensurePrimaryCategory() {
+  form.categories = uniqueCategories([...form.categories, form.category])
+}
+
+function handleKindChange() {
+  clearFieldErrors()
+  if (form.product_kind !== 'Variant') {
+    form.variant_of = ''
+    form.variant_attributes = []
+  } else if (!form.variant_attributes.length) {
+    addVariantAttribute()
+  }
+}
+
+function addVariantAttribute() {
+  form.variant_attributes.push({ attribute_name: '', attribute_value: '' })
+}
+
+function removeVariantAttribute(index) {
+  form.variant_attributes.splice(index, 1)
 }
 
 function reloadLatest() {
