@@ -91,10 +91,13 @@
 
     <!-- Content -->
     <main class="task-content">
-      <div v-if="error" class="task-error">{{ error }}</div>
-
       <div v-if="loading" class="task-empty">
         {{ __('Loading tasks...') }}
+      </div>
+
+      <div v-else-if="error" class="task-error">
+        <span>{{ error }}</span>
+        <Button variant="subtle" :label="__('Retry')" @click="loadTasks" />
       </div>
 
       <div v-else-if="!tasks.length" class="task-empty">
@@ -461,7 +464,10 @@ let fetchId = 0
 async function loadTasks() {
   const currentId = ++fetchId
   loading.value = true
+  loadingMore.value = false
   error.value = ''
+  page.value = 0
+  hasMore.value = false
   try {
     const result = await fetchPage(0)
     if (currentId !== fetchId) return
@@ -472,10 +478,29 @@ async function loadTasks() {
   finally { if (currentId === fetchId) loading.value = false }
 }
 async function loadMore() {
+  if (loadingMore.value || loading.value || !hasMore.value) return
+
+  const currentId = ++fetchId
+  const currentPage = page.value
   loadingMore.value = true
-  try { const result = await fetchPage(page.value); tasks.value.push(...(result || [])); page.value++; hasMore.value = result?.length === pageSize }
-  catch (e) { error.value = e.message || __('Unable to load more tasks') }
-  finally { loadingMore.value = false }
+  error.value = ''
+  try {
+    const result = await fetchPage(currentPage)
+    if (currentId !== fetchId) return
+
+    const nextTasks = result || []
+    const loadedNames = new Set(tasks.value.map((task) => task.name))
+    tasks.value = [
+      ...tasks.value,
+      ...nextTasks.filter((task) => !loadedNames.has(task.name)),
+    ]
+    page.value = currentPage + 1
+    hasMore.value = nextTasks.length === pageSize
+  } catch (e) {
+    if (currentId === fetchId) error.value = e.message || __('Unable to load more tasks')
+  } finally {
+    if (currentId === fetchId) loadingMore.value = false
+  }
 }
 watch([myTasks, statusFilter, dueFilter], () => {
   router.replace({ query: { ...route.query, my_tasks: myTasks.value ? '1' : '0', due_date_filter: dueFilter.value } })
