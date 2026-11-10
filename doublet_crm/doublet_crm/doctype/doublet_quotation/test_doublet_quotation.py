@@ -18,6 +18,16 @@ class TestDoubleTQuotation(FrappeTestCase):
 			"contact": self.contact.name, "quotation_date": nowdate(), "valid_until": nowdate(),
 			"items": [{"product": self.product.name, "quantity": 2, "unit_price": 101, "discount_percent": 10}], **values})
 
+	def make_product(self, label, **values):
+		return frappe.get_doc({
+			"doctype": "DoubleT Product",
+			"product_name": f"{label} {self.tag}",
+			"sku": f"{label.upper().replace(' ', '-')}-{self.tag}",
+			"category": self.category.name,
+			"price": 101,
+			**values,
+		}).insert()
+
 	def test_direct_snapshot_override_and_totals(self):
 		quote = self.quotation().insert()
 		self.assertTrue(quote.name.startswith("QUO-"))
@@ -47,6 +57,59 @@ class TestDoubleTQuotation(FrappeTestCase):
 	def test_default_price_from_product(self):
 		quote = self.quotation(items=[{"product": self.product.name, "quantity": 1}]).insert()
 		self.assertEqual(quote.items[0].unit_price, 101)
+
+	def test_active_standard_product_can_be_added(self):
+		quote = self.quotation(items=[{"product": self.product.name, "quantity": 1}]).insert()
+		self.assertEqual(quote.items[0].product, self.product.name)
+		self.assertEqual(quote.items[0].unit_price, self.product.price)
+
+	def test_active_variant_can_be_added_when_template_is_inactive(self):
+		template = self.make_product("Quote Template", product_kind="Template", is_active=0)
+		variant = self.make_product(
+			"Quote Variant",
+			product_kind="Variant",
+			variant_of=template.name,
+			variant_attributes=[{"attribute_name": "Color", "attribute_value": "Red"}],
+			price=175,
+		)
+		quote = self.quotation(items=[{"product": variant.name, "quantity": 1}]).insert()
+		self.assertEqual((quote.items[0].product, quote.items[0].unit_price), (variant.name, 175))
+
+	def test_active_template_cannot_be_added(self):
+		template = self.make_product("Active Template", product_kind="Template", is_active=1)
+		with self.assertRaises(frappe.ValidationError):
+			self.quotation(items=[{"product": template.name, "quantity": 1}]).insert()
+
+	def test_inactive_standard_and_variant_cannot_be_added(self):
+		inactive_standard = self.make_product("Inactive Standard", is_active=0)
+		template = self.make_product("Variant Template", product_kind="Template", is_active=1)
+		inactive_variant = self.make_product(
+			"Inactive Variant",
+			product_kind="Variant",
+			variant_of=template.name,
+			variant_attributes=[{"attribute_name": "Color", "attribute_value": "Blue"}],
+			is_active=0,
+		)
+		for product in (inactive_standard, inactive_variant):
+			with self.subTest(product=product.name), self.assertRaises(frappe.ValidationError):
+				self.quotation(items=[{"product": product.name, "quantity": 1}]).insert()
+
+	def test_variant_snapshot_is_preserved_when_its_price_changes(self):
+		template = self.make_product("Snapshot Template", product_kind="Template")
+		variant = self.make_product(
+			"Snapshot Variant",
+			product_kind="Variant",
+			variant_of=template.name,
+			variant_attributes=[{"attribute_name": "Size", "attribute_value": "Large"}],
+			price=175,
+		)
+		quote = self.quotation(items=[{"product": variant.name, "quantity": 1}]).insert()
+		variant.product_name = "Changed Variant"
+		variant.price = 250
+		variant.save()
+		quote.notes = "Keep snapshot"
+		quote.save()
+		self.assertEqual((quote.items[0].product_name, quote.items[0].unit_price), (f"Snapshot Variant {self.tag}", 175))
 
 	def test_personal_and_company_contact_validation(self):
 		self.quotation(customer_type="PERSONAL", company=None).insert()

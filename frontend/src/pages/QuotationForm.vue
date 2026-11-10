@@ -36,10 +36,19 @@
             <label class="field sm:col-span-2">{{ __('Notes') }}<textarea v-model="doc.notes" rows="2" /></label>
           </fieldset>
           <div v-if="optionsError" class="text-sm text-red-600">{{ optionsError }}</div>
+          <div v-if="editable" class="flex flex-wrap items-end gap-2 rounded border p-3">
+            <label class="min-w-64 flex-1 text-sm text-ink-gray-7">{{ __('Search sellable products') }}
+              <TextInput v-model="productSearch" type="search" :placeholder="__('Search name or SKU...')" />
+            </label>
+            <Button v-if="productHasNextPage" variant="subtle" :label="__('Load more products')" :loading="productsLoading" @click="loadProducts({ append: true })" />
+            <span v-else-if="productsLoading" class="text-sm text-ink-gray-5">{{ __('Loading products...') }}</span>
+            <span class="text-xs text-ink-gray-5">{{ __('Only active Standard Products and Variants are available.') }}</span>
+          </div>
+          <div v-if="productPickerError" class="mt-2 text-sm text-red-600">{{ productPickerError }}</div>
           <div class="overflow-x-auto rounded border">
             <table class="w-full min-w-[820px] text-left text-sm"><thead><tr><th class="p-3">{{ __('Product') }}</th><th>{{ __('SKU') }}</th><th>{{ __('Unit Price') }}</th><th>{{ __('Quantity') }}</th><th>{{ __('Discount %') }}</th><th>{{ __('Line Total') }}</th><th /></tr></thead>
               <tbody><tr v-for="(item, index) in doc.items" :key="item.name || index" class="border-t">
-                <td class="p-3"><select v-if="editable && !item.name" v-model="item.product" @change="selectProduct(item)"><option value="">{{ __('Select product') }}</option><option v-for="product in products" :key="product.name" :value="product.name">{{ product.product_name }} ({{ product.sku }})</option></select><span v-else>{{ item.product_name || item.product || '—' }}</span></td>
+                <td class="p-3"><select v-if="editable && !item.name" v-model="item.product" @change="selectProduct(item)"><option value="">{{ __('Select product') }}</option><option v-for="product in products" :key="product.name" :value="product.name">{{ productPickerLabel(product) }}</option></select><span v-else>{{ item.product_name || item.product || '—' }}</span></td>
                 <td>{{ item.sku || '—' }}</td>
                 <td><TextInput v-if="editable" v-model="item.unit_price" type="number" min="0" step="1" /><span v-else>{{ money(item.unit_price) }}</span></td>
                 <td><TextInput v-if="editable" v-model="item.quantity" type="number" min="0" step="any" /><span v-else>{{ item.quantity }}</span></td>
@@ -58,7 +67,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button, TextInput, call } from 'frappe-ui'
 import LayoutHeader from '@/components/LayoutHeader.vue'
@@ -70,9 +79,14 @@ const doc = ref(null), loading = ref(true), saving = ref(false), editing = ref(f
 const exporting = ref(false)
 const canWrite = ref(false), canDelete = ref(false), error = ref(''), optionsError = ref(''), conflict = ref(false)
 const contacts = ref([]), companies = ref([]), deals = ref([]), products = ref([])
+const productSearch = ref('')
+const productsLoading = ref(false), productHasNextPage = ref(true), productPickerError = ref('')
 const dealLoading = ref(false)
 const dealLabel = ref('')
 let dealRequestId = 0
+let productRequestId = 0
+let productSearchTimer = null
+const productPageLength = 20
 const editable = computed(() => (isNew.value && canWrite.value) || (!isNew.value && editing.value && canWrite.value && doc.value?.status === 'Draft'))
 const availableContacts = computed(() => doc.value?.customer_type === 'COMPANY' ? contacts.value.filter(c => c.company === doc.value.company) : contacts.value)
 const totals = computed(() => (doc.value?.items || []).reduce((sum, item) => { const a = lineAmounts(item); sum.gross += a.gross; sum.discount += a.discount; sum.total += a.total; return sum }, { gross: 0, discount: 0, total: 0 }))
@@ -82,10 +96,107 @@ async function loadOptions() {
     list('DoubleT Contact', ['name', 'first_name', 'last_name', 'company']),
     list('DoubleT Company', ['name', 'company_name']),
     list('DoubleT Deal', ['name', 'deal_title']),
-    list('DoubleT Product', ['name', 'product_name', 'sku', 'price'], { is_active: 1 }),
   ])
-  ;[contacts, companies, deals, products].forEach((target, i) => { if (results[i].status === 'fulfilled') target.value = results[i].value || [] })
+  ;[contacts, companies, deals].forEach((target, i) => { if (results[i].status === 'fulfilled') target.value = results[i].value || [] })
   if (results.some(r => r.status === 'rejected')) optionsError.value = __('Some linked records could not be loaded. Check your access and retry.')
+}
+
+watch(productSearch, () => {
+  clearTimeout(productSearchTimer)
+  productSearchTimer = setTimeout(() => loadProducts(), 250)
+})
+
+async function loadProducts({ append = false } = {}) {
+  if (productsLoading.value && append) return
+  if (append && !productHasNextPage.value) return
+
+  const requestId = ++productRequestId
+  const start = append ? products.value.length : 0
+  if (!append) {
+    products.value = []
+    productHasNextPage.value = true
+  }
+  productsLoading.value = true
+  productPickerError.value = ''
+  const search = productSearch.value.trim()
+  try {
+    const data = await call('frappe.client.get_list', {
+      doctype: 'DoubleT Product',
+      fields: ['name', 'product_name', 'sku', 'price', 'product_kind', 'variant_of'],
+      filters: [
+        ['is_active', '=', 1],
+        ['product_kind', 'in', ['Standard', 'Variant']],
+      ],
+      or_filters: search
+        ? [
+            ['product_name', 'like', `%${search}%`],
+            ['sku', 'like', `%${search}%`],
+          ]
+        : undefined,
+      order_by: 'product_name asc',
+      limit_start: start,
+      limit_page_length: productPageLength,
+    })
+    if (requestId !== productRequestId) return
+
+    const page = Array.isArray(data) ? data : []
+    const detailedPage = await hydrateProductDetails(page, requestId)
+    if (requestId !== productRequestId) return
+    const byName = new Map((append ? products.value : []).map((product) => [product.name, product]))
+    detailedPage.forEach((product) => byName.set(product.name, product))
+    products.value = [...byName.values()]
+    productHasNextPage.value = page.length === productPageLength
+  } catch (exception) {
+    if (requestId === productRequestId) productPickerError.value = message(exception)
+  } finally {
+    if (requestId === productRequestId) productsLoading.value = false
+  }
+}
+
+async function hydrateProductDetails(page, requestId) {
+  const variantParents = [...new Set(page.map((product) => product.variant_of).filter(Boolean))]
+  const variantNames = page.filter((product) => product.product_kind === 'Variant').map((product) => product.name)
+  if (!variantParents.length && !variantNames.length) return page
+
+  const [parentsResult, attributesResult] = await Promise.allSettled([
+    variantParents.length
+      ? call('frappe.client.get_list', {
+          doctype: 'DoubleT Product',
+          fields: ['name', 'product_name', 'sku'],
+          filters: [['name', 'in', variantParents]],
+          limit_page_length: variantParents.length,
+        })
+      : Promise.resolve([]),
+    variantNames.length
+      ? call('frappe.client.get_list', {
+          doctype: 'DoubleT Product Variant Attribute',
+          fields: ['parent', 'attribute_name', 'attribute_value'],
+          filters: [
+            ['parent', 'in', variantNames],
+            ['parenttype', '=', 'DoubleT Product'],
+            ['parentfield', '=', 'variant_attributes'],
+          ],
+          limit_page_length: 5000,
+        })
+      : Promise.resolve([]),
+  ])
+  if (requestId !== productRequestId) return []
+
+  const parents = parentsResult.status === 'fulfilled' ? parentsResult.value : []
+  const attributes = attributesResult.status === 'fulfilled' ? attributesResult.value : []
+
+  const parentByName = new Map((parents || []).map((parent) => [parent.name, parent]))
+  const attributesByProduct = {}
+  for (const attribute of attributes || []) {
+    if (!attribute.parent || !attribute.attribute_name) continue
+    const values = attributesByProduct[attribute.parent] || (attributesByProduct[attribute.parent] = [])
+    values.push(`${attribute.attribute_name}: ${attribute.attribute_value}`)
+  }
+  return page.map((product) => ({
+    ...product,
+    variant_parent: parentByName.get(product.variant_of),
+    variant_attributes: attributesByProduct[product.name] || [],
+  }))
 }
 async function loadDocument() {
   loading.value = true; error.value = ''; conflict.value = false
@@ -156,6 +267,14 @@ function selectProduct(item) {
   const p = products.value.find(p => p.name === item.product)
   if (p) Object.assign(item, { product_name: p.product_name, sku: p.sku, unit_price: p.price })
 }
+function productPickerLabel(product) {
+  const details = [product.sku, money(product.price)]
+  if (product.product_kind === 'Variant') {
+    if (product.variant_parent) details.push(`${__('Variant of')} ${product.variant_parent.product_name || product.variant_parent.name}`)
+    if (product.variant_attributes?.length) details.push(product.variant_attributes.join(', '))
+  }
+  return `${product.product_name || product.name} — ${details.join(' · ')}`
+}
 function validate() {
   const d = doc.value
   if (!['PERSONAL', 'COMPANY'].includes(d.customer_type) || (d.customer_type === 'PERSONAL' && (!d.contact || d.company)) || (d.customer_type === 'COMPANY' && !d.company)) return __('Select a valid customer.')
@@ -207,10 +326,12 @@ async function remove() {
 }
 onMounted(async () => {
   loadOptions()
+  loadProducts()
   await loadDocument()
   const queryDeal = Array.isArray(route.query.deal) ? '' : dealName(route.query.deal)
   if (isNew.value && queryDeal && doc.value) await selectDeal(queryDeal)
 })
+onBeforeUnmount(() => clearTimeout(productSearchTimer))
 </script>
 
 <style scoped>

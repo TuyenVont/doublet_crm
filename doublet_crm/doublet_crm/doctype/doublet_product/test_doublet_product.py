@@ -14,6 +14,10 @@ class TestDoubleTProduct(FrappeTestCase):
 			"doctype": "DoubleT Product Category",
 			"category_name": f"Product Test Category {self.suffix}",
 		}).insert()
+		self.other_category = frappe.get_doc({
+			"doctype": "DoubleT Product Category",
+			"category_name": f"Other Product Test Category {self.suffix}",
+		}).insert()
 
 	def make_product(self, **values):
 		return frappe.get_doc({
@@ -25,10 +29,134 @@ class TestDoubleTProduct(FrappeTestCase):
 			**values,
 		})
 
+	def make_template(self, **values):
+		return self.make_product(
+			product_name=f"Template {self.suffix}",
+			sku=f"TEMPLATE-{self.suffix}",
+			product_kind="Template",
+			**values,
+		)
+
+	def make_variant(self, template, **values):
+		return self.make_product(
+			product_name=f"Variant {self.suffix}",
+			sku=f"VARIANT-{self.suffix}",
+			product_kind="Variant",
+			variant_of=template.name,
+			variant_attributes=[{"attribute_name": "Color", "attribute_value": "Red"}],
+			**values,
+		)
+
 	def test_create_valid_product(self):
 		product = self.make_product().insert()
 		self.assertEqual(product.name, product.sku)
 		self.assertEqual(product.category, self.category.name)
+		self.assertEqual(product.product_kind, "Standard")
+		self.assertEqual([row.category for row in product.categories], [self.category.name])
+
+	def test_allows_multiple_category_assignments(self):
+		product = self.make_product(categories=[
+			{"category": self.category.name},
+			{"category": self.other_category.name},
+		]).insert()
+		self.assertEqual(
+			{row.category for row in product.categories},
+			{self.category.name, self.other_category.name},
+		)
+
+	def test_rejects_duplicate_category_assignments(self):
+		with self.assertRaises(frappe.ValidationError):
+			self.make_product(categories=[
+				{"category": self.other_category.name},
+				{"category": self.other_category.name},
+			]).insert()
+
+	def test_template_activity_is_preserved_and_cannot_have_variant_details(self):
+		template = self.make_template().insert()
+		self.assertEqual(template.is_active, 1)
+		self.assertFalse(template.is_sellable())
+		inactive_template = self.make_template(
+			product_name=f"Inactive Template {self.suffix}",
+			sku=f"INACTIVE-TEMPLATE-{self.suffix}",
+			is_active=0,
+		).insert()
+		self.assertEqual(inactive_template.is_active, 0)
+		self.assertFalse(inactive_template.is_sellable())
+		with self.assertRaises(frappe.ValidationError):
+			self.make_template(
+				sku=f"INVALID-TEMPLATE-{self.suffix}",
+				variant_attributes=[{"attribute_name": "Color", "attribute_value": "Red"}],
+			).insert()
+
+	def test_creates_variant_for_template(self):
+		template = self.make_template().insert()
+		variant = self.make_variant(template).insert()
+		self.assertEqual(variant.variant_of, template.name)
+		self.assertTrue(variant.variant_signature)
+		self.assertRegex(variant.variant_key, r"^[0-9a-f]{64}$")
+		self.assertTrue(variant.is_sellable())
+
+	def test_variant_activity_is_independent_of_template_activity(self):
+		template = self.make_template(is_active=0).insert()
+		variant = self.make_variant(template).insert()
+		self.assertEqual(template.is_active, 0)
+		self.assertEqual(variant.is_active, 1)
+		self.assertTrue(variant.is_sellable())
+		variant.is_active = 0
+		variant.save()
+		self.assertFalse(variant.is_sellable())
+
+	def test_rejects_duplicate_variant_combination(self):
+		template = self.make_template().insert()
+		self.make_variant(template).insert()
+		with self.assertRaises(frappe.DuplicateEntryError):
+			self.make_variant(
+				template,
+				product_name=f"Second variant {self.suffix}",
+				sku=f"VARIANT-SECOND-{self.suffix}",
+			).insert()
+
+	def test_rejects_invalid_variant_parent_and_attributes(self):
+		standard = self.make_product(sku=f"STANDARD-{self.suffix}").insert()
+		with self.assertRaises(frappe.ValidationError):
+			self.make_variant(standard).insert()
+		with self.assertRaises(frappe.ValidationError):
+			self.make_product(
+				product_kind="Variant",
+				variant_of=f"Missing Template {self.suffix}",
+				variant_attributes=[{"attribute_name": "Color", "attribute_value": "Red"}],
+			).insert()
+		template = self.make_template(sku=f"TEMPLATE-ATTR-{self.suffix}").insert()
+		with self.assertRaises(frappe.ValidationError):
+			self.make_variant(template, sku=f"VARIANT-EMPTY-{self.suffix}", variant_attributes=[]).insert()
+		with self.assertRaises(frappe.ValidationError):
+			self.make_variant(
+				template,
+				sku=f"VARIANT-DUPLICATE-ATTR-{self.suffix}",
+				variant_attributes=[
+					{"attribute_name": "Color", "attribute_value": "Red"},
+					{"attribute_name": "color", "attribute_value": "Blue"},
+				],
+			).insert()
+
+	def test_variant_parent_and_attributes_are_immutable(self):
+		template = self.make_template().insert()
+		variant = self.make_variant(template).insert()
+		other_template = self.make_template(
+			product_name=f"Other Template {self.suffix}",
+			sku=f"OTHER-TEMPLATE-{self.suffix}",
+		).insert()
+		variant.variant_of = other_template.name
+		with self.assertRaises(frappe.ValidationError):
+			variant.save()
+		variant = frappe.get_doc("DoubleT Product", variant.name)
+		variant.variant_attributes[0].attribute_value = "Blue"
+		with self.assertRaises(frappe.ValidationError):
+			variant.save()
+
+	def test_standard_active_status_is_preserved(self):
+		product = self.make_product(is_active=0).insert()
+		self.assertEqual(product.is_active, 0)
 
 	def test_generates_sku_when_omitted(self):
 		product = frappe.get_doc({

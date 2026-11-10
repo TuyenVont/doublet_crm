@@ -8,7 +8,13 @@
   "field_order": [
     "product_name",
     "sku",
+    "product_kind",
+    "variant_of",
     "category",
+    "categories",
+    "variant_attributes",
+    "variant_signature",
+    "variant_key",
     "price",
     "description",
     "is_active"
@@ -30,12 +36,54 @@
       "in_list_view": 1
     },
     {
+      "fieldname": "product_kind",
+      "fieldtype": "Select",
+      "label": "Product Kind",
+      "options": "Standard\nTemplate\nVariant",
+      "default": "Standard",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "variant_of",
+      "fieldtype": "Link",
+      "label": "Variant Of",
+      "options": "DoubleT Product"
+    },
+    {
       "fieldname": "category",
       "fieldtype": "Link",
       "label": "Category",
       "options": "DoubleT Product Category",
       "reqd": 1,
       "in_list_view": 1
+    },
+    {
+      "fieldname": "categories",
+      "fieldtype": "Table",
+      "label": "Categories",
+      "options": "DoubleT Product Category Assignment"
+    },
+    {
+      "fieldname": "variant_attributes",
+      "fieldtype": "Table",
+      "label": "Variant Attributes",
+      "options": "DoubleT Product Variant Attribute"
+    },
+    {
+      "fieldname": "variant_signature",
+      "fieldtype": "Small Text",
+      "label": "Variant Signature",
+      "read_only": 1,
+      "hidden": 1
+    },
+    {
+      "fieldname": "variant_key",
+      "fieldtype": "Data",
+      "label": "Variant Key",
+      "read_only": 1,
+      "hidden": 1,
+      "unique": 1
     },
     {
       "fieldname": "price",

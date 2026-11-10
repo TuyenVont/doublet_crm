@@ -42,12 +42,14 @@
         <ErrorMessage v-if="categoriesError" class="mb-4" :message="categoriesError" />
         <ErrorMessage v-if="actionError" class="mb-4" :message="actionError" />
         <div class="overflow-x-auto rounded border border-outline-gray-2">
-        <table class="w-full min-w-[760px] text-sm">
+        <table class="w-full min-w-[960px] text-sm">
           <thead class="bg-surface-gray-1 text-left text-ink-gray-6">
             <tr>
               <th class="px-4 py-3 font-medium">{{ __('Product Name') }}</th>
               <th class="px-4 py-3 font-medium">{{ __('SKU') }}</th>
-              <th class="px-4 py-3 font-medium">{{ __('Category') }}</th>
+              <th class="px-4 py-3 font-medium">{{ __('Kind') }}</th>
+              <th class="px-4 py-3 font-medium">{{ __('Categories') }}</th>
+              <th class="px-4 py-3 font-medium">{{ __('Template') }}</th>
               <th class="px-4 py-3 text-right font-medium">{{ __('Price') }}</th>
               <th class="px-4 py-3 font-medium">{{ __('Status') }}</th>
               <th class="w-40 px-4 py-3"><span class="sr-only">{{ __('Actions') }}</span></th>
@@ -57,7 +59,12 @@
             <tr v-for="product in products" :key="product.name" class="cursor-pointer border-t border-outline-gray-2 hover:bg-surface-gray-1" @click="openEdit(product)">
               <td class="px-4 py-3 font-medium text-ink-gray-9">{{ product.product_name || product.name }}</td>
               <td class="px-4 py-3 text-ink-gray-6">{{ product.sku }}</td>
-              <td class="px-4 py-3 text-ink-gray-6">{{ product.category }}</td>
+              <td class="px-4 py-3 text-ink-gray-6">
+                <span>{{ productKind(product) }}</span>
+                <span v-if="productKind(product) === 'Template'" class="block text-xs text-amber-700">{{ __('Not sellable') }}</span>
+              </td>
+              <td class="px-4 py-3 text-ink-gray-6">{{ categoryNames(product) }}</td>
+              <td class="px-4 py-3 text-ink-gray-6">{{ templateName(product) }}</td>
               <td class="px-4 py-3 text-right text-ink-gray-8">{{ formatCurrency(product.price || 0) }}</td>
               <td class="px-4 py-3">
                 <span :class="isActive(product) ? 'text-green-600' : 'text-ink-gray-5'">
@@ -87,7 +94,7 @@
       <Button variant="subtle" :label="__('Load More')" :loading="productsResource.loading" @click="loadMore" />
     </div>
 
-    <ProductModal v-model="showProductModal" :product="selectedProduct" @saved="handleSaved" @reload-latest="openEditByName" />
+    <ProductModal v-model="showProductModal" :product="selectedProduct" :categories="categories" :templates="templates" @saved="handleSaved" @reload-latest="openEditByName" />
   </div>
 </template>
 
@@ -103,7 +110,7 @@ import ProductModal from '@/components/Modals/ProductModal.vue'
 import { useDoubleTProducts } from '@/composables/useDoubleTProducts'
 import { formatCurrency } from '@/utils'
 
-const { productsResource, categoriesResource, reload, loadMore, setFilters } = useDoubleTProducts()
+const { productsResource, categoriesResource, templatesResource, categoryAssignmentsResource, reload, loadMore, reloadTemplates, setFilters } = useDoubleTProducts()
 const router = useRouter()
 const searchQuery = ref('')
 const selectedCategory = ref('')
@@ -120,6 +127,8 @@ const resourceError = computed(() => {
   return error?.messages?.[0] || error?.message || error || ''
 })
 const categories = computed(() => categoriesResource.data || [])
+const templates = computed(() => templatesResource.data || [])
+const categoryAssignments = computed(() => categoryAssignmentsResource.data || {})
 const categoryOptions = computed(() => [
   { label: __('All Categories'), onClick: () => { selectedCategory.value = '' } },
   ...categories.value.map((category) => ({
@@ -152,6 +161,27 @@ watch([searchQuery, selectedCategory, selectedStatus], () => {
 
 function isActive(product) {
   return product.is_active === 1 || product.is_active === '1' || product.is_active === true
+}
+
+function productKind(product) {
+  return product.product_kind || 'Standard'
+}
+
+function categoryNames(product) {
+  const names = [product.category, ...(categoryAssignments.value[product.name] || [])]
+  const uniqueNames = [...new Set(names.filter(Boolean))]
+  return uniqueNames.map(categoryLabel).join(', ') || '-'
+}
+
+function categoryLabel(name) {
+  const category = categories.value.find((item) => item.name === name)
+  return category?.category_name || name
+}
+
+function templateName(product) {
+  if (productKind(product) !== 'Variant' || !product.variant_of) return '—'
+  const template = templates.value.find((item) => item.name === product.variant_of)
+  return template ? (template.product_name || template.name) : product.variant_of
 }
 
 async function openCreate() {
@@ -193,6 +223,7 @@ function openEditByName(name) {
 
 function handleSaved() {
   reload()
+  reloadTemplates()
 }
 
 async function deleteProduct(product) {
