@@ -151,7 +151,7 @@ def convert_lead(
 	existing_company=None,
 	create_company=0,
 	company_name=None,
-	create_deal=1,
+	create_deal=0,
 	deal_title=None,
 	stage=None,
 	amount=0,
