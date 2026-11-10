@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -91,8 +93,38 @@ class TestDoubleTNote(FrappeTestCase):
 		self.assertEqual({row.name for row in first_results}, {first.name})
 		self.assertEqual({row.name for row in second_results}, {second.name})
 
+	def test_linked_notes_paginate_without_changing_legacy_response(self):
+		notes = [self.make_note(title=f"Linked page {index}") for index in range(22)]
+
+		first = get_linked_notes(
+			"DoubleT Lead",
+			self.lead.name,
+			limit_start=0,
+			limit_page_length=20,
+			include_pagination=1,
+		)
+		second = get_linked_notes(
+			"DoubleT Lead",
+			self.lead.name,
+			limit_start=20,
+			limit_page_length=20,
+			include_pagination=1,
+		)
+		first_names = {row.name for row in first["notes"]}
+		second_names = {row.name for row in second["notes"]}
+
+		self.assertEqual(len(first_names), 20)
+		self.assertEqual(len(second_names), 2)
+		self.assertFalse(first_names & second_names)
+		self.assertEqual(first_names | second_names, {note.name for note in notes})
+		self.assertTrue(first["has_more"])
+		self.assertFalse(second["has_more"])
+		self.assertIsInstance(get_linked_notes("DoubleT Lead", self.lead.name), list)
+
 	def test_central_listing_search_and_reference_filter(self):
 		lead_note = self.make_note(title="Searchable lead note")
+		content_marker = frappe.generate_hash(length=10)
+		content_note = self.make_note(title="Content search note", content=f"Body {content_marker}")
 		company_note = self.make_note(
 			reference_doctype="DoubleT Company",
 			reference_name=self.company.name,
@@ -101,6 +133,8 @@ class TestDoubleTNote(FrappeTestCase):
 
 		self.assertIn(lead_note.name, {row.name for row in get_notes(search="Searchable")})
 		self.assertNotIn(company_note.name, {row.name for row in get_notes(search="Searchable")})
+		self.assertIn(content_note.name, {row.name for row in get_notes(search=content_marker)})
+		self.assertIn(lead_note.name, {row.name for row in get_notes(search=self.lead.name)})
 		self.assertIn(
 			company_note.name,
 			{row.name for row in get_notes(reference_doctype="DoubleT Company")},
@@ -109,6 +143,88 @@ class TestDoubleTNote(FrappeTestCase):
 			lead_note.name,
 			{row.name for row in get_notes(reference_doctype="DoubleT Company")},
 		)
+
+	def test_central_listing_paginates_with_stable_order(self):
+		marker = frappe.generate_hash(length=10)
+		notes = [self.make_note(title=f"Paged {marker} {index}") for index in range(5)]
+		modified = "2026-01-01 12:00:00"
+		for note in notes:
+			frappe.db.set_value("DoubleT Note", note.name, "modified", modified, update_modified=False)
+
+		expected = sorted((note.name for note in notes), reverse=True)
+		first = get_notes(search=marker, limit_start=0, limit_page_length=2, include_pagination=1)
+		second = get_notes(search=marker, limit_start=2, limit_page_length=2, include_pagination=1)
+		third = get_notes(search=marker, limit_start=4, limit_page_length=2, include_pagination=1)
+
+		self.assertEqual([row.name for row in first["notes"]], expected[:2])
+		self.assertEqual([row.name for row in second["notes"]], expected[2:4])
+		self.assertEqual([row.name for row in third["notes"]], expected[4:])
+		self.assertTrue(first["has_more"])
+		self.assertTrue(second["has_more"])
+		self.assertFalse(third["has_more"])
+
+	def test_central_listing_combines_search_and_reference_filter(self):
+		marker = frappe.generate_hash(length=10)
+		lead_note = self.make_note(title=f"Combined {marker}")
+		company_note = self.make_note(
+			reference_doctype="DoubleT Company",
+			reference_name=self.company.name,
+			title=f"Combined {marker}",
+		)
+		self.make_note(
+			reference_doctype="DoubleT Company",
+			reference_name=self.company.name,
+			title="Different company note",
+		)
+
+		result = get_notes(
+			search=marker,
+			reference_doctype="DoubleT Company",
+			limit_page_length=20,
+			include_pagination=1,
+		)
+		self.assertEqual([row.name for row in result["notes"]], [company_note.name])
+		self.assertNotIn(lead_note.name, {row.name for row in result["notes"]})
+
+	def test_inaccessible_references_do_not_shrink_accessible_page(self):
+		marker = frappe.generate_hash(length=10)
+		first = self.make_note(title=f"Visible {marker} one")
+		second = self.make_note(title=f"Visible {marker} two")
+		inaccessible = self.make_note(
+			reference_name=self.other_lead.name,
+			title=f"Hidden {marker}",
+		)
+		real_has_permission = frappe.has_permission
+
+		def has_permission(doctype, *args, **kwargs):
+			docname = kwargs.get("doc")
+			if doctype == "DoubleT Lead" and docname == self.other_lead.name:
+				return False
+			return real_has_permission(doctype, *args, **kwargs)
+
+		with (
+			patch("doublet_crm.api.frappe.has_permission", side_effect=has_permission),
+			patch("doublet_crm.api.NOTE_SCAN_PAGE_LENGTH", 2),
+		):
+			result = get_notes(
+				search=marker,
+				limit_start=0,
+				limit_page_length=2,
+				include_pagination=1,
+			)
+
+		self.assertEqual({row.name for row in result["notes"]}, {first.name, second.name})
+		self.assertNotIn(inaccessible.name, {row.name for row in result["notes"]})
+		self.assertFalse(result["has_more"])
+
+	def test_central_listing_legacy_response_remains_a_list(self):
+		marker = frappe.generate_hash(length=10)
+		note = self.make_note(title=f"Legacy {marker}")
+
+		result = get_notes(search=marker, reference_doctype="DoubleT Lead")
+
+		self.assertIsInstance(result, list)
+		self.assertEqual([row.name for row in result], [note.name])
 
 	def test_permissions(self):
 		note = self.make_note()

@@ -63,8 +63,8 @@
                         label: __('Delete'),
                         theme: 'red',
                         variant: 'solid',
-                        onClick(close) {
-                          modalRef.deleteTask(task.name)
+                        onClick: async (close) => {
+                          await modalRef.deleteTask(task.name)
                           close()
                         },
                       },
@@ -88,6 +88,9 @@
         class="mx-2 h-px border-t border-outline-elevation-2"
       />
     </div>
+    <div v-if="hasMore" class="flex justify-center pt-3">
+      <Button :label="__('Load More')" variant="subtle" :loading="loading" @click="$emit('load-more')" />
+    </div>
   </div>
 </template>
 <script setup>
@@ -99,12 +102,16 @@ import UserAvatar from '@/components/UserAvatar.vue'
 import { formatDate, taskStatusOptions } from '@/utils'
 import { usersStore } from '@/stores/users'
 import { globalStore } from '@/stores/global'
-import { Tooltip, Dropdown } from 'frappe-ui'
+import { Button, Tooltip, Dropdown } from 'frappe-ui'
 
 defineProps({
   tasks: { type: Array, default: () => [] },
   modalRef: { type: Object, default: () => ({}) },
+  hasMore: { type: Boolean, default: false },
+  loading: { type: Boolean, default: false },
 })
+
+defineEmits(['load-more'])
 
 const { getUser } = usersStore()
 const { $dialog } = globalStore()

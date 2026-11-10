@@ -23,19 +23,18 @@
           type="search"
           :placeholder="__('Search notes...')"
           class="min-w-52 flex-1 rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2 text-sm"
-          @keyup.enter="loadNotes"
+          @keyup.enter="applyManagementFilters"
         />
         <select
           v-model="referenceFilter"
           class="rounded-lg border border-outline-gray-2 bg-surface-white px-3 py-2 text-sm"
-          @change="loadNotes"
         >
           <option value="">{{ __('All record types') }}</option>
           <option v-for="doctype in referenceDoctypes" :key="doctype" :value="doctype">
             {{ doctype.replace('DoubleT ', '') }}
           </option>
         </select>
-        <Button :label="__('Search')" variant="subtle" :loading="loading" @click="loadNotes" />
+        <Button :label="__('Search')" variant="subtle" :loading="loading" @click="applyManagementFilters" />
       </div>
 
       <form
@@ -146,7 +145,7 @@
         <Button :label="__('Retry')" variant="subtle" @click="loadNotes" />
       </div>
 
-      <div v-if="loading" class="flex min-h-40 items-center justify-center text-sm text-ink-gray-5">
+      <div v-if="loading && !notes.length" class="flex min-h-40 items-center justify-center text-sm text-ink-gray-5">
         {{ __('Loading Notes...') }}
       </div>
 
@@ -193,6 +192,10 @@
           </p>
         </article>
       </div>
+
+      <div v-if="notes.length && hasMore" class="flex justify-center">
+        <Button :label="__('Load More')" variant="subtle" :loading="loading" @click="loadMoreNotes" />
+      </div>
     </div>
   </div>
 </template>
@@ -235,9 +238,12 @@ const search = ref('')
 const referenceFilter = ref('')
 const referenceOptions = ref([])
 const referencesLoading = ref(false)
+const hasMore = ref(false)
 const form = reactive({ title: '', content: '', reference_doctype: '', reference_name: '' })
 let requestSerial = 0
 let referenceRequestSerial = 0
+let searchTimer
+const pageLength = 20
 
 function apiError(error) {
   return error?.messages?.join?.('; ')
@@ -284,11 +290,17 @@ function startEdit(note) {
   if (props.management) loadReferenceOptions(true)
 }
 
-async function loadNotes() {
+async function loadNotes({ append = false } = {}) {
+  if (append && (loading.value || !hasMore.value)) return
+
   const serial = ++requestSerial
   const doctype = props.referenceDoctype
   const name = props.referenceName
-  notes.value = []
+  const start = append ? notes.value.length : 0
+  if (!append) {
+    notes.value = []
+    hasMore.value = false
+  }
   loadError.value = ''
 
   if (!props.management && (!doctype || !name)) {
@@ -302,10 +314,23 @@ async function loadNotes() {
       ? await call('doublet_crm.api.get_notes', {
           search: search.value.trim() || null,
           reference_doctype: referenceFilter.value || null,
+          limit_start: start,
+          limit_page_length: pageLength,
+          include_pagination: 1,
         })
-      : await call('doublet_crm.api.get_linked_notes', { doctype, docname: name })
+      : await call('doublet_crm.api.get_linked_notes', {
+          doctype,
+          docname: name,
+          limit_start: start,
+          limit_page_length: pageLength,
+          include_pagination: 1,
+        })
     if (serial === requestSerial && isCurrent(doctype, name)) {
-      notes.value = result || []
+      const page = result?.notes || (Array.isArray(result) ? result : [])
+      notes.value = append
+        ? [...notes.value, ...page.filter((note) => !notes.value.some((current) => current.name === note.name))]
+        : page
+      hasMore.value = Boolean(result?.has_more)
     }
   } catch (error) {
     if (serial === requestSerial && isCurrent(doctype, name)) {
@@ -316,6 +341,15 @@ async function loadNotes() {
       loading.value = false
     }
   }
+}
+
+function applyManagementFilters() {
+  clearTimeout(searchTimer)
+  return loadNotes()
+}
+
+function loadMoreNotes() {
+  return loadNotes({ append: true })
 }
 
 async function saveNote() {
@@ -448,6 +482,7 @@ watch(
   () => {
     requestSerial += 1
     notes.value = []
+    hasMore.value = false
     loading.value = false
     loadError.value = ''
     showEditor.value = false
@@ -462,7 +497,20 @@ watch(
   { immediate: true },
 )
 
+watch(search, () => {
+  if (!props.management) return
+  clearTimeout(searchTimer)
+  requestSerial += 1
+  hasMore.value = false
+  searchTimer = setTimeout(loadNotes, 300)
+})
+
+watch(referenceFilter, () => {
+  if (props.management) applyManagementFilters()
+})
+
 onBeforeUnmount(() => {
+  clearTimeout(searchTimer)
   requestSerial += 1
 })
 </script>

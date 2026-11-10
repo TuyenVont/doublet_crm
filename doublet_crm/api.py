@@ -2,10 +2,39 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import frappe
 from frappe import _
-from frappe.utils import cstr, get_datetime, get_system_timezone, now
+from frappe.utils import cint, cstr, get_datetime, get_system_timezone, now
 
 from doublet_crm.doublet_crm.doctype.doublet_call_log.doublet_call_log import normalize_phone_number
 from doublet_crm.doublet_crm.doctype.doublet_note.doublet_note import ALLOWED_REFERENCES
+
+
+NOTE_FIELDS = [
+    "name",
+    "title",
+    "content",
+    "reference_doctype",
+    "reference_name",
+    "owner",
+    "modified",
+    "creation",
+]
+NOTE_ORDER_BY = "modified desc, name desc"
+NOTE_LEGACY_PAGE_LENGTH = 500
+NOTE_DEFAULT_PAGE_LENGTH = 20
+NOTE_MAX_PAGE_LENGTH = 500
+NOTE_SCAN_PAGE_LENGTH = 100
+TASK_FIELDS = [
+    "name",
+    "title",
+    "description",
+    "assigned_to",
+    "due_date",
+    "priority",
+    "status",
+    "modified",
+    "creation",
+]
+TASK_ORDER_BY = "modified desc, name desc"
 
 
 def _note_reference_label(doctype, docname):
@@ -26,11 +55,43 @@ def _note_reference_label(doctype, docname):
     return str(label or record.get_title() or docname).strip()
 
 
+def _page_value(value, default, minimum, label):
+    if value is None or value == "":
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        frappe.throw(_("{0} must be an integer").format(label), frappe.ValidationError)
+    if parsed < minimum:
+        frappe.throw(_("{0} must be at least {1}").format(label, minimum), frappe.ValidationError)
+    return parsed
+
+
 @frappe.whitelist()
-def get_notes(search: str | None = None, reference_doctype: str | None = None):
+def get_notes(
+    search: str | None = None,
+    reference_doctype: str | None = None,
+    limit_start: int | str | None = None,
+    limit_page_length: int | str | None = None,
+    include_pagination: int | str = 0,
+):
     frappe.has_permission("DoubleT Note", "read", throw=True)
     if reference_doctype and reference_doctype not in ALLOWED_REFERENCES:
         frappe.throw(_("Unsupported reference DocType"), frappe.ValidationError)
+
+    paginated = limit_start is not None or limit_page_length is not None or cint(include_pagination)
+    visible_start = _page_value(limit_start, 0, 0, _("Limit start"))
+    page_length = _page_value(
+        limit_page_length,
+        NOTE_DEFAULT_PAGE_LENGTH if paginated else NOTE_LEGACY_PAGE_LENGTH,
+        1,
+        _("Page length"),
+    )
+    if page_length > NOTE_MAX_PAGE_LENGTH:
+        frappe.throw(
+            _("Page length cannot exceed {0}").format(NOTE_MAX_PAGE_LENGTH),
+            frappe.ValidationError,
+        )
 
     filters = {"reference_doctype": reference_doctype} if reference_doctype else {}
     term = (search or "").strip()
@@ -43,41 +104,68 @@ def get_notes(search: str | None = None, reference_doctype: str | None = None):
             "reference_name": ["like", pattern],
         }
 
-    notes = frappe.get_list(
-        "DoubleT Note",
-        filters=filters,
-        or_filters=or_filters,
-        fields=[
-            "name",
-            "title",
-            "content",
-            "reference_doctype",
-            "reference_name",
-            "owner",
-            "modified",
-            "creation",
-        ],
-        order_by="modified desc",
-        limit_page_length=500,
-    )
     visible_notes = []
     reference_labels = {}
-    for note in notes:
-        if not (
-            frappe.db.exists(note.reference_doctype, note.reference_name)
-            and frappe.has_permission(note.reference_doctype, "read", note.reference_name)
-        ):
-            continue
-        reference = (note.reference_doctype, note.reference_name)
-        if reference not in reference_labels:
-            reference_labels[reference] = _note_reference_label(*reference)
-        note["reference_label"] = reference_labels[reference]
-        visible_notes.append(note)
-    return visible_notes
+    candidate_start = 0
+    target_count = visible_start + page_length + (1 if paginated else 0)
+
+    # Page after checking the linked CRM record. Applying SQL pagination first
+    # would let inaccessible records crowd accessible notes out of a page.
+    while len(visible_notes) < target_count:
+        notes = frappe.get_list(
+            "DoubleT Note",
+            filters=filters,
+            or_filters=or_filters,
+            fields=NOTE_FIELDS,
+            order_by=NOTE_ORDER_BY,
+            limit_start=candidate_start,
+            limit_page_length=NOTE_SCAN_PAGE_LENGTH,
+        )
+        if not notes:
+            break
+        candidate_start += len(notes)
+
+        for note in notes:
+            if not (
+                frappe.db.exists(note.reference_doctype, note.reference_name)
+                and frappe.has_permission(
+                    note.reference_doctype,
+                    "read",
+                    doc=note.reference_name,
+                )
+            ):
+                continue
+            reference = (note.reference_doctype, note.reference_name)
+            if reference not in reference_labels:
+                reference_labels[reference] = _note_reference_label(*reference)
+            note["reference_label"] = reference_labels[reference]
+            visible_notes.append(note)
+            if len(visible_notes) >= target_count:
+                break
+
+        if len(notes) < NOTE_SCAN_PAGE_LENGTH:
+            break
+
+    page = visible_notes[visible_start:visible_start + page_length]
+    if cint(include_pagination):
+        return {
+            "notes": page,
+            "has_more": len(visible_notes) > visible_start + page_length,
+            "limit_start": visible_start,
+            "limit_page_length": page_length,
+        }
+    return page
 
 
 @frappe.whitelist()
-def get_linked_notes(doctype: str, docname: str):
+def get_linked_notes(
+    doctype: str,
+    docname: str,
+    limit_start: int | str | None = None,
+    limit_page_length: int | str | None = None,
+    include_pagination: int | str = 0,
+):
+    frappe.has_permission("DoubleT Note", "read", throw=True)
     if doctype not in ALLOWED_REFERENCES:
         frappe.throw(_("Unsupported reference DocType"), frappe.ValidationError)
 
@@ -86,25 +174,50 @@ def get_linked_notes(doctype: str, docname: str):
     if not frappe.has_permission(doctype, "read", docname):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
-    return frappe.get_list(
+    paginated = limit_start is not None or limit_page_length is not None or cint(include_pagination)
+    if not paginated:
+        return frappe.get_list(
+            "DoubleT Note",
+            filters={"reference_doctype": doctype, "reference_name": docname},
+            fields=NOTE_FIELDS,
+            order_by=NOTE_ORDER_BY,
+        )
+
+    start = _page_value(limit_start, 0, 0, _("Limit start"))
+    page_length = _page_value(limit_page_length, NOTE_DEFAULT_PAGE_LENGTH, 1, _("Page length"))
+    if page_length > NOTE_MAX_PAGE_LENGTH:
+        frappe.throw(
+            _("Page length cannot exceed {0}").format(NOTE_MAX_PAGE_LENGTH),
+            frappe.ValidationError,
+        )
+    notes = frappe.get_list(
         "DoubleT Note",
         filters={"reference_doctype": doctype, "reference_name": docname},
-        fields=[
-            "name",
-            "title",
-            "content",
-            "reference_doctype",
-            "reference_name",
-            "owner",
-            "modified",
-            "creation",
-        ],
-        order_by="modified desc",
+        fields=NOTE_FIELDS,
+        order_by=NOTE_ORDER_BY,
+        limit_start=start,
+        limit_page_length=page_length + 1,
     )
+    page = notes[:page_length]
+    if cint(include_pagination):
+        return {
+            "notes": page,
+            "has_more": len(notes) > page_length,
+            "limit_start": start,
+            "limit_page_length": page_length,
+        }
+    return page
 
 
 @frappe.whitelist()
-def get_linked_tasks(doctype: str, docname: str):
+def get_linked_tasks(
+    doctype: str,
+    docname: str,
+    limit_start: int | str | None = None,
+    limit_page_length: int | str | None = None,
+    include_pagination: int | str = 0,
+):
+    frappe.has_permission("DoubleT Task", "read", throw=True)
     supported_doctypes = {
         "DoubleT Lead",
         "DoubleT Deal",
@@ -119,22 +232,46 @@ def get_linked_tasks(doctype: str, docname: str):
     if not frappe.has_permission(doctype, "read", docname):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
+    paginated = limit_start is not None or limit_page_length is not None or cint(include_pagination)
+    if not paginated:
+        tasks = frappe.get_list(
+            "DoubleT Task",
+            filters={"reference_doctype": doctype, "reference_docname": docname},
+            fields=TASK_FIELDS,
+            order_by=TASK_ORDER_BY,
+        )
+        return [[], [], [], tasks, []]
+
+    start = _page_value(limit_start, 0, 0, _("Limit start"))
+    page_length = _page_value(limit_page_length, NOTE_DEFAULT_PAGE_LENGTH, 1, _("Page length"))
+    if page_length > NOTE_MAX_PAGE_LENGTH:
+        frappe.throw(
+            _("Page length cannot exceed {0}").format(NOTE_MAX_PAGE_LENGTH),
+            frappe.ValidationError,
+        )
     tasks = frappe.get_list(
         "DoubleT Task",
         filters={"reference_doctype": doctype, "reference_docname": docname},
-        fields=[
-            "name",
-            "title",
-            "description",
-            "assigned_to",
-            "due_date",
-            "priority",
-            "status",
-            "modified",
-            "creation",
-        ],
+        fields=TASK_FIELDS,
+        order_by=TASK_ORDER_BY,
+        limit_start=start,
+        limit_page_length=page_length + 1,
     )
-    return [[], [], [], tasks, []]
+    page = tasks[:page_length]
+    if cint(include_pagination):
+        return [
+            [],
+            [],
+            [],
+            {
+                "tasks": page,
+                "has_more": len(tasks) > page_length,
+                "limit_start": start,
+                "limit_page_length": page_length,
+            },
+            [],
+        ]
+    return [[], [], [], page, []]
 
 
 @frappe.whitelist()

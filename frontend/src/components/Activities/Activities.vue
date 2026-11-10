@@ -75,6 +75,9 @@
           :modalRef="modalRef"
           :tasks="activities"
           :doctype="doctype"
+          :has-more="linkedTasks.data?.has_more"
+          :loading="linkedTasks.loading"
+          @load-more="loadLinkedTasks({ append: true })"
         />
       </div>
       <div v-else-if="title == 'Calls'" class="activity">
@@ -486,13 +489,14 @@ import { useTimelinePreferences } from '@/composables/useTimelinePreferences'
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
 import { useTelemetry } from 'frappe-ui/frappe'
-import { Button, createResource, toast } from 'frappe-ui'
+import { Button, call, createResource, toast } from 'frappe-ui'
 import { useElementVisibility } from '@vueuse/core'
 import {
   ref,
   computed,
   h,
   markRaw,
+  reactive,
   watch,
   nextTick,
   onMounted,
@@ -552,20 +556,58 @@ const all_activities = createResource({
   onSuccess: () => nextTick(() => scroll()),
 })
 
-const linkedTasks = createResource({
-  url: 'doublet_crm.api.get_linked_tasks',
-  params: { doctype: props.doctype, docname: props.docname },
-  cache: ['doublet_linked_tasks', props.doctype, props.docname],
-  auto: false,
-  transform: ([, , , tasks]) => ({
-    versions: [],
-    calls: [],
-    notes: [],
-    tasks: tasks || [],
-    attachments: [],
-  }),
-  onSuccess: () => nextTick(() => scroll()),
+const linkedTasks = reactive({
+  data: { versions: [], calls: [], notes: [], tasks: [], attachments: [], has_more: false },
+  loading: false,
+  error: null,
+  fetch: () => loadLinkedTasks(),
+  reload: () => loadLinkedTasks(),
 })
+let linkedTaskRequestSerial = 0
+const linkedTaskPageLength = 20
+
+async function loadLinkedTasks({ append = false } = {}) {
+  if (append && (linkedTasks.loading || !linkedTasks.data?.has_more)) return
+
+  const requestSerial = ++linkedTaskRequestSerial
+  const existingTasks = linkedTasks.data?.tasks || []
+  const start = append ? existingTasks.length : 0
+  if (!append) {
+    linkedTasks.data = { versions: [], calls: [], notes: [], tasks: [], attachments: [], has_more: false }
+  }
+  linkedTasks.loading = true
+  linkedTasks.error = null
+
+  try {
+    const response = await call('doublet_crm.api.get_linked_tasks', {
+      doctype: props.doctype,
+      docname: props.docname,
+      limit_start: start,
+      limit_page_length: linkedTaskPageLength,
+      include_pagination: 1,
+    })
+    if (requestSerial !== linkedTaskRequestSerial) return
+
+    const payload = response?.[3] || {}
+    const page = Array.isArray(payload) ? payload : (payload.tasks || [])
+    const tasks = append
+      ? [...existingTasks, ...page.filter((task) => !existingTasks.some((current) => current.name === task.name))]
+      : page
+    linkedTasks.data = {
+      versions: [],
+      calls: [],
+      notes: [],
+      tasks,
+      attachments: [],
+      has_more: Boolean(payload.has_more),
+    }
+    nextTick(() => scroll())
+  } catch (error) {
+    if (requestSerial === linkedTaskRequestSerial) linkedTasks.error = error
+  } finally {
+    if (requestSerial === linkedTaskRequestSerial) linkedTasks.loading = false
+  }
+}
 
 watch(
   reload,
@@ -601,6 +643,19 @@ watch(
     }
   },
   { immediate: true },
+)
+
+watch(
+  () => [props.doctype, props.docname],
+  () => {
+    linkedTaskRequestSerial += 1
+    linkedTasks.data = { versions: [], calls: [], notes: [], tasks: [], attachments: [], has_more: false }
+    linkedTasks.loading = false
+    linkedTasks.error = null
+    if (supportedTaskDoctypes.includes(props.doctype) && title.value === 'Tasks') {
+      loadLinkedTasks()
+    }
+  },
 )
 
 const showWhatsappTemplates = ref(false)

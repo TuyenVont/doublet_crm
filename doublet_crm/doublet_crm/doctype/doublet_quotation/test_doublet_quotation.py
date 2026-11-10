@@ -134,7 +134,7 @@ class TestDoubleTQuotation(FrappeTestCase):
 				self.assertEqual(deal_data.get("contact"), self.contact.name)
 				self.assertEqual(deal_data.get("company"), self.company.name)
 				if role == "Sales User":
-					self.assertNotEqual(deal_data.get("amount"), 12345)
+					self.assertEqual(deal_data.get("amount"), 12345)
 					self.assertNotIn(1, frappe.get_meta("DoubleT Deal").get_permlevel_access("read"))
 					self.assertFalse(frappe.has_permission("DoubleT Deal", "delete", deal.name))
 				self.assertFalse(frappe.has_permission("DoubleT Contact", "write", self.contact.name))

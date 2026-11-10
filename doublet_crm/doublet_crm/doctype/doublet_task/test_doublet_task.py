@@ -155,6 +155,45 @@ class TestDoubleTTask(FrappeTestCase):
         self.assertIsInstance(response[3], list)
         self.assertEqual(response[4], [])
 
+    def test_get_linked_tasks_paginate_without_changing_legacy_response(self):
+        lead_name = self.make_references()["DoubleT Lead"]
+        tasks = [
+            self.make_task(
+                title=f"Paged task {index} {self.unique}",
+                reference_doctype="DoubleT Lead",
+                reference_docname=lead_name,
+            )
+            for index in range(22)
+        ]
+
+        first = get_linked_tasks(
+            "DoubleT Lead",
+            lead_name,
+            limit_start=0,
+            limit_page_length=20,
+            include_pagination=1,
+        )
+        second = get_linked_tasks(
+            "DoubleT Lead",
+            lead_name,
+            limit_start=20,
+            limit_page_length=20,
+            include_pagination=1,
+        )
+        first_tasks = first[3]
+        second_tasks = second[3]
+        first_names = {row.name for row in first_tasks["tasks"]}
+        second_names = {row.name for row in second_tasks["tasks"]}
+
+        self.assertEqual(len(first), 5)
+        self.assertEqual(len(first_names), 20)
+        self.assertEqual(len(second_names), 2)
+        self.assertFalse(first_names & second_names)
+        self.assertEqual(first_names | second_names, {task.name for task in tasks})
+        self.assertTrue(first_tasks["has_more"])
+        self.assertFalse(second_tasks["has_more"])
+        self.assertIsInstance(get_linked_tasks("DoubleT Lead", lead_name)[3], list)
+
     def test_permissions_and_unauthorized_access(self):
         lead_name = self.make_references()["DoubleT Lead"]
         task = self.make_task(reference_doctype="DoubleT Lead", reference_docname=lead_name)

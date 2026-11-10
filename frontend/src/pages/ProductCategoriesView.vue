@@ -24,7 +24,7 @@
         {{ __('Loading categories...') }}
       </div>
       <div v-else-if="resourceError" class="mx-auto max-w-xl pt-8"><ErrorMessage :message="resourceError" /></div>
-      <template v-else-if="filteredCategories.length">
+      <template v-else-if="categories.length">
         <ErrorMessage v-if="actionError" class="mb-4" :message="actionError" />
         <div class="overflow-x-auto rounded border border-outline-gray-2">
         <table class="w-full min-w-[600px] text-sm">
@@ -36,7 +36,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="category in filteredCategories" :key="category.name" class="cursor-pointer border-t border-outline-gray-2 hover:bg-surface-gray-1" @click="openEdit(category)">
+            <tr v-for="category in categories" :key="category.name" class="cursor-pointer border-t border-outline-gray-2 hover:bg-surface-gray-1" @click="openEdit(category)">
               <td class="px-4 py-3 font-medium text-ink-gray-9">{{ category.category_name || category.name }}</td>
               <td class="px-4 py-3 text-ink-gray-6">{{ category.description || '-' }}</td>
               <td class="px-4 py-3 text-right">
@@ -51,7 +51,7 @@
       <EmptyState v-else name="Product Categories" :title="__('No Categories Found')" :description="__('Create a product category to organize your products.')" />
     </div>
 
-    <div v-if="categories.length" class="border-t border-outline-gray-2 px-5 py-3 text-center">
+    <div v-if="categories.length && categoriesResource.hasNextPage" class="border-t border-outline-gray-2 px-5 py-3 text-center">
       <Button variant="subtle" :label="__('Load More')" :loading="categoriesResource.loading" @click="loadMore" />
     </div>
 
@@ -84,21 +84,23 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Button, Dialog, FeatherIcon, TextInput, call, createListResource } from 'frappe-ui'
+import { Button, Dialog, FeatherIcon, TextInput, call } from 'frappe-ui'
 
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 
-const categoriesResource = createListResource({
-  doctype: 'DoubleT Product Category',
-  fields: ['name', 'category_name', 'description'],
-  orderBy: 'category_name asc',
-  pageLength: 20,
-  auto: true,
+const pageLength = 20
+const categoryFields = ['name', 'category_name', 'description']
+const categoriesResource = reactive({
+  data: [],
+  loading: false,
+  error: null,
+  hasNextPage: true,
 })
+let categoryRequestVersion = 0
 const router = useRouter()
 const searchQuery = ref('')
 const showModal = ref(false)
@@ -110,23 +112,63 @@ const actionError = ref('')
 const form = reactive({ category_name: '', description: '' })
 
 const categories = computed(() => categoriesResource.data || [])
-const filteredCategories = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
-  if (!query) return categories.value
-  return categories.value.filter((category) => [category.category_name, category.description].some((value) => String(value || '').toLowerCase().includes(query)))
-})
 const resourceError = computed(() => {
   const error = categoriesResource.error
   return error?.messages?.[0] || error?.message || error || ''
 })
 
+async function fetchCategories({ append = false } = {}) {
+  if (append && (categoriesResource.loading || !categoriesResource.hasNextPage)) return
+
+  const requestVersion = ++categoryRequestVersion
+  const start = append ? categoriesResource.data.length : 0
+  if (!append) {
+    categoriesResource.data = []
+    categoriesResource.hasNextPage = true
+  }
+  categoriesResource.loading = true
+  categoriesResource.error = null
+
+  const search = searchQuery.value.trim()
+  try {
+    const data = await call('frappe.client.get_list', {
+      doctype: 'DoubleT Product Category',
+      fields: categoryFields,
+      or_filters: search
+        ? [
+            ['category_name', 'like', `%${search}%`],
+            ['description', 'like', `%${search}%`],
+          ]
+        : undefined,
+      order_by: 'category_name asc',
+      limit_start: start,
+      limit_page_length: pageLength,
+    })
+    if (requestVersion !== categoryRequestVersion) return
+
+    const page = Array.isArray(data) ? data : []
+    categoriesResource.data = append ? categoriesResource.data.concat(page) : page
+    categoriesResource.hasNextPage = page.length === pageLength
+  } catch (error) {
+    if (requestVersion !== categoryRequestVersion) return
+    categoriesResource.error = error
+  } finally {
+    if (requestVersion === categoryRequestVersion) {
+      categoriesResource.loading = false
+    }
+  }
+}
+
 function reload() {
-  categoriesResource.reload()
+  return fetchCategories()
 }
 
 function loadMore() {
-  categoriesResource.next()
+  return fetchCategories({ append: true })
 }
+
+watch(searchQuery, reload)
+reload()
 
 function openCreate() {
   editingCategory.value = null

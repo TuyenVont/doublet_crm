@@ -31,10 +31,6 @@
       <Button class="ml-auto" :tooltip="__('Refresh')" icon="refresh-cw" :loading="productsResource.loading" @click="reload" />
     </div>
 
-    <div class="px-5 pt-2 text-xs text-ink-gray-5">
-      {{ __('Search and filters apply to products loaded in this list.') }}
-    </div>
-
     <div class="relative flex-1 overflow-auto p-5">
       <div v-if="productsResource.loading && !products.length" class="flex h-48 items-center justify-center text-sm text-ink-gray-5">
         {{ __('Loading products...') }}
@@ -42,7 +38,8 @@
       <div v-else-if="resourceError" class="mx-auto max-w-xl pt-8">
         <ErrorMessage :message="resourceError" />
       </div>
-      <template v-else-if="filteredProducts.length">
+      <template v-else-if="products.length">
+        <ErrorMessage v-if="categoriesError" class="mb-4" :message="categoriesError" />
         <ErrorMessage v-if="actionError" class="mb-4" :message="actionError" />
         <div class="overflow-x-auto rounded border border-outline-gray-2">
         <table class="w-full min-w-[760px] text-sm">
@@ -57,7 +54,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="product in filteredProducts" :key="product.name" class="cursor-pointer border-t border-outline-gray-2 hover:bg-surface-gray-1" @click="openEdit(product)">
+            <tr v-for="product in products" :key="product.name" class="cursor-pointer border-t border-outline-gray-2 hover:bg-surface-gray-1" @click="openEdit(product)">
               <td class="px-4 py-3 font-medium text-ink-gray-9">{{ product.product_name || product.name }}</td>
               <td class="px-4 py-3 text-ink-gray-6">{{ product.sku }}</td>
               <td class="px-4 py-3 text-ink-gray-6">{{ product.category }}</td>
@@ -76,15 +73,17 @@
         </table>
         </div>
       </template>
-      <EmptyState
-        v-else
-        name="Products"
-        :title="__('No Products Found')"
-        :description="__('No DoubleT products match the selected criteria.')"
-      />
+      <template v-else>
+        <ErrorMessage v-if="categoriesError" class="mb-4" :message="categoriesError" />
+        <EmptyState
+          name="Products"
+          :title="__('No Products Found')"
+          :description="__('No DoubleT products match the selected criteria.')"
+        />
+      </template>
     </div>
 
-    <div v-if="products.length" class="border-t border-outline-gray-2 px-5 py-3 text-center">
+    <div v-if="products.length && productsResource.hasNextPage" class="border-t border-outline-gray-2 px-5 py-3 text-center">
       <Button variant="subtle" :label="__('Load More')" :loading="productsResource.loading" @click="loadMore" />
     </div>
 
@@ -93,7 +92,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Button, Dropdown, FeatherIcon, TextInput, call } from 'frappe-ui'
 
@@ -104,7 +103,7 @@ import ProductModal from '@/components/Modals/ProductModal.vue'
 import { useDoubleTProducts } from '@/composables/useDoubleTProducts'
 import { formatCurrency } from '@/utils'
 
-const { productsResource, reload, loadMore } = useDoubleTProducts()
+const { productsResource, categoriesResource, reload, loadMore, setFilters } = useDoubleTProducts()
 const router = useRouter()
 const searchQuery = ref('')
 const selectedCategory = ref('')
@@ -120,10 +119,13 @@ const resourceError = computed(() => {
   const error = productsResource.error
   return error?.messages?.[0] || error?.message || error || ''
 })
-const categories = computed(() => [...new Set(products.value.map((product) => product.category).filter(Boolean))])
+const categories = computed(() => categoriesResource.data || [])
 const categoryOptions = computed(() => [
   { label: __('All Categories'), onClick: () => { selectedCategory.value = '' } },
-  ...categories.value.map((category) => ({ label: category, onClick: () => { selectedCategory.value = category } })),
+  ...categories.value.map((category) => ({
+    label: category.category_name || category.name,
+    onClick: () => { selectedCategory.value = category.name },
+  })),
 ])
 const statusOptions = computed(() => [
   { label: __('All Statuses'), onClick: () => { selectedStatus.value = '' } },
@@ -135,13 +137,16 @@ const selectedStatusLabel = computed(() => {
   if (selectedStatus.value === 'inactive') return __('Inactive')
   return __('All Statuses')
 })
-const filteredProducts = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
-  return products.value.filter((product) => {
-    const matchesCategory = !selectedCategory.value || product.category === selectedCategory.value
-    const matchesStatus = !selectedStatus.value || (selectedStatus.value === 'active' ? isActive(product) : !isActive(product))
-    const matchesSearch = !query || [product.product_name, product.sku].some((value) => String(value || '').toLowerCase().includes(query))
-    return matchesCategory && matchesStatus && matchesSearch
+const categoriesError = computed(() => {
+  const error = categoriesResource.error
+  return error?.messages?.[0] || error?.message || error || ''
+})
+
+watch([searchQuery, selectedCategory, selectedStatus], () => {
+  setFilters({
+    search: searchQuery.value,
+    category: selectedCategory.value,
+    status: selectedStatus.value,
   })
 })
 
