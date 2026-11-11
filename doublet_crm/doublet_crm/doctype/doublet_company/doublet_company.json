@@ -13,7 +13,8 @@
   "address",
   "industry",
   "size",
-  "company_owner"
+  "company_owner",
+  "price_list"
  ],
  "fields": [
   {
@@ -67,6 +68,12 @@
    "fieldtype": "Link",
    "label": "Company Owner",
    "options": "User"
+  },
+  {
+   "fieldname": "price_list",
+   "fieldtype": "Link",
+   "label": "Price List",
+   "options": "DoubleT Price List"
   }
  ],
  "permissions": [
