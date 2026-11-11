@@ -6,6 +6,7 @@
       </template>
       <template #right-header>
         <Button variant="subtle" :label="__('Manage Categories')" @click="router.push({ name: 'ProductCategories' })" />
+        <Button variant="subtle" :label="__('Price Lists')" @click="router.push({ name: 'PriceLists' })" />
         <Button variant="solid" :label="__('Create Product')" iconLeft="plus" :loading="openingProduct" @click="openCreate" />
       </template>
     </LayoutHeader>

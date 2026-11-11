@@ -14,6 +14,7 @@
   "source",
   "contact_owner",
   "company",
+  "price_list",
   "job_title",
   "notes"
  ],
@@ -71,6 +72,12 @@
    "label": "Company",
    "options": "DoubleT Company",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "price_list",
+   "fieldtype": "Link",
+   "label": "Price List",
+   "options": "DoubleT Price List"
   },
   {
    "fieldname": "job_title",

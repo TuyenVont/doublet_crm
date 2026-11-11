@@ -184,6 +184,16 @@
             />
           </div>
 
+          <div class="space-y-1 md:col-span-2">
+            <span class="text-sm font-medium text-ink-gray-8">{{ __('Price List') }}</span>
+            <Link
+              :value="form.price_list"
+              doctype="DoubleT Price List"
+              :placeholder="__('Select Price List')"
+              @change="value => (form.price_list = value || '')"
+            />
+          </div>
+
           <label class="space-y-1 md:col-span-2">
             <span class="text-sm font-medium text-ink-gray-8">{{ __('Address') }}</span>
             <textarea
@@ -242,6 +252,7 @@ const fields = [
   'source',
   'contact_owner',
   'company',
+  'price_list',
   'address',
   'notes',
 ]

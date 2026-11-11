@@ -1,0 +1,33 @@
+{
+  "doctype": "DocType",
+  "name": "DoubleT Pricing Settings",
+  "module": "DoubleT CRM",
+  "issingle": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "default_price_list"
+  ],
+  "fields": [
+    {
+      "fieldname": "default_price_list",
+      "fieldtype": "Link",
+      "label": "Default Price List",
+      "options": "DoubleT Price List"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1
+    },
+    {
+      "role": "Sales Manager",
+      "read": 1
+    },
+    {
+      "role": "Sales User",
+      "read": 1
+    }
+  ]
+}

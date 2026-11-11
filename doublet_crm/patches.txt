@@ -4,4 +4,5 @@
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
-doublet_crm.patches.backfill_product_category_assignments.execute
+doublet_crm.patches.backfill_product_category_assignments
+doublet_crm.patches.setup_default_price_lists

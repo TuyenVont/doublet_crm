@@ -23,11 +23,7 @@
               <label class="mb-1 block text-sm text-ink-gray-5">{{ field.label }} <span v-if="field.required">*</span></label>
               <template v-if="editing">
                 <textarea v-if="field.multiline" v-model="form[field.key]" rows="3" class="w-full rounded border border-outline-gray-2 bg-transparent p-2" />
-                <select v-else-if="field.link" v-model="form[field.key]" class="w-full rounded border border-outline-gray-2 bg-transparent p-2">
-                  <option value="">— Select —</option>
-                  <option v-if="form[field.key] && !linkOptions[field.key]?.some(x => x.name === form[field.key])" :value="form[field.key]">{{ form[field.key] }}</option>
-                  <option v-for="option in linkOptions[field.key] || []" :key="option.name" :value="option.name">{{ option.label }}</option>
-                </select>
+                <Link v-else-if="field.link" :value="form[field.key]" :doctype="field.link" :placeholder="__('Select {0}', [field.label])" @change="value => (form[field.key] = value || '')" />
                 <input v-else v-model="form[field.key]" :type="field.type || 'text'" class="w-full rounded border border-outline-gray-2 bg-transparent p-2" />
               </template>
               <template v-else>
@@ -65,6 +61,7 @@ import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import SharedNotes from '@/components/Notes/SharedNotes.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
+import Link from '@/components/Controls/Link.vue'
 
 const props = defineProps({ kind: { type: String, required: true } })
 const router = useRouter()
@@ -83,6 +80,7 @@ const contactFields = [
   { key: 'source', label: 'Source', link: 'DoubleT Lead Source' },
   { key: 'contact_owner', label: 'Contact Owner', link: 'User' },
   { key: 'company', label: 'Company', link: 'DoubleT Company' },
+  { key: 'price_list', label: 'Price List', link: 'DoubleT Price List' },
   { key: 'job_title', label: 'Job Title' }, { key: 'notes', label: 'Notes', multiline: true },
 ]
 const companyFields = [
@@ -91,6 +89,7 @@ const companyFields = [
   { key: 'website', label: 'Website', type: 'url' }, { key: 'address', label: 'Address', multiline: true },
   { key: 'industry', label: 'Industry' }, { key: 'size', label: 'Size' },
   { key: 'company_owner', label: 'Company Owner', link: 'User' },
+  { key: 'price_list', label: 'Price List', link: 'DoubleT Price List' },
 ]
 const fields = computed(() => isContact.value ? contactFields : companyFields)
 const form = reactive({})
