@@ -142,7 +142,9 @@ const subject = computed(() => {
 })
 
 const signature = createResource({
-  url: 'crm.api.get_user_signature',
+  url: 'frappe.client.get_value',
+  params: { doctype: 'User', filters: { name: getUser().email }, fieldname: 'email_signature' },
+  transform: (data) => data?.email_signature || '',
   cache: 'user-email-signature',
   auto: true,
 })
@@ -220,9 +222,9 @@ async function sendComment() {
     ? attachments.value.map((x) => x.name)
     : []
 
-  let comment = await call('crm.api.comment.add_comment', {
-    reference_doctype: props.doctype,
-    reference_name: doc.value.name,
+  let comment = await call('doublet_crm.api.add_activity_comment', {
+    doctype: props.doctype,
+    docname: doc.value.name,
     content: newComment.value,
     attachments: _attachments,
   })

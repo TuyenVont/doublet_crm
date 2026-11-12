@@ -18,6 +18,9 @@
       <LoadingIndicator class="h-6 w-6" />
       <span>{{ __('Loading...') }}</span>
     </div>
+    <div v-else-if="activitiesResource?.error" class="px-3 py-5 text-ink-red-6 sm:px-10">
+      {{ activitiesResource.error?.message || __('Failed to load activities') }}
+    </div>
     <div
       v-else-if="
         activities?.length ||
@@ -510,7 +513,7 @@ const { capture } = useTelemetry()
 const { isNewestFirst } = useTimelinePreferences()
 
 const props = defineProps({
-  doctype: { type: String, default: 'CRM Lead' },
+  doctype: { type: String, default: 'DoubleT Lead' },
   docname: { type: String, default: '' },
   tabs: { type: Array, default: () => [] },
 })
@@ -547,9 +550,10 @@ const changeTabTo = (tabName) => {
 }
 
 const all_activities = createResource({
-  url: 'crm.api.activities.get_activities',
-  params: { name: props.docname },
-  cache: ['activity', props.docname],
+  url: 'doublet_crm.api.get_activities',
+  params: { doctype: props.doctype, docname: props.docname },
+  cache: ['activity', props.doctype, props.docname],
+  auto: true,
   transform: ([versions, calls, notes, tasks, attachments]) => {
     return { versions, calls, notes, tasks, attachments }
   },
@@ -609,30 +613,10 @@ async function loadLinkedTasks({ append = false } = {}) {
   }
 }
 
-watch(
-  reload,
-  (reloadValue) => {
-    if (reloadValue && supportedTaskDoctypes.includes(props.doctype)) {
-      linkedTasks.reload()
-      reload.value = false
-    }
-  },
-)
-
 const activitiesResource = computed(() =>
   supportedTaskDoctypes.includes(props.doctype) && title.value === 'Tasks'
     ? linkedTasks
     : all_activities,
-)
-
-watch(
-  linkedTasks,
-  (resource) => {
-    if (supportedTaskDoctypes.includes(props.doctype) && title.value === 'Tasks') {
-      all_activities.data = resource.data
-      all_activities.loading = resource.loading
-    }
-  },
 )
 
 watch(
@@ -648,6 +632,8 @@ watch(
 watch(
   () => [props.doctype, props.docname],
   () => {
+    all_activities.params = { doctype: props.doctype, docname: props.docname }
+    all_activities.reload()
     linkedTaskRequestSerial += 1
     linkedTasks.data = { versions: [], calls: [], notes: [], tasks: [], attachments: [], has_more: false }
     linkedTasks.loading = false
@@ -726,7 +712,7 @@ const replyMessage = ref({})
 
 function get_activities() {
   if (!all_activities.data?.versions) return []
-  if (!all_activities.data?.calls.length)
+  if (!all_activities.data?.calls?.length)
     return all_activities.data.versions || []
   return [...all_activities.data.versions, ...all_activities.data.calls]
 }
@@ -799,7 +785,7 @@ function sortByModified(list) {
 }
 
 function update_activities_details(activity) {
-  activity.owner_name = getUser(activity.owner).full_name
+  activity.owner_name = getUser(activity.owner)?.full_name || activity.owner
   activity.type = ''
   activity.value = ''
   activity.to = ''
@@ -929,6 +915,7 @@ const whatsappBox = ref(null)
 
 watch([reload, reload_email], ([reload_value, reload_email_value]) => {
   if (reload_value || reload_email_value) {
+    if (title.value === 'Tasks') linkedTasks.reload()
     all_activities.reload()
     _document.reload()
     reload.value = false

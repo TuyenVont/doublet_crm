@@ -66,7 +66,7 @@ const { getUser } = usersStore()
 async function deleteNote(name) {
   await toast.promise(
     call('frappe.client.delete', {
-      doctype: 'FCRM Note',
+      doctype: 'DoubleT Note',
       name,
     }),
     {

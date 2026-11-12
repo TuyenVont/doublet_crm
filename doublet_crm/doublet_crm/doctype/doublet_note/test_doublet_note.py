@@ -3,7 +3,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from doublet_crm.api import get_linked_notes, get_notes
+from doublet_crm.api import add_activity_comment, get_activities, get_linked_notes, get_notes
 
 
 class TestDoubleTNote(FrappeTestCase):
@@ -53,6 +53,53 @@ class TestDoubleTNote(FrappeTestCase):
 			"reference_name": reference_name or self.lead.name,
 			**values,
 		}).insert()
+
+	def test_timeline_is_scoped_to_lead_and_deal(self):
+		lead_note = self.make_note()
+		deal_note = self.make_note(reference_doctype="DoubleT Deal", reference_name=self.deal.name)
+		for doctype, name, content in (
+			("DoubleT Lead", self.lead.name, "Lead timeline comment"),
+			("DoubleT Deal", self.deal.name, "Deal timeline comment"),
+		):
+			frappe.get_doc({"doctype": "Comment", "comment_type": "Comment",
+				"reference_doctype": doctype, "reference_name": name, "content": content}).insert()
+
+		lead = get_activities("DoubleT Lead", self.lead.name)
+		deal = get_activities("DoubleT Deal", self.deal.name)
+		self.assertEqual(len(lead), 5)
+		self.assertEqual({row.name for row in lead[2]}, {lead_note.name})
+		self.assertEqual({row.name for row in deal[2]}, {deal_note.name})
+		self.assertTrue(any(row.activity_type == "comment" and row.content == "Lead timeline comment" for row in lead[0]))
+		self.assertFalse(any(row.get("content") == "Deal timeline comment" for row in lead[0]))
+
+	def test_timeline_rejects_other_doctypes_and_missing_records(self):
+		with self.assertRaises(frappe.ValidationError):
+			get_activities("User", "Administrator")
+		with self.assertRaises(frappe.DoesNotExistError):
+			get_activities("DoubleT Lead", "missing-record")
+		with patch("doublet_crm.api.frappe.has_permission", return_value=False):
+			with self.assertRaises(frappe.PermissionError):
+				get_activities("DoubleT Lead", self.lead.name)
+
+	def test_timeline_maps_linked_call_without_leaking_other_record(self):
+		call = frappe.get_doc({
+			"doctype": "DoubleT Call Log", "agent": "Administrator",
+			"call_type": "Outgoing", "status": "Completed",
+			"start_time": frappe.utils.now_datetime(),
+			"reference_doctype": "DoubleT Deal", "reference_name": self.deal.name,
+		}).insert()
+		deal_calls = get_activities("DoubleT Deal", self.deal.name)[1]
+		lead_calls = get_activities("DoubleT Lead", self.lead.name)[1]
+		self.assertIn(call.name, {row.name for row in deal_calls})
+		self.assertNotIn(call.name, {row.name for row in lead_calls})
+		self.assertEqual(next(row for row in deal_calls if row.name == call.name).type, "Outgoing")
+
+	def test_comment_endpoint_checks_record_permission(self):
+		name = add_activity_comment("DoubleT Lead", self.lead.name, "Scoped comment")
+		self.assertIn(name, {row.name for row in get_activities("DoubleT Lead", self.lead.name)[0]})
+		with patch("doublet_crm.api.frappe.has_permission", return_value=False):
+			with self.assertRaises(frappe.PermissionError):
+				add_activity_comment("DoubleT Lead", self.lead.name, "Denied")
 
 	def test_crud_and_reload_persistence(self):
 		note = self.make_note()

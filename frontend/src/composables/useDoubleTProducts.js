@@ -180,6 +180,7 @@ export function useDoubleTProducts() {
     try {
       const data = await call('frappe.client.get_list', {
         doctype: 'DoubleT Product Category Assignment',
+        parent: 'DoubleT Product',
         fields: ['parent', 'category'],
         filters: [
           ['parent', 'in', names],

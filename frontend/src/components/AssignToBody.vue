@@ -424,7 +424,7 @@ const addAssignees =
 const removeAssignees =
   createResource({
     url:
-      'crm.api.doc.remove_assignments',
+      'doublet_crm.api.remove_assignments',
 
     makeParams:
       (

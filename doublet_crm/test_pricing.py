@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import nowdate
@@ -229,3 +231,34 @@ class TestPricing(FrappeTestCase):
                 )
         finally:
             frappe.set_user("Administrator")
+
+    def test_pricing_api_applies_selected_price_list_and_customer_context(self):
+        retail = get_product_price(
+            self.product.name,
+            "COMPANY",
+            company=self.company.name,
+            contact=self.contact.name,
+            price_list=self.retail.name,
+        )
+        wholesale = get_product_price(
+            self.product.name,
+            "COMPANY",
+            company=self.company.name,
+            contact=self.contact.name,
+            price_list=self.wholesale.name,
+        )
+        self.assertEqual((Decimal(retail["price"]), retail["source"]), (Decimal("90"), "price_list"))
+        self.assertEqual((Decimal(wholesale["price"]), wholesale["source"]), (Decimal("80"), "price_list"))
+
+        self.company.price_list = self.wholesale.name
+        self.company.save()
+        customer_price = get_product_price(
+            self.product.name,
+            "COMPANY",
+            company=self.company.name,
+            contact=self.contact.name,
+        )
+        self.assertEqual(
+            (Decimal(customer_price["price"]), customer_price["price_list"]),
+            (Decimal("80"), self.wholesale.name),
+        )

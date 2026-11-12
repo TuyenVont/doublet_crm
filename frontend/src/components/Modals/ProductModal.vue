@@ -41,15 +41,54 @@
             </select>
             <span v-if="fieldErrors.category" class="block text-xs text-red-600">{{ fieldErrors.category }}</span>
           </label>
-          <label class="space-y-1 sm:col-span-2">
+          <div class="space-y-2 sm:col-span-2">
             <span class="text-sm text-ink-gray-7">{{ __('Categories') }}</span>
-            <select v-model="form.categories" multiple class="min-h-24 w-full rounded border border-outline-gray-2 bg-surface-white px-2 py-1 text-sm">
-              <option v-for="category in categories" :key="category.name" :value="category.name">
-                {{ category.category_name || category.name }}
-              </option>
-            </select>
-            <span class="block text-xs text-ink-gray-5">{{ __('Use Ctrl or Cmd to select additional categories. The primary category is always included.') }}</span>
-          </label>
+            <div v-if="selectedCategories.length" class="flex flex-wrap gap-1.5">
+              <span v-for="category in selectedCategories" :key="category.name" class="inline-flex items-center gap-1 rounded-full bg-surface-gray-2 px-2 py-1 text-xs text-ink-gray-7">
+                {{ category.label }}
+                <span v-if="category.name === form.category" class="text-ink-gray-5">{{ __('Primary') }}</span>
+                <button
+                  v-else
+                  type="button"
+                  class="ml-0.5 rounded text-ink-gray-5 hover:text-ink-gray-9 focus:outline-none focus-visible:ring-2 focus-visible:ring-outline-gray-3"
+                  :aria-label="__('Remove {0}', [category.label])"
+                  @click="removeCategory(category.name)"
+                >
+                  ×
+                </button>
+              </span>
+            </div>
+            <Popover placement="bottom-start">
+              <template #target="{ togglePopover }">
+                <button
+                  type="button"
+                  class="flex h-8 w-full items-center justify-between rounded border border-outline-gray-2 bg-surface-white px-2 text-left text-sm text-ink-gray-7 hover:border-outline-gray-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-outline-gray-3"
+                  @click="togglePopover"
+                >
+                  <span>{{ selectedCategories.length ? __('Manage {0} categories', [selectedCategories.length]) : __('Select categories') }}</span>
+                  <span class="lucide-chevron-down h-4 w-4" aria-hidden="true" />
+                </button>
+              </template>
+              <template #body>
+                <div class="w-72 rounded-lg border border-outline-gray-2 bg-surface-white p-1 shadow-lg">
+                  <div class="max-h-64 overflow-y-auto py-1">
+                    <label v-for="category in categories" :key="category.name" class="flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm text-ink-gray-7 hover:bg-surface-gray-1">
+                      <input
+                        type="checkbox"
+                        class="rounded border-outline-gray-3"
+                        :checked="isCategorySelected(category.name)"
+                        :disabled="category.name === form.category"
+                        @change="toggleCategory(category.name, $event.target.checked)"
+                      />
+                      <span class="min-w-0 flex-1 truncate">{{ category.category_name || category.name }}</span>
+                      <span v-if="category.name === form.category" class="text-xs text-ink-gray-5">{{ __('Primary') }}</span>
+                    </label>
+                  </div>
+                </div>
+              </template>
+            </Popover>
+            <span class="block text-xs text-ink-gray-5">{{ __('The primary category is always included. Choose any additional categories below.') }}</span>
+          </div>
           <label class="space-y-1">
             <span class="text-sm text-ink-gray-7">{{ __('Price') }} *</span>
             <TextInput v-model="form.price" type="number" min="0" step="0.01" :placeholder="__('0')" />
@@ -103,7 +142,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { Button, Dialog, TextInput, call } from 'frappe-ui'
+import { Button, Dialog, Popover, TextInput, call } from 'frappe-ui'
 
 const props = defineProps({
   product: { type: Object, default: null },
@@ -132,6 +171,10 @@ const form = reactive({
 const isEditMode = computed(() => Boolean(props.product?.name))
 const isExistingVariant = computed(() => isEditMode.value && props.product?.product_kind === 'Variant')
 const availableTemplates = computed(() => props.templates.filter((template) => template.name !== props.product?.name))
+const selectedCategories = computed(() => uniqueCategories([form.category, ...form.categories]).map((name) => {
+  const category = props.categories.find((item) => item.name === name)
+  return { name, label: category?.category_name || name }
+}))
 
 watch(show, (isOpen) => {
   if (!isOpen) return
@@ -248,6 +291,21 @@ function uniqueCategories(categories) {
 
 function ensurePrimaryCategory() {
   form.categories = uniqueCategories([...form.categories, form.category])
+}
+
+function isCategorySelected(category) {
+  return form.categories.includes(category) || form.category === category
+}
+
+function toggleCategory(category, selected) {
+  if (category === form.category) return
+  form.categories = selected
+    ? uniqueCategories([...form.categories, category])
+    : form.categories.filter((name) => name !== category)
+}
+
+function removeCategory(category) {
+  if (category !== form.category) toggleCategory(category, false)
 }
 
 function handleKindChange() {
