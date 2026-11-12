@@ -24,8 +24,8 @@
         <Button
           variant="subtle"
           icon="refresh-cw"
-          :loading="callLogs.loading"
-          @click="callLogs.reload()"
+          :loading="callLogs.loading || callLogStats.loading"
+          @click="refreshCallLogs"
         >
           {{ __('Refresh') }}
         </Button>
@@ -41,7 +41,7 @@
               {{ __('Total calls') }}
             </div>
             <div class="mt-2 text-2xl font-semibold text-ink-gray-9">
-              {{ summary.total }}
+              {{ summary ? summary.total : '—' }}
             </div>
           </div>
 
@@ -51,7 +51,7 @@
             </div>
             <div class="mt-2 flex items-center gap-2">
               <div class="text-2xl font-semibold text-ink-gray-9">
-                {{ summary.completed }}
+                {{ summary ? summary.completed : '—' }}
               </div>
               <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
             </div>
@@ -63,7 +63,7 @@
             </div>
             <div class="mt-2 flex items-center gap-2">
               <div class="text-2xl font-semibold text-ink-gray-9">
-                {{ summary.missed }}
+                {{ summary ? summary.missed : '—' }}
               </div>
               <span class="h-2.5 w-2.5 rounded-full bg-red-500"></span>
             </div>
@@ -74,7 +74,7 @@
               {{ __('Avg. duration') }}
             </div>
             <div class="mt-2 text-2xl font-semibold text-ink-gray-9">
-              {{ formatDuration(summary.avgDuration) }}
+              {{ summary ? formatDuration(summary.avgDuration) : '—' }}
             </div>
           </div>
         </div>
@@ -131,14 +131,14 @@
           class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700"
         >
           {{ __('Could not load Call Logs.') }}
-          <Button class="ml-2" variant="subtle" @click="callLogs.reload()">
+          <Button class="ml-2" variant="subtle" @click="loadCallLogs">
             {{ __('Retry') }}
           </Button>
         </div>
 
         <!-- Loading -->
         <div
-          v-else-if="callLogs.loading && !logs.length"
+          v-else-if="callLogs.loading"
           class="rounded-2xl border bg-white p-10 text-center text-sm text-ink-gray-5 shadow-sm"
         >
           {{ __('Loading call history...') }}
@@ -292,15 +292,34 @@
           </div>
 
           <div
-            v-if="logs.length"
-            class="flex items-center justify-between border-t bg-gray-50/60 px-4 py-3"
+            v-if="!callLogs.error && totalMatches > 0"
+            class="flex flex-wrap items-center justify-between gap-3 border-t bg-gray-50/60 px-4 py-3"
           >
             <div class="text-xs text-ink-gray-5">
-              {{ filteredLogs.length }} / {{ logs.length }} {{ __('calls') }}
+              {{ (pageNumber - 1) * pageSize + 1 }}–{{ Math.min(pageNumber * pageSize, totalMatches) }}
+              / {{ totalMatches }} {{ __('calls') }}
             </div>
 
-            <div class="text-xs text-ink-gray-5">
-              {{ __('Showing latest 100 records') }}
+            <div class="flex items-center gap-2">
+              <Button
+                variant="subtle"
+                :disabled="pageNumber <= 1 || callLogs.loading"
+                @click="pageNumber--"
+              >
+                {{ __('Previous') }}
+              </Button>
+
+              <span class="text-xs text-ink-gray-6">
+                {{ pageNumber }} / {{ pageCount }}
+              </span>
+
+              <Button
+                variant="subtle"
+                :disabled="pageNumber >= pageCount || callLogs.loading"
+                @click="pageNumber++"
+              >
+                {{ __('Next') }}
+              </Button>
             </div>
           </div>
         </div>
@@ -319,7 +338,7 @@ import LayoutHeader from '@/components/LayoutHeader.vue'
 import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import CallLogDetailModal from '@/components/Modals/CallLogDetailModal.vue'
 import { Button, FeatherIcon, createResource } from 'frappe-ui'
-import { computed, ref } from 'vue'
+import { computed, ref, watch, onUnmounted } from 'vue'
 
 const search = ref('')
 const statusFilter = ref('')
@@ -341,97 +360,94 @@ const callTypes = [
   'Callback',
 ]
 
+const pageNumber = ref(1)
+const pageSize = 25
+
 const callLogs = createResource({
-  url: 'frappe.client.get_list',
-  params: {
-    doctype: 'DoubleT Call Log',
-    fields: [
-      'name',
-      'agent',
-      'line_number',
-      'call_type',
-      'duration',
-      'start_time',
-      'end_time',
-      'status',
-      'from_number',
-      'to_number',
-      'recording_url',
-      'reference_doctype',
-      'reference_name',
-      'note',
-      'external_call_id',
-      'creation',
-      'modified',
-    ],
-    order_by: 'start_time desc',
-    limit_page_length: 100,
-  },
+  url: 'doublet_crm.api.get_call_logs_page',
+  auto: false,
+})
+
+const callLogStats = createResource({
+  url: 'doublet_crm.api.get_call_log_stats',
   auto: true,
 })
 
 const logs = computed(() =>
-  Array.isArray(callLogs.data) ? callLogs.data : [],
+  Array.isArray(callLogs.data?.rows) ? callLogs.data.rows : [],
 )
 
-const filteredLogs = computed(() => {
-  const q = search.value.trim().toLowerCase()
+const filteredLogs = computed(() => logs.value)
 
-  return logs.value.filter((log) => {
-    if (statusFilter.value && log.status !== statusFilter.value) {
-      return false
+const totalMatches = computed(() =>
+  Number(callLogs.data?.total ?? 0),
+)
+
+const pageCount = computed(() =>
+  Math.max(1, Math.ceil(totalMatches.value / pageSize)),
+)
+
+let pageFetchTimer = null
+
+function loadCallLogs() {
+  callLogs.abort()
+  callLogs.fetch({
+    page: pageNumber.value,
+    page_size: pageSize,
+    search: search.value.trim(),
+    status: statusFilter.value,
+    call_type: typeFilter.value,
+  }).catch(() => {})
+}
+
+watch(
+  [search, statusFilter, typeFilter, pageNumber],
+  (current, previous) => {
+    clearTimeout(pageFetchTimer)
+
+    const filtersChanged = previous &&
+      current.slice(0, 3).some(
+        (value, index) => value !== previous[index],
+      )
+
+    if (filtersChanged && pageNumber.value !== 1) {
+      pageNumber.value = 1
+      return
     }
 
-    if (typeFilter.value && log.call_type !== typeFilter.value) {
-      return false
-    }
+    const delay = previous && current[0] !== previous[0]
+      ? 350
+      : 0
 
-    if (!q) return true
+    pageFetchTimer = setTimeout(loadCallLogs, delay)
+  },
+  { immediate: true },
+)
 
-    return [
-      log.from_number,
-      log.to_number,
-      log.agent,
-      log.reference_name,
-      log.reference_doctype,
-      log.external_call_id,
-      log.line_number,
-      log.status,
-      log.call_type,
-    ]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(q))
-  })
+onUnmounted(() => {
+  clearTimeout(pageFetchTimer)
+  callLogs.abort()
 })
 
 const summary = computed(() => {
-  const data = logs.value
-  const completed = data.filter((d) => d.status === 'Completed').length
-  const missed = data.filter((d) =>
-    ['Missed', 'No Answer'].includes(d.status),
-  ).length
-
-  const durations = data
-    .map((d) => Number(d.duration || 0))
-    .filter((d) => Number.isFinite(d) && d >= 0)
-
-  const avgDuration = durations.length
-    ? Math.round(
-        durations.reduce((sum, value) => sum + value, 0) /
-          durations.length,
-      )
-    : 0
+  const data = callLogStats.data
+  if (!data) return null
 
   return {
-    total: data.length,
-    completed,
-    missed,
-    avgDuration,
+    total: Number(data.total ?? 0),
+    completed: Number(data.completed ?? 0),
+    missed: Number(data.missed ?? 0),
+    avgDuration: Number(data.avg_duration ?? 0),
   }
 })
 
 const showCallLogDetailModal = ref(false)
 const selectedCallLog = ref({})
+
+function refreshCallLogs() {
+  loadCallLogs()
+  callLogStats.reload()
+}
 
 function openDetail(log) {
   selectedCallLog.value = { ...log }

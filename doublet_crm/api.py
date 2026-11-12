@@ -56,18 +56,11 @@ def update_deal_stage(deal_name, stage, lost_reason=None):
 
     deal.save()
 
-        if current_type == "LOST":
-            values["lost_on"] = None
-            values["lost_reason"] = None
-
-    frappe.db.set_value(
-        "DoubleT Deal",
-        deal_name,
-        values,
-        update_modified=True,
-    )
-
-    return values
+    return {
+        "name": deal.name,
+        "stage": deal.stage,
+        "lost_reason": deal.lost_reason,
+    }
 
 CALL_LOG_API_ROLE = "Call Log API"
 
@@ -314,4 +307,142 @@ def create_call_log(
         "reference_doctype": doc.reference_doctype,
         "reference_name": doc.reference_name,
         "duplicate": False,
+    }
+
+
+@frappe.whitelist()
+def get_call_log_stats():
+    """Permission-aware Call Log statistics."""
+    if not frappe.has_permission("DoubleT Call Log", "read"):
+        frappe.throw(
+            _("Not permitted to read Call Logs."),
+            frappe.PermissionError,
+        )
+
+    rows = frappe.get_list(
+        "DoubleT Call Log",
+        fields=[
+            "status",
+            "count(name) as call_count",
+            "sum(duration) as duration_sum",
+        ],
+        group_by="status",
+        order_by="status asc",
+        limit_page_length=20,
+    )
+
+    total = sum(int(row.call_count or 0) for row in rows)
+    completed = sum(
+        int(row.call_count or 0)
+        for row in rows if row.status == "Completed"
+    )
+    missed = sum(
+        int(row.call_count or 0)
+        for row in rows
+        if row.status in ("Missed", "No Answer")
+    )
+    total_duration = sum(
+        float(row.duration_sum or 0) for row in rows
+    )
+
+    return {
+        "total": total,
+        "completed": completed,
+        "missed": missed,
+        "avg_duration": (
+            round(total_duration / total) if total else 0
+        ),
+    }
+
+
+@frappe.whitelist()
+def get_call_logs_page(
+    page=1, page_size=25,
+    search=None, status=None, call_type=None,
+):
+    """Return permission-aware paginated Call Logs."""
+    if not frappe.has_permission("DoubleT Call Log", "read"):
+        frappe.throw(
+            _("Not permitted to read Call Logs."),
+            frappe.PermissionError,
+        )
+
+    try:
+        page = int(page)
+        page_size = int(page_size)
+    except (TypeError, ValueError):
+        frappe.throw(
+            _("Invalid pagination parameters."),
+            frappe.ValidationError,
+        )
+
+    if page < 1 or not 1 <= page_size <= 100:
+        frappe.throw(
+            _("Invalid page or page size."),
+            frappe.ValidationError,
+        )
+
+    status = cstr(status).strip()
+    call_type = cstr(call_type).strip()
+    search = cstr(search).strip()[:100]
+
+    if status and status not in CALL_LOG_STATUSES:
+        frappe.throw(_("Invalid Call Log status."))
+
+    if call_type and call_type not in CALL_LOG_TYPES:
+        frappe.throw(_("Invalid Call Type."))
+
+    filters = {}
+    if status:
+        filters["status"] = status
+    if call_type:
+        filters["call_type"] = call_type
+
+    or_filters = None
+    if search:
+        pattern = f"%{search}%"
+        or_filters = {
+            field: ["like", pattern]
+            for field in (
+                "from_number", "to_number", "agent",
+                "reference_name", "reference_doctype",
+                "external_call_id", "line_number",
+                "status", "call_type",
+            )
+        }
+
+    kwargs = {
+        "filters": filters,
+        "or_filters": or_filters,
+    }
+
+    counts = frappe.get_list(
+        "DoubleT Call Log",
+        fields=["count(name) as total"],
+        limit_page_length=1,
+        **kwargs,
+    )
+    total = int(counts[0].total or 0) if counts else 0
+
+    rows = frappe.get_list(
+        "DoubleT Call Log",
+        fields=[
+            "name", "agent", "line_number", "call_type",
+            "duration", "start_time", "end_time", "status",
+            "from_number", "to_number", "recording_url",
+            "reference_doctype", "reference_name",
+            "note", "external_call_id", "creation",
+            "modified",
+        ],
+        order_by="start_time desc, creation desc",
+        start=(page - 1) * page_size,
+        page_length=page_size,
+        **kwargs,
+    )
+
+    return {
+        "rows": rows,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
     }
