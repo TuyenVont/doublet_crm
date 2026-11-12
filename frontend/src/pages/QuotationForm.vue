@@ -6,7 +6,7 @@
         <Button v-if="!isNew && doc && !editing" :label="__('Export PDF')" :loading="exporting" @click="exportPdf" />
         <Button v-if="!isNew && doc?.deal" :label="__('Back to Deal')" @click="router.push({ name: 'DealDetail', params: { dealId: doc.deal }, hash: '#quotations' })" />
         <Button v-if="!isNew && doc && canWrite && doc.status === 'Draft' && !editing" :label="__('Edit')" @click="editing = true" />
-        <Button v-if="editable" variant="solid" :label="isNew ? __('Create') : __('Save')" :loading="saving" :disabled="dealLoading" @click="save" />
+        <Button v-if="editable" variant="solid" :label="isNew ? __('Create') : __('Save')" :loading="saving" :disabled="dealLoading || pricingPending" @click="save" />
         <Button v-if="!isNew && editing" :label="__('Cancel')" @click="loadDocument" />
         <Button v-if="doc && canDelete && doc.status === 'Draft' && !editing" :label="__('Delete')" :loading="saving" @click="remove" />
       </template>
@@ -28,9 +28,10 @@
           </div>
           <fieldset :disabled="!editable" class="grid gap-4 sm:grid-cols-2">
             <label class="field">{{ __('Customer Type') }} *<select v-model="doc.customer_type" :disabled="!!doc.deal" @change="customerChanged"><option value="">{{ __('Select') }}</option><option value="PERSONAL">Personal</option><option value="COMPANY">Company</option></select></label>
-            <label class="field">{{ __('Deal') }}<select v-model="doc.deal" @change="selectDeal($event.target.value)"><option value="">{{ __('None') }}</option><option v-if="doc.deal && !deals.some(x => x.name === doc.deal)" :value="doc.deal">{{ dealLabel || __('Unavailable') }}</option><option v-for="deal in deals" :key="deal.name" :value="deal.name">{{ deal.deal_title || deal.name }}</option></select></label>
-            <label v-if="doc.customer_type === 'COMPANY'" class="field">{{ __('Company') }} *<select v-model="doc.company" :disabled="!!doc.deal"><option value="">{{ __('Select') }}</option><option v-if="doc.company && !companies.some(x => x.name === doc.company)" :value="doc.company">{{ doc.company }} ({{ __('unavailable') }})</option><option v-for="company in companies" :key="company.name" :value="company.name">{{ company.company_name || company.name }}</option></select></label>
-            <label class="field">{{ __('Contact') }} {{ doc.customer_type === 'PERSONAL' ? '*' : '' }}<select v-model="doc.contact" :disabled="!!doc.deal"><option value="">{{ __('None') }}</option><option v-if="doc.contact && !contacts.some(x => x.name === doc.contact)" :value="doc.contact">{{ doc.contact }} ({{ __('unavailable') }})</option><option v-for="contact in availableContacts" :key="contact.name" :value="contact.name">{{ [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.name }}</option></select></label>
+            <label class="field">{{ __('Deal') }}<select v-model="doc.deal" @change="selectDeal($event.target.value)"><option value="">{{ __('None') }}</option><option v-if="doc.deal && !deals.some(x => x.name === doc.deal)" :value="doc.deal">{{ dealLabel || __('Unavailable') }}</option><option v-for="deal in deals" :key="deal.name" :value="deal.name">{{ deal.deal_title || deal.name }}</option></select><span v-if="dealError" class="text-xs text-red-600">{{ dealError }}</span></label>
+            <label v-if="doc.customer_type === 'COMPANY'" class="field">{{ __('Company') }} *<select v-model="doc.company" :disabled="!!doc.deal" @change="pricingContextChanged"><option value="">{{ __('Select') }}</option><option v-if="doc.company && !companies.some(x => x.name === doc.company)" :value="doc.company">{{ doc.company }} ({{ __('unavailable') }})</option><option v-for="company in companies" :key="company.name" :value="company.name">{{ company.company_name || company.name }}</option></select></label>
+            <label class="field">{{ __('Contact') }} {{ doc.customer_type === 'PERSONAL' ? '*' : '' }}<select v-model="doc.contact" :disabled="!!doc.deal" @change="pricingContextChanged"><option value="">{{ __('None') }}</option><option v-if="doc.contact && !contacts.some(x => x.name === doc.contact)" :value="doc.contact">{{ doc.contact }} ({{ __('unavailable') }})</option><option v-for="contact in availableContacts" :key="contact.name" :value="contact.name">{{ [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.name }}</option></select></label>
+            <label class="field">{{ __('Price List') }}<select v-model="doc.price_list" @change="pricingContextChanged"><option value="">{{ __('Automatic (customer/default)') }}</option><option v-if="doc.price_list && !priceLists.some(x => x.name === doc.price_list)" :value="doc.price_list">{{ doc.price_list }} ({{ __('unavailable') }})</option><option v-for="priceList in priceLists" :key="priceList.name" :value="priceList.name">{{ priceList.price_list_name || priceList.name }}</option></select><span class="text-xs text-ink-gray-5">{{ __('Applied when pricing newly added products.') }}</span></label>
             <label class="field">{{ __('Quotation Date') }} *<TextInput v-model="doc.quotation_date" type="date" /></label>
             <label class="field">{{ __('Valid Until') }} *<TextInput v-model="doc.valid_until" type="date" /></label>
             <label class="field sm:col-span-2">{{ __('Notes') }}<textarea v-model="doc.notes" rows="2" /></label>
@@ -45,20 +46,19 @@
             <span class="text-xs text-ink-gray-5">{{ __('Only active Standard Products and Variants are available.') }}</span>
           </div>
           <div v-if="productPickerError" class="mt-2 text-sm text-red-600">{{ productPickerError }}</div>
-          <div class="overflow-x-auto rounded border">
-            <table class="w-full min-w-[820px] text-left text-sm"><thead><tr><th class="p-3">{{ __('Product') }}</th><th>{{ __('SKU') }}</th><th>{{ __('Unit Price') }}</th><th>{{ __('Quantity') }}</th><th>{{ __('Discount %') }}</th><th>{{ __('Line Total') }}</th><th /></tr></thead>
-              <tbody><tr v-for="(item, index) in doc.items" :key="item.name || index" class="border-t">
-                <td class="p-3"><select v-if="editable && !item.name" v-model="item.product" @change="selectProduct(item)"><option value="">{{ __('Select product') }}</option><option v-for="product in products" :key="product.name" :value="product.name">{{ productPickerLabel(product) }}</option></select><span v-else>{{ item.product_name || item.product || '—' }}</span></td>
-                <td>{{ item.sku || '—' }}</td>
-                <td><TextInput v-if="editable" v-model="item.unit_price" type="number" min="0" step="1" /><span v-else>{{ money(item.unit_price) }}</span></td>
-                <td><TextInput v-if="editable" v-model="item.quantity" type="number" min="0" step="any" /><span v-else>{{ item.quantity }}</span></td>
-                <td><TextInput v-if="editable" v-model="item.discount_percent" type="number" min="0" max="100" step="any" /><span v-else>{{ item.discount_percent }}</span></td>
-                <td>{{ money(editable ? lineAmounts(item).total : item.line_total) }}</td>
-                <td><Button v-if="editable" :label="__('Remove')" @click="doc.items.splice(index, 1)" /></td>
+          <div class="overflow-x-auto rounded-lg border border-outline-gray-2">
+            <table class="w-full min-w-[1040px] table-fixed text-left text-sm"><thead class="bg-surface-gray-1 text-ink-gray-6"><tr><th class="w-[32%] p-3">{{ __('Product') }}</th><th class="w-[18%] p-3">{{ __('Unit Price') }}</th><th class="w-[12%] p-3">{{ __('Quantity') }}</th><th class="w-[14%] p-3">{{ __('Discount %') }}</th><th class="w-[16%] p-3 text-right">{{ __('Line Total') }}</th><th class="w-[8%] p-3" /></tr></thead>
+              <tbody><tr v-for="(item, index) in doc.items" :key="item.name || index" class="border-t border-outline-gray-2 align-top">
+                <td class="p-3"><select v-if="editable && !item.name" v-model="item.product" @change="selectProduct(item)"><option value="">{{ __('Select product') }}</option><option v-for="product in products" :key="product.name" :value="product.name">{{ productPickerLabel(product) }}</option></select><div v-else class="font-medium text-ink-gray-8">{{ item.product_name || item.product || '—' }}</div><div v-if="item.sku" class="mt-1 text-xs text-ink-gray-5">{{ __('SKU') }}: {{ item.sku }}</div></td>
+                <td class="p-3"><TextInput v-if="editable" v-model="item.unit_price" type="number" min="0" step="1" @update:modelValue="markManualPrice(item)" /><span v-else>{{ money(item.unit_price) }}</span><div v-if="itemPricing(item).loading" class="mt-1 text-xs text-ink-gray-5">{{ __('Loading price...') }}</div><div v-else-if="itemPricing(item).error" class="mt-1 text-xs text-red-600">{{ itemPricing(item).error }}</div><div v-else-if="itemPricing(item).source" class="mt-1 text-xs text-ink-gray-5">{{ pricingSourceLabel(item) }}</div></td>
+                <td class="p-3"><TextInput v-if="editable" v-model="item.quantity" type="number" min="0" step="any" /><span v-else>{{ item.quantity }}</span></td>
+                <td class="p-3"><TextInput v-if="editable" v-model="item.discount_percent" type="number" min="0" max="100" step="any" /><span v-else>{{ item.discount_percent }}</span></td>
+                <td class="p-3 text-right font-medium text-ink-gray-8">{{ money(editable ? lineAmounts(item).total : item.line_total) }}</td>
+                <td class="p-3 text-right"><Button v-if="editable" icon="trash-2" variant="ghost" :tooltip="__('Remove')" @click="doc.items.splice(index, 1)" /></td>
               </tr></tbody>
             </table>
           </div>
-          <Button v-if="editable" :label="__('Add item')" iconLeft="plus" @click="doc.items.push({ product: '', product_name: '', sku: '', quantity: 1, unit_price: '', discount_percent: 0 })" />
+          <Button v-if="editable" :label="__('Add item')" iconLeft="plus" @click="addItem" />
           <div class="ml-auto max-w-xs space-y-2 text-right text-sm"><p>{{ __('Subtotal') }}: {{ money(editable ? totals.gross : doc.subtotal) }}</p><p>{{ __('Total discount') }}: {{ money(editable ? totals.discount : doc.total_discount) }}</p><p class="font-semibold">{{ __('Grand total') }}: {{ money(editable ? totals.total : doc.grand_total) }}</p><p v-if="editable" class="text-xs text-ink-gray-5">{{ __('Preview; final amounts are calculated by the server.') }}</p></div>
         </div>
       </template>
@@ -67,7 +67,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button, TextInput, call } from 'frappe-ui'
 import LayoutHeader from '@/components/LayoutHeader.vue'
@@ -77,8 +77,8 @@ const route = useRoute(), router = useRouter()
 const isNew = computed(() => route.name === 'QuotationCreate')
 const doc = ref(null), loading = ref(true), saving = ref(false), editing = ref(false)
 const exporting = ref(false)
-const canWrite = ref(false), canDelete = ref(false), error = ref(''), optionsError = ref(''), conflict = ref(false)
-const contacts = ref([]), companies = ref([]), deals = ref([]), products = ref([])
+const canWrite = ref(false), canDelete = ref(false), error = ref(''), dealError = ref(''), optionsError = ref(''), conflict = ref(false)
+const contacts = ref([]), companies = ref([]), deals = ref([]), priceLists = ref([]), products = ref([])
 const productSearch = ref('')
 const productsLoading = ref(false), productHasNextPage = ref(true), productPickerError = ref('')
 const dealLoading = ref(false)
@@ -87,17 +87,21 @@ let dealRequestId = 0
 let productRequestId = 0
 let productSearchTimer = null
 const productPageLength = 20
+const pricingStates = new WeakMap()
 const editable = computed(() => (isNew.value && canWrite.value) || (!isNew.value && editing.value && canWrite.value && doc.value?.status === 'Draft'))
 const availableContacts = computed(() => doc.value?.customer_type === 'COMPANY' ? contacts.value.filter(c => c.company === doc.value.company) : contacts.value)
 const totals = computed(() => (doc.value?.items || []).reduce((sum, item) => { const a = lineAmounts(item); sum.gross += a.gross; sum.discount += a.discount; sum.total += a.total; return sum }, { gross: 0, discount: 0, total: 0 }))
+const pricingPending = computed(() => (doc.value?.items || []).some(item => itemPricing(item).loading))
 const list = (doctype, fields, filters = {}) => call('frappe.client.get_list', { doctype, fields, filters, limit_page_length: 500 })
 async function loadOptions() {
+  optionsError.value = ''
   const results = await Promise.allSettled([
     list('DoubleT Contact', ['name', 'first_name', 'last_name', 'company']),
     list('DoubleT Company', ['name', 'company_name']),
     list('DoubleT Deal', ['name', 'deal_title']),
+    list('DoubleT Price List', ['name', 'price_list_name'], { is_active: 1 }),
   ])
-  ;[contacts, companies, deals].forEach((target, i) => { if (results[i].status === 'fulfilled') target.value = results[i].value || [] })
+  ;[contacts, companies, deals, priceLists].forEach((target, i) => { if (results[i].status === 'fulfilled') target.value = results[i].value || [] })
   if (results.some(r => r.status === 'rejected')) optionsError.value = __('Some linked records could not be loaded. Check your access and retry.')
 }
 
@@ -122,7 +126,7 @@ async function loadProducts({ append = false } = {}) {
   try {
     const data = await call('frappe.client.get_list', {
       doctype: 'DoubleT Product',
-      fields: ['name', 'product_name', 'sku', 'price', 'product_kind', 'variant_of'],
+      fields: ['name', 'product_name', 'sku', 'product_kind', 'variant_of'],
       filters: [
         ['is_active', '=', 1],
         ['product_kind', 'in', ['Standard', 'Variant']],
@@ -199,13 +203,13 @@ async function hydrateProductDetails(page, requestId) {
   }))
 }
 async function loadDocument() {
-  loading.value = true; error.value = ''; conflict.value = false
+  loading.value = true; error.value = ''; dealError.value = ''; conflict.value = false
   try {
     if (isNew.value) {
       const permission = await call('frappe.client.has_permission', { doctype: 'DoubleT Quotation', docname: '', perm_type: 'create' })
       canWrite.value = Boolean(permission?.has_permission)
       if (!canWrite.value) throw new Error(__('You do not have permission to create quotations.'))
-      doc.value = { doctype: 'DoubleT Quotation', status: 'Draft', customer_type: '', contact: '', company: '', deal: '', quotation_date: '', valid_until: '', notes: '', items: [] }
+      doc.value = { doctype: 'DoubleT Quotation', status: 'Draft', customer_type: '', contact: '', company: '', deal: '', price_list: '', quotation_date: '', valid_until: '', notes: '', items: [] }
     } else {
       const [data, permissions] = await Promise.all([
         call('frappe.client.get', { doctype: 'DoubleT Quotation', name: route.params.quotationId }),
@@ -217,7 +221,13 @@ async function loadDocument() {
     editing.value = false
   } catch (e) { error.value = message(e); doc.value = null } finally { loading.value = false }
 }
-function customerChanged() { if (doc.value.customer_type === 'PERSONAL') doc.value.company = ''; doc.value.deal = ''; dealLabel.value = '' }
+function customerChanged() {
+  if (doc.value.customer_type === 'PERSONAL') doc.value.company = ''
+  doc.value.deal = ''
+  dealLabel.value = ''
+  dealError.value = ''
+  pricingContextChanged()
+}
 function dealName(value) { return typeof value === 'string' ? value.trim() : '' }
 async function loadDealLabel(value) {
   const name = dealName(value)
@@ -238,12 +248,13 @@ async function selectDeal(value = doc.value?.deal) {
     doc.value.deal = ''
     dealLoading.value = false
     dealLabel.value = ''
-    error.value = ''
+    dealError.value = ''
     return
   }
 
   doc.value.deal = name
   dealLoading.value = true
+  dealError.value = ''
   try {
     const deal = await call('frappe.client.get', { doctype: 'DoubleT Deal', name })
     if (requestId !== dealRequestId) return
@@ -253,22 +264,127 @@ async function selectDeal(value = doc.value?.deal) {
     }
     Object.assign(doc.value, { customer_type: deal.deal_type, contact: deal.contact || '', company: deal.company || '' })
     await loadDealLabel(name)
-    error.value = ''
+    dealError.value = ''
+    await repriceAutomaticItems()
   } catch (e) {
     if (requestId !== dealRequestId) return
-    error.value = isPermissionError(e)
+    dealError.value = isPermissionError(e)
       ? __('You do not have permission to read the selected Deal.')
       : message(e)
-    doc.value.deal = ''
     dealLabel.value = ''
   } finally { if (requestId === dealRequestId) dealLoading.value = false }
 }
-function selectProduct(item) {
-  const p = products.value.find(p => p.name === item.product)
-  if (p) Object.assign(item, { product_name: p.product_name, sku: p.sku, unit_price: p.price })
+
+function itemPricing(item) {
+  if (!pricingStates.has(item)) {
+    pricingStates.set(item, reactive({
+      loading: false,
+      error: '',
+      manual: Boolean(item.name),
+      auto: false,
+      source: '',
+      priceList: '',
+      requestId: 0,
+    }))
+  }
+  return pricingStates.get(item)
+}
+
+function addItem() {
+  const item = { product: '', product_name: '', sku: '', quantity: 1, unit_price: '', discount_percent: 0 }
+  doc.value.items.push(item)
+  itemPricing(item)
+}
+
+function markManualPrice(item) {
+  const state = itemPricing(item)
+  state.requestId += 1
+  state.loading = false
+  state.error = ''
+  state.manual = true
+  state.auto = false
+  state.source = ''
+  state.priceList = ''
+}
+
+async function selectProduct(item) {
+  const product = products.value.find(product => product.name === item.product)
+  const state = itemPricing(item)
+  state.requestId += 1
+  state.error = ''
+  state.manual = false
+  state.auto = false
+  state.loading = false
+  state.source = ''
+  state.priceList = ''
+  item.unit_price = ''
+  if (!product) {
+    Object.assign(item, { product_name: '', sku: '' })
+    return
+  }
+  Object.assign(item, { product_name: product.product_name, sku: product.sku })
+  await resolveItemPrice(item)
+}
+
+async function resolveItemPrice(item) {
+  if (!item.product || item.name) return
+  const state = itemPricing(item)
+  if (state.manual) return
+  const requestId = ++state.requestId
+  const selectedProduct = item.product
+  state.loading = true
+  state.error = ''
+  state.source = ''
+  state.priceList = ''
+  item.unit_price = ''
+  try {
+    const result = await call('doublet_crm.pricing.get_product_price', {
+      product: selectedProduct,
+      customer_type: doc.value.customer_type,
+      contact: doc.value.contact || null,
+      company: doc.value.company || null,
+      price_list: doc.value.price_list || null,
+    })
+    if (requestId !== state.requestId || item.product !== selectedProduct || state.manual) return
+    if (result?.price === undefined || result?.price === null || result?.price === '') {
+      throw new Error(__('The pricing service did not return a price.'))
+    }
+    item.unit_price = result.price
+    state.auto = true
+    state.source = result.source || ''
+    state.priceList = result.price_list || ''
+  } catch (exception) {
+    if (requestId !== state.requestId || item.product !== selectedProduct || state.manual) return
+    item.unit_price = ''
+    state.auto = false
+    state.error = message(exception) || __('Unable to load the product price.')
+  } finally {
+    if (requestId === state.requestId) state.loading = false
+  }
+}
+
+async function repriceAutomaticItems() {
+  const items = (doc.value?.items || []).filter(item => {
+    const state = itemPricing(item)
+    return !item.name && item.product && !state.manual && (state.auto || item.unit_price === '' || item.unit_price === null)
+  })
+  await Promise.allSettled(items.map(resolveItemPrice))
+}
+
+function pricingContextChanged() {
+  void repriceAutomaticItems()
+}
+
+function pricingSourceLabel(item) {
+  const state = itemPricing(item)
+  if (state.source === 'price_list' && state.priceList) {
+    const priceList = priceLists.value.find(row => row.name === state.priceList)
+    return `${__('Price List')}: ${priceList?.price_list_name || state.priceList}`
+  }
+  return state.source === 'product' ? __('Product default price') : ''
 }
 function productPickerLabel(product) {
-  const details = [product.sku, money(product.price)]
+  const details = [product.sku].filter(Boolean)
   if (product.product_kind === 'Variant') {
     if (product.variant_parent) details.push(`${__('Variant of')} ${product.variant_parent.product_name || product.variant_parent.name}`)
     if (product.variant_attributes?.length) details.push(product.variant_attributes.join(', '))
@@ -277,6 +393,7 @@ function productPickerLabel(product) {
 }
 function validate() {
   const d = doc.value
+  if (dealError.value) return dealError.value
   if (!['PERSONAL', 'COMPANY'].includes(d.customer_type) || (d.customer_type === 'PERSONAL' && (!d.contact || d.company)) || (d.customer_type === 'COMPANY' && !d.company)) return __('Select a valid customer.')
   if (d.customer_type === 'COMPANY' && d.contact && contacts.value.some(c => c.name === d.contact && c.company !== d.company)) return __('Contact must belong to the selected Company.')
   if (!d.quotation_date || !d.valid_until || d.valid_until < d.quotation_date) return __('Enter valid quotation and expiry dates.')
@@ -304,7 +421,7 @@ async function exportPdf() {
   } catch (e) { error.value = message(e) } finally { exporting.value = false }
 }
 async function save() {
-  if (saving.value || dealLoading.value || !editable.value) return
+  if (saving.value || dealLoading.value || pricingPending.value || !editable.value) return
   error.value = validate(); if (error.value) return
   saving.value = true
   try {

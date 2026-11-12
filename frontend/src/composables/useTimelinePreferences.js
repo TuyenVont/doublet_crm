@@ -24,7 +24,7 @@ export function useTimelinePreferences() {
 }
 
 // Builds a { label, timeAgo } cell for list/table views, honoring the global
-// FCRM Settings timestamp format. `timeAgo` is the displayed value and `label`
+// DoubleT boot settings timestamp format. `timeAgo` is the displayed value and `label`
 // is the tooltip; when "Exact" is set the two are swapped so the date shows.
 // Kept here (not in utils/index.js) so the settings store is not pulled into
 // the eager import graph and fetched before frappe-ui is configured.

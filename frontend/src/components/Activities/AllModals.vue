@@ -88,11 +88,11 @@ async function updateTaskStatus(status, task) {
 function showNote(note) {
   showModal({
     name: note?.name,
-    doctype: 'FCRM Note',
+    doctype: 'DoubleT Note',
     title: 'Note',
     defaults: {
       reference_doctype: props.doctype,
-      reference_docname: referenceDocname(),
+      reference_name: referenceDocname(),
     },
     callbacks: {
       afterInsert: (d) => afterDoctype(d, true),
@@ -119,12 +119,12 @@ function afterDoctype(d, isInsert = false) {
   activities.value?.reload?.()
 
   const name =
-    d.doctype === 'FCRM Note'
+    d.doctype === 'DoubleT Note'
       ? 'note'
       : 'call_log'
 
   const redirectHash =
-    d.doctype === 'CRM Call Log'
+    d.doctype === 'DoubleT Call Log'
       ? 'calls'
       : name + 's'
 
@@ -159,12 +159,11 @@ function afterDoctype(d, isInsert = false) {
 
 function createCallLog() {
   showModal({
-    doctype: 'CRM Call Log',
+    doctype: 'DoubleT Call Log',
     title: 'Call Log',
     defaults: {
       reference_doctype: props.doctype,
-      reference_docname: referenceDocname(),
-      reference_doc: { ...props.doc },
+      reference_name: referenceDocname(),
     },
     callbacks: {
       afterInsert: (d) => afterDoctype(d, true),

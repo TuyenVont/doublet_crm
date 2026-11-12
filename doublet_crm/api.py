@@ -1,4 +1,5 @@
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+import json
 
 import frappe
 from frappe import _
@@ -272,6 +273,214 @@ def get_linked_tasks(
             [],
         ]
     return [[], [], [], page, []]
+
+
+def _check_activity_reference(doctype, docname):
+    if doctype not in ALLOWED_REFERENCES:
+        frappe.throw(_("Unsupported reference DocType"), frappe.ValidationError)
+    if not frappe.db.exists(doctype, docname):
+        frappe.throw(_("Document not found"), frappe.DoesNotExistError)
+    if not frappe.has_permission(doctype, "read", doc=docname):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+
+@frappe.whitelist()
+def get_activities(doctype, docname):
+    """Timeline data for a single DoubleT record, in the shared Activities shape."""
+    _check_activity_reference(doctype, docname)
+    record = frappe.get_doc(doctype, docname)
+    versions = [frappe._dict(
+        name=f"creation-{docname}", activity_type="creation", data=doctype,
+        owner=record.owner, creation=record.creation, is_lead=doctype == "DoubleT Lead",
+    )]
+
+    comments = frappe.get_list(
+        "Comment", filters={"reference_doctype": doctype, "reference_name": docname,
+                            "comment_type": "Comment"},
+        fields=["name", "content", "owner", "creation"],
+        order_by="creation asc",
+    )
+    for comment in comments:
+        comment.update(activity_type="comment", is_lead=doctype == "DoubleT Lead")
+    versions.extend(comments)
+
+    if frappe.has_permission("Version", "read"):
+        history = frappe.get_list(
+            "Version", filters={"ref_doctype": doctype, "docname": docname},
+            fields=["name", "owner", "creation", "data"], order_by="creation asc",
+        )
+        for revision in history:
+            changes = json.loads(revision.data or "{}")
+            for index, change in enumerate(changes.get("changed", [])):
+                if len(change) < 3:
+                    continue
+                fieldname, old, value = change[:3]
+                field = frappe.get_meta(doctype).get_field(fieldname)
+                versions.append(frappe._dict(
+                    name=f"{revision.name}-{index}", activity_type="changed",
+                    data={"field_label": field.label if field else fieldname,
+                          "old_value": old, "value": value},
+                    owner=revision.owner, creation=revision.creation,
+                    options=field.options if field else None,
+                ))
+
+    emails = frappe.get_list(
+        "Communication", filters={"reference_doctype": doctype, "reference_name": docname,
+                                  "communication_type": "Communication", "sent_or_received": ["in", ["Sent", "Received"]]},
+        fields=["name", "owner", "creation", "communication_date", "communication_type",
+                "sender", "sender_full_name", "recipients", "cc", "bcc", "subject", "content",
+                "delivery_status"],
+        order_by="creation asc",
+    )
+    for email in emails:
+        email["activity_type"] = "communication"
+        email["data"] = {key: email.get(key) for key in (
+            "sender", "sender_full_name", "recipients", "cc", "bcc", "subject", "content", "delivery_status")}
+        email["data"]["attachments"] = frappe.get_list(
+            "File", filters={"attached_to_doctype": "Communication", "attached_to_name": email.name},
+            fields=["file_name", "file_url"],
+        )
+    versions.extend(emails)
+
+    calls = frappe.get_list(
+        "DoubleT Call Log", filters={"reference_doctype": doctype, "reference_name": docname},
+        fields=["name", "agent", "call_type", "duration", "status", "start_time",
+                "from_number", "to_number", "recording_url", "creation", "modified"],
+        order_by="creation asc",
+    )
+    for entry in calls:
+        incoming = entry.call_type.startswith("Incoming")
+        entry.update(type="Incoming" if incoming else "Outgoing",
+                     activity_type="incoming_call" if incoming else "outgoing_call",
+                     owner=entry.agent,
+                     _caller={"label": entry.from_number or entry.agent, "image": None},
+                     _receiver={"label": entry.to_number or "", "image": None},
+                     _duration=f"{entry.duration or 0}s")
+
+    notes = get_linked_notes(doctype, docname) if frappe.has_permission("DoubleT Note", "read") else []
+    tasks = get_linked_tasks(doctype, docname)[3] if frappe.has_permission("DoubleT Task", "read") else []
+    attachments = frappe.get_list(
+        "File", filters={"attached_to_doctype": doctype, "attached_to_name": docname},
+        fields=["name", "file_name", "file_url", "file_type", "file_size", "is_private", "creation", "modified"],
+        order_by="creation desc",
+    )
+    return [versions, calls, notes, tasks, attachments]
+
+
+@frappe.whitelist(methods=["POST"])
+def add_activity_comment(doctype, docname, content, attachments=None):
+    _check_activity_reference(doctype, docname)
+    if not frappe.has_permission(doctype, "write", doc=docname):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    if not (content or "").strip():
+        frappe.throw(_("Comment cannot be empty"), frappe.ValidationError)
+    names = json.loads(attachments) if isinstance(attachments, str) else (attachments or [])
+    if not isinstance(names, list):
+        frappe.throw(_("Invalid attachments"), frappe.ValidationError)
+    for name in names:
+        file = frappe.get_doc("File", name)
+        file.check_permission("write")
+        if file.attached_to_doctype != doctype or file.attached_to_name != docname:
+            frappe.throw(_("Attachment is not linked to this document"), frappe.PermissionError)
+    comment = frappe.get_doc({
+        "doctype": "Comment", "comment_type": "Comment", "comment_email": frappe.session.user,
+        "reference_doctype": doctype, "reference_name": docname, "content": content,
+    }).insert()
+    return comment.name
+
+
+ASSIGNABLE_ROLES = ("System Manager", "Sales Manager", "Sales User")
+USER_PROFILE_FIELDS = ["name", "email", "first_name", "last_name", "full_name",
+                       "user_image", "user_type", "language"]
+
+
+def _require_crm_user():
+    if frappe.session.user == "Guest" or not set(frappe.get_roles()).intersection(ASSIGNABLE_ROLES):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+
+def _assignable_user_names():
+    names = set(frappe.get_all(
+        "Has Role", filters={"parenttype": "User", "role": ["in", ASSIGNABLE_ROLES]},
+        pluck="parent", distinct=True,
+    ))
+    names.add("Administrator")
+    return names
+
+
+def _user_profiles(names):
+    if not names:
+        return []
+    users = frappe.get_all(
+        "User", filters={"name": ["in", list(names)], "enabled": 1,
+                         "user_type": "System User"},
+        fields=USER_PROFILE_FIELDS, order_by="full_name asc",
+    )
+    roles = frappe.get_all(
+        "Has Role", filters={"parenttype": "User", "parent": ["in", [u.name for u in users]]},
+        fields=["parent", "role"],
+    ) if users else []
+    by_user = {}
+    for row in roles:
+        by_user.setdefault(row.parent, []).append(row.role)
+    for user in users:
+        user["roles"] = by_user.get(user.name, [])
+        if user.name == "Administrator":
+            user["roles"] = ["System Manager"]
+        user["role"] = next((role for role in ASSIGNABLE_ROLES if role in user.roles), None)
+        user["session_user"] = user.name == frappe.session.user
+    return users
+
+
+@frappe.whitelist()
+def get_assignment_users(include_all=0):
+    """Return [visible users, assignable users] for the existing users store."""
+    _require_crm_user()
+    eligible = _assignable_user_names()
+    names = eligible
+    if cint(include_all) and "System Manager" in frappe.get_roles():
+        names = set(frappe.get_all("User", filters={"enabled": 1, "user_type": "System User"}, pluck="name"))
+    users = _user_profiles(names)
+    assignable = [user for user in users if user.name in eligible]
+    return [users, assignable]
+
+
+@frappe.whitelist()
+def get_assignment_user_info(users):
+    _require_crm_user()
+    try:
+        names = frappe.parse_json(users) if isinstance(users, str) else users
+    except (TypeError, ValueError):
+        frappe.throw(_("Invalid user list"), frappe.ValidationError)
+    if not isinstance(names, list) or len(names) > 200 or any(not isinstance(name, str) for name in names):
+        frappe.throw(_("Invalid user list"), frappe.ValidationError)
+    permitted = _assignable_user_names() | {frappe.session.user}
+    return _user_profiles(set(names) & permitted)
+
+
+@frappe.whitelist()
+def get_assigned_users(doctype, name):
+    _check_activity_reference(doctype, name)
+    return sorted(set(frappe.get_all(
+        "ToDo", filters={"reference_type": doctype, "reference_name": name,
+                       "status": ["!=", "Cancelled"]},
+        pluck="allocated_to",
+    )))
+
+
+@frappe.whitelist(methods=["POST"])
+def remove_assignments(doctype, name, assignees):
+    _check_activity_reference(doctype, name)
+    if not frappe.has_permission(doctype, "write", doc=name):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    names = frappe.parse_json(assignees) if isinstance(assignees, str) else assignees
+    if not isinstance(names, list) or any(not isinstance(user, str) for user in names):
+        frappe.throw(_("Invalid assignees"), frappe.ValidationError)
+    from frappe.desk.form.assign_to import remove
+
+    for user in set(names):
+        remove(doctype, name, user)
+    return get_assigned_users(doctype, name)
 
 
 @frappe.whitelist()
