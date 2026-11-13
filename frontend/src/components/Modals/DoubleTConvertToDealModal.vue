@@ -103,8 +103,10 @@
             v-model="amount"
             class="mt-3"
             type="number"
-            :label="__('Amount')"
-            :placeholder="__('0')"
+            min="0"
+            step="0.01"
+            :label="__('Amount (USD)')"
+            :placeholder="__('0.00')"
           />
         </div>
 

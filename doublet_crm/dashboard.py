@@ -122,3 +122,95 @@ def get_won_deals(filters=None):
 @frappe.whitelist()
 def get_lost_deals(filters=None):
 	return _deal_count("LOST")
+
+
+def _can_read(doctype):
+	return bool(frappe.has_permission(doctype, "read"))
+
+
+def _readable_labels(doctype, names, fields, formatter):
+	if not names or not _can_read(doctype):
+		return {}
+	rows = frappe.get_list(
+		doctype,
+		filters={"name": ["in", list(names)]},
+		fields=["name", *fields],
+		limit_page_length=0,
+	)
+	return {row.name: formatter(row) for row in rows}
+
+
+@frappe.whitelist()
+def get_overview():
+	"""Return the permission-scoped data used by the custom CRM overview."""
+	result = {"permissions": {}, "kpis": {}, "lead_sources": [], "deal_stages": [], "quotations": []}
+
+	for doctype, key in (("DoubleT Lead", "leads"), ("DoubleT Deal", "deals"), ("DoubleT Quotation", "quotations"), ("DoubleT Deal Stage", "stages")):
+		result["permissions"][key] = _can_read(doctype)
+
+	if result["permissions"]["leads"]:
+		leads = frappe.get_list("DoubleT Lead", fields=["name", "source"], limit_page_length=0)
+		result["kpis"]["leads"] = len(leads)
+		counts = {}
+		for row in leads:
+			label = row.source or _("No source")
+			counts[label] = counts.get(label, 0) + 1
+		result["lead_sources"] = [{"label": label, "count": count} for label, count in counts.items()]
+	else:
+		result["kpis"]["leads"] = None
+
+	if result["permissions"]["deals"] and result["permissions"]["stages"]:
+		stages = frappe.get_list("DoubleT Deal Stage", filters={"enabled": 1}, fields=["name", "stage_name", "stage_type", "sort_order"], order_by="sort_order asc", limit_page_length=0)
+		deals = frappe.get_list("DoubleT Deal", fields=["name", "stage"], limit_page_length=0)
+		counts = {stage.name: 0 for stage in stages}
+		for deal in deals:
+			if deal.stage in counts:
+				counts[deal.stage] += 1
+		result["deal_stages"] = [{"name": stage.name, "label": stage.stage_name, "stage_type": stage.stage_type, "count": counts[stage.name]} for stage in stages]
+		result["kpis"]["open_deals"] = sum(item["count"] for item in result["deal_stages"] if item["stage_type"] == "OPEN")
+		result["kpis"]["won_deals"] = sum(item["count"] for item in result["deal_stages"] if item["stage_type"] == "WON")
+	else:
+		result["kpis"]["open_deals"] = None
+		result["kpis"]["won_deals"] = None
+
+	if result["permissions"]["quotations"]:
+		filters = [["status", "in", ["Draft", "Sent"]]]
+		rows = frappe.get_list("DoubleT Quotation", filters=filters, fields=["name", "contact", "company", "deal", "status", "valid_until"], order_by="modified desc", limit_page_length=0)
+		today = frappe.utils.getdate()
+		rows = [row for row in rows if row.status == "Draft" or (row.status == "Sent" and row.valid_until and frappe.utils.getdate(row.valid_until) >= today)]
+		contact_labels = _readable_labels(
+			"DoubleT Contact",
+			{row.contact for row in rows if row.contact},
+			["first_name", "last_name"],
+			lambda row: " ".join(filter(None, [row.first_name, row.last_name])) or row.name,
+		)
+		company_labels = _readable_labels(
+			"DoubleT Company",
+			{row.company for row in rows if row.company},
+			["company_name"],
+			lambda row: row.company_name or row.name,
+		)
+		deal_labels = _readable_labels(
+			"DoubleT Deal",
+			{row.deal for row in rows if row.deal},
+			["deal_title"],
+			lambda row: row.deal_title or row.name,
+		)
+		result["kpis"]["draft_quotations"] = sum(row.status == "Draft" for row in rows)
+		result["quotations"] = [
+			{
+				"name": row.name,
+				"status": row.status,
+				"valid_until": row.valid_until,
+				"customer_label": company_labels.get(row.company) if row.company else contact_labels.get(row.contact),
+				"customer_restricted": bool((row.company or row.contact) and not (company_labels.get(row.company) if row.company else contact_labels.get(row.contact))),
+				"deal": row.deal if row.deal in deal_labels else None,
+				"deal_label": deal_labels.get(row.deal),
+				"deal_restricted": bool(row.deal and row.deal not in deal_labels),
+			}
+			for row in rows[:10]
+		]
+	else:
+		result["kpis"]["draft_quotations"] = None
+
+	return result

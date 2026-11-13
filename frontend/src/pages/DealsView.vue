@@ -334,7 +334,7 @@ const {
   rows,
   reload,
   loadMore,
-} = useDoubleTDeals()
+} = useDoubleTDeals({ lifecycle: route.query.lifecycle })
 
 const VIEW_STORAGE_KEY =
   'doublet-deals-view-mode'
@@ -456,6 +456,10 @@ const rawDeals = computed(() => {
   let result =
     dealsResource.data || []
 
+  if (route.query.lifecycle) {
+    const names = stages.value.filter((stage) => stage.stage_type === route.query.lifecycle).map((stage) => stage.name)
+    result = result.filter((row) => names.includes(row.stage))
+  }
   if (selectedStage.value) {
     result = result.filter(
       (deal) =>

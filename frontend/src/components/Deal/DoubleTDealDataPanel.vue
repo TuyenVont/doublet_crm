@@ -74,7 +74,7 @@
           <!-- AMOUNT -->
           <label class="space-y-1">
             <span class="text-sm font-medium text-ink-gray-8">
-              {{ __('Amount') }}
+              {{ __('Amount (USD)') }}
             </span>
 
             <input

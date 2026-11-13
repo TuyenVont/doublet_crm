@@ -18,8 +18,8 @@ def decimal_value(value, label):
 		frappe.throw(_("{0} must be a finite number.").format(label))
 
 
-def vnd(value):
-	return value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+def usd(value):
+	return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def readable_doc(doctype, name):
@@ -65,16 +65,19 @@ class DoubleTQuotation(Document):
 
 	@staticmethod
 	def item_snapshot(row):
+		def number(value):
+			return Decimal(str(value or 0)).normalize()
+
 		return (
 			row.name,
 			row.product,
 			row.product_name,
 			row.sku,
-			row.unit_price,
-			row.quantity,
+			number(row.unit_price),
+			number(row.quantity),
 			row.discount_type or "Percentage",
-			row.discount_percent or 0,
-			row.discount_amount or 0,
+			number(row.discount_percent),
+			number(row.discount_amount),
 		)
 
 	def validate_customer(self):
@@ -128,28 +131,28 @@ class DoubleTQuotation(Document):
 			discount_amount = decimal_value(row.discount_amount or 0, _("Discount Amount"))
 			if quantity <= 0 or price < 0 or not 0 <= discount_percent <= 100:
 				frappe.throw(_("Quantity must be positive, price nonnegative and discount between 0 and 100."))
-			gross = vnd(quantity * price)
+			gross = usd(quantity * price)
 			if discount_type == "Percentage":
-				line_discount = vnd(gross * discount_percent / 100)
+				line_discount = usd(gross * discount_percent / 100)
 				row.discount_type = "Percentage"
-				row.discount_amount = int(line_discount)
+				row.discount_amount = line_discount
 			elif discount_type == "Amount":
 				if discount_percent:
 					frappe.throw(_("Amount discounts cannot also have a discount percentage."))
 				if not 0 <= discount_amount <= gross:
 					frappe.throw(_("Discount Amount must be between zero and the gross line total."))
-				line_discount = vnd(discount_amount)
+				line_discount = usd(discount_amount)
 				row.discount_type = "Amount"
 				row.discount_percent = 0
-				row.discount_amount = int(line_discount)
+				row.discount_amount = line_discount
 			else:
 				frappe.throw(_("Discount Type must be Percentage or Amount."))
-			row.line_total = int(gross - line_discount)
+			row.line_total = usd(gross - line_discount)
 			subtotal += gross
 			total_discount += line_discount
-		self.subtotal = int(subtotal)
-		self.total_discount = int(total_discount)
-		self.grand_total = int(subtotal - total_discount)
+		self.subtotal = usd(subtotal)
+		self.total_discount = usd(total_discount)
+		self.grand_total = usd(subtotal - total_discount)
 
 	def on_trash(self):
 		if self.status != "Draft":

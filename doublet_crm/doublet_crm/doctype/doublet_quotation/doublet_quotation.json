@@ -17,9 +17,9 @@
   {"fieldname": "valid_until", "fieldtype": "Date", "label": "Valid Until", "reqd": 1},
   {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Draft\nSent\nAccepted\nRejected", "default": "Draft", "reqd": 1, "in_list_view": 1},
   {"fieldname": "items", "fieldtype": "Table", "label": "Items", "options": "DoubleT Quotation Item", "reqd": 1},
-  {"fieldname": "subtotal", "fieldtype": "Currency", "label": "Subtotal", "precision": "0", "read_only": 1},
-  {"fieldname": "total_discount", "fieldtype": "Currency", "label": "Total Discount", "precision": "0", "read_only": 1},
-  {"fieldname": "grand_total", "fieldtype": "Currency", "label": "Grand Total", "precision": "0", "read_only": 1, "in_list_view": 1},
+  {"fieldname": "subtotal", "fieldtype": "Currency", "label": "Subtotal", "precision": "2", "read_only": 1},
+  {"fieldname": "total_discount", "fieldtype": "Currency", "label": "Total Discount", "precision": "2", "read_only": 1},
+  {"fieldname": "grand_total", "fieldtype": "Currency", "label": "Grand Total", "precision": "2", "read_only": 1, "in_list_view": 1},
   {"fieldname": "notes", "fieldtype": "Small Text", "label": "Notes"}
  ],
  "permissions": [

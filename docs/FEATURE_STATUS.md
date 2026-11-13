@@ -1,31 +1,21 @@
-# DoubleT CRM — Feature status
+DoubleT CRM — Feature status
+Updated 2026-11-13. Source baseline is GitHub main at 26feef6. WSL/Docker can differ. Anti's current regression results have yet to be recorded here.
+Area	Status	Evidence and next check
+Lead → Contact / Company → Deal	SOURCE PRESENT	Conversion logic and tests exist. Verify personal and company flows, record links, role permissions and duplicate conversion handling on the target site.
+Deal pipeline	SOURCE PRESENT	Stage updates and Won/Lost rules are in source. Verify with demo roles and compare the visible pipeline with Dashboard totals.
+Task	HISTORICAL MANUAL PASS; REGRESSION PENDING	The user tested standalone CRUD, My Tasks, filters, assignment and links on the earlier MVP. Linked Tasks are wired into the four record types in current source. Recheck CRUD, navigation and permissions across Lead, Deal, Contact and Company.
+Notes	HISTORICAL LEAD MANUAL PASS; REGRESSION PENDING	Focused backend tests were reported 6/6 on 2026-11-05. Lead detail CRUD and reload were manually verified then. Recheck centralized Notes and the four record views, including record switching and access control.
+Product, Category and Variant	USD/UI FIX IMPLEMENTED; VISUAL REGRESSION PENDING	Product price is USD with cents. The Categories menu now has an opaque surface, viewport collision/scroll handling and retains primary/secondary selection rules. Desktop/narrow browser interaction is CHƯA TEST.
+Price List	USD/UI FIX IMPLEMENTED; VISUAL REGRESSION PENDING	The dialog is approximately 900 px on desktop, viewport constrained and responsive; Product remains widest and Price (USD)/remove stay visible. Build passes; New/Edit visual checks, long names and multiple rows are CHƯA TEST.
+Quotation and Discount	IMPLEMENTED; AUTOMATED PARTIAL PASS; BROWSER PENDING	Customer-scoped Deal filtering, Amount/Percentage UI, en-US USD cents, backend decimal calculations and English USD PDF are implemented. Quotation tests passed 18/18 before a final PDF/historical assertion was added; rerun the now 19-test module. Preview arithmetic and production build pass. Browser and downloaded-PDF comparison remain CHƯA TEST.
+Lead → send Quotation	IMPLEMENTED; DELIVERY PENDING	`Mark as Sent` now requires confirmation that external delivery already occurred and explicitly performs no send. Full Lead → Deal → Quotation browser regression and delivery through an agreed channel/recipient are CHƯA TEST.
+Activities and Call Log	SOURCE PRESENT; REGRESSION PENDING	DoubleT timeline API, Call Log listing and ingestion exist. Check Sales permissions, detail and recording playback, and the reported local Deal-linked Call Log changes.
+Dashboard	IMPLEMENTED; DATA/API PASS; VISUAL CHECK PENDING	On `doublet.localhost`, commit `09bb5163`, Administrator and Sales User authenticated HTTP/API checks pass. Rollback-backed regression passes Lead source reconciliation, Open→Won KPI/stage/list counts, Draft→Sent→Accepted, expired Sent exclusion, Draft filter, labels and linked-record permissions. Build and referenced JS/CSS pass. Restricted backend state returns null rather than zero. Interactive card/row clicks, empty/retry rendering and narrow viewport remain CHƯA TEST. Dashboard test module is 5/7; two unrelated timeline Version assertions fail under the test runner.
+Contact Center / Zalo OA / WooCommerce	FUTURE OR EXTERNAL VERIFICATION	Call Log ingestion is present. End-to-end telephony and external integrations need separate evidence. Contact Center work is deferred while Dashboard is the active task.
+Deployment	CURRENT WORKTREE BUILD PASS; CLEAN RELEASE PENDING	On 2026-11-13, the current WSL worktree built successfully and generated HTML references existing `index-Bny_-C0B.js` and `index-CTuAPnQm.css`. Vite reported only the existing large-chunk warning. A clean-checkout release remains pending.
 
-Updated: 2026-11-05. Status is based on uploaded 2026-10-31 source, 2026-11-04 Task patch, current checkout inspection, and user's manual test reports. **Runtime changes still require target-environment validation.**
 
-Legend: `MANUAL PASS` user tested; `SOURCE PRESENT` code exists but functionality not fully verified; `IN PROGRESS`; `PLANNED`; `NOT TESTED`.
-
-| Area | Current status | Evidence / caveat | Next focus |
-|---|---|---|---|
-| Lead | SOURCE PRESENT | Views/detail and DoubleT Lead DocType in ZIP; user reports earlier development | Regression after shared component changes |
-| Deal | SOURCE PRESENT | Deal views, detail, stage model, tests in ZIP | Regression for sidebar/stage/tasks |
-| Contact | SOURCE PRESENT | List/detail/data panel and Doctype in ZIP | Regression; Tasks tab integration |
-| Company | SOURCE PRESENT | List/detail/DoubleTEntityDetail and Doctype in ZIP | Tasks section integration |
-| Standalone Tasks MVP | MANUAL PASS | User tested Create/Edit/Delete, My Tasks, status/priority/due/assign, date filters, linked records and navigation after patch | Preserve behavior, test permissions later |
-| Task inside record detail | IN PROGRESS | Existing tabs/sections and shared Activities; legacy `CRM Task` handlers and data-shape concerns | `docs/CURRENT_TASK.md` |
-| Notes | IN PROGRESS — LEAD MANUAL PASS | Backend 6/6; Lead detail manually verified; shared component covers four detail views and centralized `/notes`; production build passes. Central page and remaining detail views not manually tested | Manually validate centralized search/filter/CRUD/navigation and remaining detail views |
-| Task Kanban | PLANNED | Standalone MVP patch uses list, not Kanban | Defer until CRM Core integration stable |
-| Smart Reminder | PLANNED | Not validated as DoubleT functionality | Defer |
-| Recurring Task | PLANNED | Not validated as DoubleT functionality | Defer |
-| Products / Categories | PLANNED | User's roadmap; implementation not verified | Separate feature spec |
-| Quotations / Orders | PLANNED | User's roadmap; implementation not verified | Separate feature spec |
-| Messaging / Zalo OA / Contact Center | RESEARCH | Direction discussed, not implemented here | Defer |
-| Build / permissions / regression | NOT TESTED | Manual Task tests are not substitutes for automated and role-based tests | Focused regression before merge |
-
-## Completion criteria
-A feature is `DONE` only if its required behavior is demonstrable on the target environment, tests are recorded, there are no critical regressions, and changes are committed (or explicitly ready for review). Do not mark a feature done solely because code exists.
-
-## Working cadence
-1. Finish `docs/CURRENT_TASK.md` only.
-2. Record file diff, test evidence, outstanding issues.
-3. Request user review; commit only when authorized.
-4. Update this table and swap to the next CURRENT_TASK in a separate request.
+Completion criteria
+Mark a feature done once the target-site behavior, tested roles and test results are recorded, blocking regressions are resolved, and the change is ready for review. Record the build or commit tested so older results remain distinguishable from current results.
+Working cadence
+Use [CURRENT_TASK.md](CURRENT_TASK.md) for the active implementation. Record Anti's results, relevant file changes, retest evidence and remaining work here as they become available.

@@ -1,4 +1,5 @@
 import frappe
+from decimal import Decimal
 from unittest.mock import patch
 from frappe.permissions import get_role_permissions
 from frappe.tests.utils import FrappeTestCase
@@ -31,7 +32,10 @@ class TestDoubleTQuotation(FrappeTestCase):
 	def test_direct_snapshot_override_and_totals(self):
 		quote = self.quotation().insert()
 		self.assertTrue(quote.name.startswith("QUO-"))
-		self.assertEqual((quote.subtotal, quote.total_discount, quote.grand_total), (202, 20, 182))
+		self.assertEqual(
+			(quote.subtotal, quote.total_discount, quote.grand_total),
+			(Decimal("202.00"), Decimal("20.20"), Decimal("181.80")),
+		)
 		self.assertEqual((quote.items[0].sku, quote.items[0].product_name), (self.product.sku, self.product.product_name))
 		self.product.product_name = "Changed"
 		self.product.price = 200
@@ -52,7 +56,57 @@ class TestDoubleTQuotation(FrappeTestCase):
 
 	def test_rounding(self):
 		quote = self.quotation(items=[{"product": self.product.name, "quantity": 1, "unit_price": 101, "discount_percent": 50}]).insert()
-		self.assertEqual((quote.subtotal, quote.total_discount, quote.grand_total), (101, 51, 50))
+		self.assertEqual(
+			(quote.subtotal, quote.total_discount, quote.grand_total),
+			(Decimal("101.00"), Decimal("50.50"), Decimal("50.50")),
+		)
+
+	def test_usd_cents_for_amount_and_percentage_discounts(self):
+		amount_quote = self.quotation(items=[{
+			"product": self.product.name,
+			"quantity": 2,
+			"unit_price": 19.99,
+			"discount_type": "Amount",
+			"discount_percent": 0,
+			"discount_amount": 5,
+		}]).insert()
+		self.assertEqual(
+			(amount_quote.subtotal, amount_quote.total_discount, amount_quote.grand_total),
+			(Decimal("39.98"), Decimal("5.00"), Decimal("34.98")),
+		)
+		percentage_quote = self.quotation(items=[{
+			"product": self.product.name,
+			"quantity": 2,
+			"unit_price": 19.99,
+			"discount_type": "Percentage",
+			"discount_percent": 10,
+		}]).insert()
+		self.assertEqual(
+			(percentage_quote.subtotal, percentage_quote.total_discount, percentage_quote.grand_total),
+			(Decimal("39.98"), Decimal("4.00"), Decimal("35.98")),
+		)
+
+	def test_pdf_html_uses_usd_cents_and_sent_totals_remain_historical(self):
+		from doublet_crm.doublet_crm.doctype.doublet_quotation.quotation_pdf import quotation_html
+
+		quote = self.quotation(items=[{
+			"product": self.product.name,
+			"quantity": 2,
+			"unit_price": 19.99,
+			"discount_type": "Amount",
+			"discount_percent": 0,
+			"discount_amount": 5,
+		}]).insert()
+		totals = (quote.subtotal, quote.total_discount, quote.grand_total)
+		html = quotation_html(quote.name)
+		for text in ("Unit Price", "(USD)", "$19.99", "$5.00", "$34.98"):
+			self.assertIn(text, html)
+
+		quote.status = "Sent"
+		quote.save()
+		quote.reload()
+		self.assertEqual((quote.subtotal, quote.total_discount, quote.grand_total), totals)
+		self.assertIn("$34.98", quotation_html(quote.name))
 
 	def test_default_price_from_product(self):
 		quote = self.quotation(items=[{"product": self.product.name, "quantity": 1}]).insert()
