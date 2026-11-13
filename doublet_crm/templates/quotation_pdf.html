@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <style>
@@ -22,21 +22,21 @@
 </head>
 <body>
   <div class="brand">DoubleT CRM</div>
-  <h1>BÁO GIÁ / QUOTATION</h1>
-  <div class="meta">{{ doc.name | e }}<br>Ngày báo giá: {{ format_date(doc.get('quotation_date')) | e }}<br>Hiệu lực đến: {{ format_date(doc.get('valid_until')) | e }}</div>
-  <div class="customer"><h2>Khách hàng / Customer</h2>
+  <h1>QUOTATION</h1>
+  <div class="meta">{{ doc.name | e }}<br>Quotation date: {{ format_date(doc.get('quotation_date')) | e }}<br>Valid until: {{ format_date(doc.get('valid_until')) | e }}</div>
+  <div class="customer"><h2>Customer</h2>
     {% if company_name %}<div>{{ company_name | e }}</div>{% endif %}
     {% if contact_name %}<div>{{ contact_name | e }}</div>{% endif %}
     {% if not company_name and not contact_name %}<div>—</div>{% endif %}
   </div>
   <table>
-    <thead><tr><th>STT</th><th>Sản phẩm / Dịch vụ</th><th>SKU</th><th class="number">Số lượng</th><th class="number">Đơn giá<br>VND</th><th class="number">Giảm<br>%</th><th class="number">Thành tiền<br>VND</th></tr></thead>
+    <thead><tr><th>#</th><th>Product / Service</th><th>SKU</th><th class="number">Quantity</th><th class="number">Unit Price<br>(USD)</th><th class="number">Discount</th><th class="number">Line Total<br>(USD)</th></tr></thead>
     <tbody>{% for item in doc.get('items') or [] %}
-      <tr><td>{{ loop.index }}</td><td>{{ (item.get('product_name') or '—') | e }}</td><td>{{ (item.get('sku') or '—') | e }}</td><td class="number">{{ (item.get('quantity') if item.get('quantity') is not none else '—') | e }}</td><td class="number">{{ currency(item.get('unit_price')) | e }}</td><td class="number">{{ (item.get('discount_percent') if item.get('discount_percent') is not none else '—') | e }}</td><td class="number">{{ currency(item.get('line_total')) | e }}</td></tr>
+      <tr><td>{{ loop.index }}</td><td>{{ (item.get('product_name') or '—') | e }}</td><td>{{ (item.get('sku') or '—') | e }}</td><td class="number">{{ (item.get('quantity') if item.get('quantity') is not none else '—') | e }}</td><td class="number">{{ currency(item.get('unit_price')) | e }}</td><td class="number">{% if (item.get('discount_type') or 'Percentage') == 'Amount' %}{{ currency(item.get('discount_amount')) | e }}{% else %}{{ (item.get('discount_percent') if item.get('discount_percent') is not none else 0) | e }}%{% endif %}</td><td class="number">{{ currency(item.get('line_total')) | e }}</td></tr>
     {% endfor %}</tbody>
   </table>
-  <table class="totals"><tr><td>Tạm tính</td><td class="number">{{ currency(doc.get('subtotal')) }} VND</td></tr><tr><td>Tổng giảm giá</td><td class="number">{{ currency(doc.get('total_discount')) }} VND</td></tr><tr class="grand"><td>Tổng cộng</td><td class="number">{{ currency(doc.get('grand_total')) }} VND</td></tr></table>
-  {% if doc.get('notes') %}<h2>Ghi chú / Notes</h2><div class="notes">{{ doc.get('notes') | e }}</div>{% endif %}
-  <div class="footer">Trân trọng cảm ơn / Thank you.</div>
+  <table class="totals"><tr><td>Subtotal</td><td class="number">{{ currency(doc.get('subtotal')) }}</td></tr><tr><td>Total Discount</td><td class="number">{{ currency(doc.get('total_discount')) }}</td></tr><tr class="grand"><td>Grand Total</td><td class="number">{{ currency(doc.get('grand_total')) }}</td></tr></table>
+  {% if doc.get('notes') %}<h2>Notes</h2><div class="notes">{{ doc.get('notes') | e }}</div>{% endif %}
+  <div class="footer">Thank you.</div>
 </body>
 </html>

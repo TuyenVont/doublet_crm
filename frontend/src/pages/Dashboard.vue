@@ -1,309 +1,230 @@
 <template>
-  <div class="flex flex-col h-full overflow-hidden">
+  <div class="flex h-full flex-col overflow-auto bg-surface-white">
     <LayoutHeader>
       <template #left-header>
         <ViewBreadcrumbs routeName="Dashboard" />
       </template>
       <template #right-header>
         <Button
-          v-if="!editing"
           :label="__('Refresh')"
-          :iconLeft="LucideRefreshCcw"
-          @click="dashboardItems.reload"
-        />
-        <Button
-          v-if="!editing && isAdmin()"
-          :label="__('Edit')"
-          :iconLeft="LucidePenLine"
-          @click="enableEditing"
-        />
-        <Button
-          v-if="editing"
-          :label="__('Chart')"
-          iconLeft="plus"
-          @click="showAddChartModal = true"
-        />
-        <Button
-          v-if="editing && isAdmin()"
-          :label="__('Reset to Default')"
-          :iconLeft="LucideUndo2"
-          @click="resetToDefault"
-        />
-        <Button v-if="editing" :label="__('Cancel')" @click="cancel" />
-        <Button
-          v-if="editing"
-          variant="solid"
-          :label="__('Save')"
-          :disabled="!dirty"
-          :loading="saveDashboard.loading"
-          @click="save"
+          :loading="loading"
+          @click="load"
         />
       </template>
     </LayoutHeader>
 
-    <div class="p-5 pb-2 flex items-center gap-4">
-      <Dropdown
-        v-if="!showDatePicker"
-        v-model="preset"
-        :options="options"
-        class="form-control"
-        :placeholder="__('Select Range')"
-        :button="{
-          label: __(preset),
-          class:
-            '!w-full justify-start [&>span]:mr-auto [&>svg]:text-ink-gray-5',
-          variant: 'outline',
-          iconRight: 'chevron-down',
-          iconLeft: 'calendar',
-        }"
-      />
-      <DateRangePicker
-        v-else
-        ref="datePickerRef"
-        class="!w-48"
-        :value="filters.period"
-        variant="outline"
-        :placeholder="__('Period')"
-        :formatter="formatRange"
-        @change="
-          (v) =>
-            updateFilter('period', v, () => {
-              showDatePicker = false
-              if (!v) {
-                filters.period = getLastXDays()
-                preset = 'Last 30 Days'
-              } else {
-                preset = formatter(v)
-              }
-            })
-        "
+    <div class="space-y-5 p-4 sm:p-5">
+      <div
+        v-if="error"
+        class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700"
       >
-        <template #prefix>
-          <LucideCalendar class="size-4 text-ink-gray-5 mr-2" />
-        </template>
-      </DateRangePicker>
-      <Link
-        v-if="isAdmin() || isManager()"
-        class="form-control w-48"
-        variant="outline"
-        :value="filters.user && getUser(filters.user).full_name"
-        doctype="User"
-        :filters="{
-          name: ['in', users.data.crmUsers?.map((u) => u.name)],
-          ignore_user_type: 1,
-        }"
-        :placeholder="__('Sales User')"
-        :hideMe="true"
-        @change="(v) => updateFilter('user', v)"
-      >
-        <template #prefix>
-          <UserAvatar
-            v-if="filters.user"
-            class="mr-2"
-            :user="filters.user"
-            size="sm"
-          />
-        </template>
-        <template #item-prefix="{ option }">
-          <UserAvatar class="mr-2" :user="option.value" size="sm" />
-        </template>
-        <template #item-label="{ option }">
-          <Tooltip :text="option.value">
-            <div class="cursor-pointer">
-              {{ getUser(option.value).full_name }}
-            </div>
-          </Tooltip>
-        </template>
-      </Link>
-    </div>
+        {{ error }}
+        <Button
+          class="ml-2"
+          :label="__('Try again')"
+          @click="load"
+        />
+      </div>
 
-    <div class="w-full overflow-y-scroll">
-      <DashboardGrid
-        v-if="!dashboardItems.loading && dashboardItems.data"
-        v-model="dashboardItems.data"
-        class="pt-1"
-        :editing="editing"
-      />
+      <div
+        v-if="loading && !data"
+        class="p-10 text-center text-ink-gray-5"
+      >
+        {{ __('Loading dashboard...') }}
+      </div>
+
+      <template v-else-if="data">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <button
+            v-for="card in cards"
+            :key="card.key"
+            class="rounded-lg border p-4 text-left shadow-sm hover:border-outline-gray-4 disabled:cursor-not-allowed"
+            :disabled="!canAccess(card)"
+            @click="open(card.route, card.query)"
+          >
+            <div class="text-sm text-ink-gray-5">{{ __(card.label) }}</div>
+            <div
+              v-if="!canAccess(card)"
+              class="mt-2 text-sm text-ink-gray-5"
+            >
+              {{ __('You do not have access to this data.') }}
+            </div>
+            <div
+              v-else
+              class="mt-1 text-2xl font-semibold"
+            >
+              {{ data.kpis[card.key] ?? '—' }}
+            </div>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <section class="rounded-lg border p-4">
+            <h2 class="mb-4 font-semibold">{{ __('Leads by source') }}</h2>
+            <Restricted v-if="!data.permissions.leads" />
+            <EmptyState
+              v-else-if="!data.lead_sources.length"
+              :title="__('No leads yet')"
+            />
+            <Bars
+              v-else
+              :items="data.lead_sources"
+            />
+          </section>
+
+          <section class="rounded-lg border p-4">
+            <h2 class="mb-4 font-semibold">{{ __('Deals by current stage') }}</h2>
+            <Restricted v-if="!data.permissions.deals || !data.permissions.stages" />
+            <EmptyState
+              v-else-if="!data.deal_stages.length"
+              :title="__('No deal stages configured')"
+            />
+            <Bars
+              v-else
+              :items="data.deal_stages"
+            />
+          </section>
+        </div>
+
+        <section class="rounded-lg border p-4">
+          <h2 class="font-semibold">{{ __('Quotations to follow up') }}</h2>
+          <p class="mb-3 text-xs text-ink-gray-5">
+            {{ __('Sent means manually marked as sent and is included only while valid.') }}
+          </p>
+          <Restricted v-if="!data.permissions.quotations" />
+          <EmptyState
+            v-else-if="!data.quotations.length"
+            :title="__('No quotations need follow-up')"
+          />
+          <div
+            v-else
+            class="overflow-x-auto"
+          >
+            <table class="w-full min-w-[700px] text-left text-sm">
+              <thead>
+                <tr>
+                  <th class="p-2">{{ __('Quotation') }}</th>
+                  <th>{{ __('Customer') }}</th>
+                  <th>{{ __('Deal') }}</th>
+                  <th>{{ __('Status') }}</th>
+                  <th>{{ __('Valid until') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="row in data.quotations"
+                  :key="row.name"
+                  class="cursor-pointer border-t hover:bg-surface-gray-1"
+                  @click="open('QuotationDetail', { quotationId: row.name })"
+                >
+                  <td class="p-2">{{ row.name }}</td>
+                  <td>{{ linkedLabel(row.customer_label, row.customer_restricted) }}</td>
+                  <td>
+                    <button
+                      v-if="row.deal"
+                      class="hover:underline"
+                      @click.stop="open('DealDetail', { dealId: row.deal })"
+                    >
+                      {{ row.deal_label }}
+                    </button>
+                    <span v-else>{{ linkedLabel(row.deal_label, row.deal_restricted) }}</span>
+                  </td>
+                  <td>{{ row.status === 'Sent' ? __('Đã đánh dấu gửi') : __('Draft') }}</td>
+                  <td>{{ row.valid_until || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </template>
     </div>
   </div>
-  <AddChartModal
-    v-if="showAddChartModal"
-    v-model="showAddChartModal"
-    v-model:items="dashboardItems.data"
-  />
 </template>
 
-<script setup lang="ts">
-import AddChartModal from '@/components/Dashboard/AddChartModal.vue'
-import LucideRefreshCcw from '~icons/lucide/refresh-ccw'
-import LucideUndo2 from '~icons/lucide/undo-2'
-import LucidePenLine from '~icons/lucide/pen-line'
-import DashboardGrid from '@/components/Dashboard/DashboardGrid.vue'
-import UserAvatar from '@/components/UserAvatar.vue'
-import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
+<script setup>
+import { h, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { Button, call } from 'frappe-ui'
+
+import EmptyState from '@/components/ListViews/EmptyState.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
-import Link from '@/components/Controls/Link.vue'
-import { usersStore } from '@/stores/users'
-import { copy } from '@/utils'
-import { getLastXDays, formatter, formatRange } from '@/utils/dashboard'
-import {
-  usePageMeta,
-  createResource,
-  DateRangePicker,
-  Dropdown,
-  Tooltip,
-} from 'frappe-ui'
-import { ref, reactive, computed, provide } from 'vue'
+import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
 
-const { users, getUser, isManager, isAdmin } = usersStore()
+const router = useRouter()
+const data = ref(null)
+const loading = ref(false)
+const error = ref('')
 
-const editing = ref(false)
+const cards = [
+  { key: 'leads', label: 'Total Leads', permissions: ['leads'], route: 'Leads', query: {} },
+  { key: 'open_deals', label: 'Open Deals', permissions: ['deals', 'stages'], route: 'Deals', query: { lifecycle: 'OPEN' } },
+  { key: 'won_deals', label: 'Won Deals', permissions: ['deals', 'stages'], route: 'Deals', query: { lifecycle: 'WON' } },
+  { key: 'draft_quotations', label: 'Draft Quotations', permissions: ['quotations'], route: 'Quotations', query: { status: 'Draft' } },
+]
 
-const showDatePicker = ref(false)
-const datePickerRef = ref(null)
-const preset = ref('Last 30 Days')
-const showAddChartModal = ref(false)
-
-const filters = reactive({
-  period: getLastXDays(),
-  user: null,
-})
-
-const fromDate = computed(() => {
-  if (!filters.period) return null
-  return filters.period.split(',')[0]
-})
-
-const toDate = computed(() => {
-  if (!filters.period) return null
-  return filters.period.split(',')[1]
-})
-
-function updateFilter(key: string, value: unknown, callback?: () => void) {
-  filters[key] = value
-  callback?.()
-  dashboardItems.reload()
+const Bars = {
+  props: ['items'],
+  setup(props) {
+    return () => h(
+      'div',
+      { class: 'space-y-3' },
+      props.items.map((item) => h('div', { class: 'space-y-1' }, [
+        h('div', { class: 'flex justify-between gap-3 text-sm' }, [
+          h('span', { class: 'truncate' }, item.label || item.name),
+          h('span', String(item.count)),
+        ]),
+        h('div', { class: 'h-2 rounded bg-surface-gray-2' }, [
+          h('div', {
+            class: 'h-2 rounded bg-blue-500',
+            style: {
+              width: `${Math.max(4, item.count / Math.max(...props.items.map((entry) => entry.count), 1) * 100)}%`,
+            },
+          }),
+        ]),
+      ])),
+    )
+  },
 }
 
-const options = computed(() => [
-  {
-    group: 'Presets',
-    hideLabel: true,
-    items: [
-      {
-        label: __('Last 7 Days'),
-        onClick: () => {
-          preset.value = 'Last 7 Days'
-          filters.period = getLastXDays(7)
-          dashboardItems.reload()
-        },
-      },
-      {
-        label: __('Last 30 Days'),
-        onClick: () => {
-          preset.value = 'Last 30 Days'
-          filters.period = getLastXDays(30)
-          dashboardItems.reload()
-        },
-      },
-      {
-        label: __('Last 60 Days'),
-        onClick: () => {
-          preset.value = 'Last 60 Days'
-          filters.period = getLastXDays(60)
-          dashboardItems.reload()
-        },
-      },
-      {
-        label: __('Last 90 Days'),
-        onClick: () => {
-          preset.value = 'Last 90 Days'
-          filters.period = getLastXDays(90)
-          dashboardItems.reload()
-        },
-      },
-    ],
+const Restricted = {
+  setup() {
+    return () => h(
+      'div',
+      { class: 'py-8 text-sm text-ink-gray-5' },
+      __('You do not have permission to view this data.'),
+    )
   },
-  {
-    label: __('Custom Range'),
-    onClick: () => {
-      showDatePicker.value = true
-      setTimeout(() => datePickerRef.value?.open(), 0)
-      preset.value = 'Custom Range'
-      filters.period = null // Reset period to allow custom date selection
-    },
-  },
-])
-
-const dashboardItems = createResource({
-  url: 'crm.api.dashboard.get_dashboard',
-  makeParams() {
-    return {
-      from_date: fromDate.value,
-      to_date: toDate.value,
-      user: filters.user,
-    }
-  },
-  auto: true,
-})
-
-const dirty = computed(() => {
-  if (!editing.value) return false
-  return JSON.stringify(dashboardItems.data) !== JSON.stringify(oldItems.value)
-})
-
-const oldItems = ref([])
-
-provide('fromDate', fromDate)
-provide('toDate', toDate)
-provide('filters', filters)
-
-function enableEditing() {
-  editing.value = true
-  oldItems.value = copy(dashboardItems.data)
 }
 
-function cancel() {
-  editing.value = false
-  dashboardItems.data = copy(oldItems.value)
+function canAccess(card) {
+  return card.permissions.every((permission) => data.value.permissions[permission])
 }
 
-const saveDashboard = createResource({
-  url: 'frappe.client.set_value',
-  method: 'POST',
-  onSuccess: () => {
-    dashboardItems.reload()
-    editing.value = false
-  },
-})
+function linkedLabel(label, restricted) {
+  if (label) return label
+  return restricted ? __('Restricted') : '—'
+}
 
-function save() {
-  const dashboardItemsCopy = copy(dashboardItems.data)
+async function load() {
+  loading.value = true
+  error.value = ''
+  try {
+    data.value = await call('doublet_crm.dashboard.get_overview')
+  } catch (requestError) {
+    error.value = requestError?.message || __('Could not load dashboard.')
+  } finally {
+    loading.value = false
+  }
+}
 
-  dashboardItemsCopy.forEach((item: Record<string, unknown>) => {
-    delete item.data
-  })
-
-  saveDashboard.submit({
-    doctype: 'CRM Dashboard',
-    name: 'Manager Dashboard',
-    fieldname: 'layout',
-    value: JSON.stringify(dashboardItemsCopy),
+function open(name, query) {
+  const isDetail = ['DealDetail', 'QuotationDetail'].includes(name)
+  router.push({
+    name,
+    params: isDetail ? query : {},
+    query: isDetail ? {} : query,
   })
 }
 
-function resetToDefault() {
-  createResource({
-    url: 'crm.api.dashboard.reset_to_default',
-    auto: true,
-    onSuccess: () => {
-      dashboardItems.reload()
-      editing.value = false
-    },
-  })
-}
-
-usePageMeta(() => {
-  return { title: __('CRM Dashboard') }
-})
+onMounted(load)
 </script>

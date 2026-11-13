@@ -1,7 +1,7 @@
 <template>
-  <Dialog v-model:open="show" :size="'xl'">
+  <Dialog v-model:open="show" :size="'4xl'">
     <template #body>
-      <div class="bg-surface-elevation-1 px-4 pb-6 pt-5 sm:px-6">
+      <div class="max-h-[calc(100vh-8rem)] overflow-y-auto bg-surface-elevation-1 px-4 pb-6 pt-5 sm:px-6">
         <div class="mb-5 flex items-center justify-between">
           <h3 class="text-xl font-semibold text-ink-gray-9">
             {{ isEditMode ? __('Edit Price List') : __('New Price List') }}
@@ -35,18 +35,15 @@
             <Button variant="subtle" size="sm" :label="__('Add Product')" iconLeft="plus" @click="addItem" />
           </div>
 
-          <div v-if="form.items.length" class="overflow-x-auto">
-            <table class="w-full min-w-[620px] text-sm">
-              <thead class="bg-surface-gray-1 text-left text-ink-gray-6">
-                <tr>
-                  <th class="px-4 py-3 font-medium">{{ __('Product / Variant') }}</th>
-                  <th class="w-44 px-4 py-3 text-right font-medium">{{ __('Price') }}</th>
-                  <th class="w-16 px-4 py-3"><span class="sr-only">{{ __('Remove') }}</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(item, index) in form.items" :key="item.key" class="border-t border-outline-gray-2">
-                  <td class="px-4 py-2">
+          <div v-if="form.items.length" class="text-sm">
+            <div class="hidden grid-cols-[minmax(0,1fr)_11rem_3rem] bg-surface-gray-1 text-left text-ink-gray-6 sm:grid">
+              <div class="px-4 py-3 font-medium">{{ __('Product / Variant') }}</div>
+              <div class="px-4 py-3 text-right font-medium">{{ __('Price (USD)') }}</div>
+              <div class="px-4 py-3"><span class="sr-only">{{ __('Remove') }}</span></div>
+            </div>
+            <div v-for="(item, index) in form.items" :key="item.key" class="grid gap-3 border-t border-outline-gray-2 p-4 sm:grid-cols-[minmax(0,1fr)_11rem_3rem] sm:items-start sm:gap-0 sm:p-0">
+              <label class="min-w-0 space-y-1 sm:px-4 sm:py-2">
+                    <span class="text-xs text-ink-gray-6 sm:hidden">{{ __('Product / Variant') }}</span>
                     <Link
                       v-model="item.product"
                       doctype="DoubleT Product"
@@ -54,17 +51,16 @@
                       :placeholder="__('Search Product or Variant')"
                     />
                     <span v-if="itemErrors[index]?.product" class="mt-1 block text-xs text-red-600">{{ itemErrors[index].product }}</span>
-                  </td>
-                  <td class="px-4 py-2">
-                    <TextInput v-model="item.price" type="number" min="0" step="1" class="text-right" :placeholder="__('0')" />
+              </label>
+              <label class="space-y-1 sm:px-4 sm:py-2">
+                    <span class="text-xs text-ink-gray-6 sm:hidden">{{ __('Price (USD)') }}</span>
+                    <TextInput v-model="item.price" type="number" min="0" step="0.01" class="text-right" :placeholder="__('0.00')" />
                     <span v-if="itemErrors[index]?.price" class="mt-1 block text-xs text-red-600">{{ itemErrors[index].price }}</span>
-                  </td>
-                  <td class="px-3 py-2 text-right">
+              </label>
+              <div class="text-right sm:px-3 sm:py-2">
                     <Button variant="subtle" icon="trash-2" :aria-label="__('Remove product price')" @click="removeItem(index)" />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+              </div>
+            </div>
           </div>
           <div v-else class="px-4 py-8 text-center text-sm text-ink-gray-5">
             {{ __('No Product prices yet. Product default prices will be used until you add one.') }}
@@ -72,10 +68,10 @@
         </div>
 
         <ErrorMessage v-if="error" class="mt-4" :message="error" />
-      </div>
-      <div class="flex justify-end gap-2 px-4 pb-6 pt-4 sm:px-6">
+        <div class="sticky bottom-0 -mx-4 mt-5 flex justify-end gap-2 border-t border-outline-gray-2 bg-surface-elevation-1 px-4 pb-1 pt-4 sm:-mx-6 sm:px-6">
         <Button variant="subtle" :label="__('Cancel')" @click="show = false" />
         <Button variant="solid" :label="isEditMode ? __('Save') : __('Create')" :loading="submitting" @click="save" />
+        </div>
       </div>
     </template>
   </Dialog>

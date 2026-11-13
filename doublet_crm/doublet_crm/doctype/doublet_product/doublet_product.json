@@ -91,7 +91,8 @@
       "label": "Price",
       "default": "0",
       "reqd": 1,
-      "in_list_view": 1
+      "in_list_view": 1,
+      "precision": "2"
     },
     {
       "fieldname": "description",

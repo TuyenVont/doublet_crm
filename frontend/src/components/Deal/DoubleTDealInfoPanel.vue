@@ -78,7 +78,7 @@
 
         <label class="block space-y-1">
           <span class="text-xs text-ink-gray-5">
-            {{ __('Amount') }}
+            {{ __('Amount (USD)') }}
           </span>
 
           <input

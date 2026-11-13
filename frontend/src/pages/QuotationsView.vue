@@ -70,6 +70,7 @@ async function load(reset) {
   } catch (e) { error.value = message(e) } finally { loading.value = false }
 }
 onMounted(async () => {
+  status.value = router.currentRoute.value.query.status || ''
   load(true)
   try { canCreate.value = Boolean((await call('frappe.client.has_permission', { doctype: 'DoubleT Quotation', docname: '', perm_type: 'create' }))?.has_permission) } catch { canCreate.value = false }
 })

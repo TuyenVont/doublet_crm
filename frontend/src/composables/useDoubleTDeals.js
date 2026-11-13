@@ -15,7 +15,7 @@ import {
   formatCurrency,
 } from '@/utils'
 
-export function useDoubleTDeals() {
+export function useDoubleTDeals(options = {}) {
   const stages = ref([])
   const contactLabels = ref({})
   const companyLabels = ref({})
@@ -47,11 +47,20 @@ export function useDoubleTDeals() {
         limit_page_length: 50,
       })
       stages.value = res || []
+
+      if (options.lifecycle) {
+        const stageNames = stages.value
+          .filter((stage) => stage.stage_type === options.lifecycle)
+          .map((stage) => stage.name)
+        dealsResource.params.filters = {
+          stage: ['in', stageNames],
+        }
+      }
     } catch (e) {
       console.warn('Failed to fetch stages', e)
     }
+    await dealsResource.reload()
   }
-  fetchStages()
 
   function getStageColor(stageName) {
     const s = stagesMap.value[stageName]
@@ -83,8 +92,10 @@ export function useDoubleTDeals() {
     ],
     orderBy: 'modified desc',
     pageLength: 20,
-    auto: true,
+    auto: false,
   })
+
+  fetchStages()
 
   async function loadRelatedLabels(deals) {
     const contactNames = [

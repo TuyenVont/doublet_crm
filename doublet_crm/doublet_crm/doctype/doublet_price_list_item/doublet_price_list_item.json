@@ -21,7 +21,7 @@
       "fieldname": "price",
       "fieldtype": "Currency",
       "label": "Price",
-      "precision": "0",
+      "precision": "2",
       "reqd": 1,
       "in_list_view": 1
     }

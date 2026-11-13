@@ -29,9 +29,15 @@ class TestDoubleTCRMDashboard(FrappeTestCase):
 		}).insert()
 
 	def make_deal(self, stage, amount=0, lost_reason=None):
+		contact = frappe.get_doc({
+			"doctype": "DoubleT Contact",
+			"first_name": f"Dashboard Contact {frappe.generate_hash(length=10)}",
+		}).insert()
 		return frappe.get_doc({
 			"doctype": "DoubleT Deal",
 			"deal_title": f"Dashboard Deal {frappe.generate_hash(length=10)}",
+			"deal_type": "PERSONAL",
+			"contact": contact.name,
 			"stage": stage.name,
 			"amount": amount,
 			"lost_reason": lost_reason,
@@ -46,8 +52,8 @@ class TestDoubleTCRMDashboard(FrappeTestCase):
 
 	def test_setup_creates_all_native_cards_and_charts_idempotently(self):
 		dashboard = sync_dashboard()
-		card_names = [f"DoubleT CRM - {label}" for label, _ in CARD_DEFINITIONS]
-		chart_names = [f"DoubleT CRM - {label}" for label, _ in CHART_DEFINITIONS]
+		card_names = [label for label, _ in CARD_DEFINITIONS]
+		chart_names = [label for label, _ in CHART_DEFINITIONS]
 
 		self.assertEqual(dashboard.name, DASHBOARD_NAME)
 		self.assertEqual([row.card for row in dashboard.cards], card_names)
@@ -81,8 +87,8 @@ class TestDoubleTCRMDashboard(FrappeTestCase):
 		won_stage = self.make_stage("WON")
 		self.make_deal(won_stage, amount=125)
 
-		status_data = get_chart(chart_name="DoubleT CRM - Lead Status Distribution", refresh=1)
-		revenue_data = get_chart(chart_name="DoubleT CRM - Monthly Deal Revenue", refresh=1)
+		status_data = get_chart(chart_name="Lead Status Distribution", refresh=1)
+		revenue_data = get_chart(chart_name="Monthly Deal Revenue", refresh=1)
 		self.assertIn("QUALIFIED", status_data["labels"])
 		self.assertTrue(any(value >= 125 for value in revenue_data["datasets"][0]["values"]))
 

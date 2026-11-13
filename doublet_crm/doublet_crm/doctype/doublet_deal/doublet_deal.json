@@ -33,7 +33,8 @@
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Amount",
-   "permlevel": 0
+   "permlevel": 0,
+   "precision": "2"
   },
   {
    "fieldname": "deal_owner",

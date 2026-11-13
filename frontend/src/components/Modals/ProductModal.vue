@@ -58,7 +58,7 @@
                 </button>
               </span>
             </div>
-            <Popover placement="bottom-start">
+            <Popover side="bottom" align="start" :collision-padding="16">
               <template #target="{ togglePopover }">
                 <button
                   type="button"
@@ -70,8 +70,8 @@
                 </button>
               </template>
               <template #body>
-                <div class="w-72 rounded-lg border border-outline-gray-2 bg-surface-white p-1 shadow-lg">
-                  <div class="max-h-64 overflow-y-auto py-1">
+                <div class="z-[200] w-72 rounded-lg border border-outline-gray-3 bg-white p-1 text-ink-gray-8 shadow-xl">
+                  <div class="max-h-[min(16rem,calc(100vh-8rem))] overflow-y-auto overscroll-contain py-1">
                     <label v-for="category in categories" :key="category.name" class="flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-sm text-ink-gray-7 hover:bg-surface-gray-1">
                       <input
                         type="checkbox"
@@ -90,8 +90,8 @@
             <span class="block text-xs text-ink-gray-5">{{ __('The primary category is always included. Choose any additional categories below.') }}</span>
           </div>
           <label class="space-y-1">
-            <span class="text-sm text-ink-gray-7">{{ __('Price') }} *</span>
-            <TextInput v-model="form.price" type="number" min="0" step="0.01" :placeholder="__('0')" />
+            <span class="text-sm text-ink-gray-7">{{ __('Price (USD)') }} *</span>
+            <TextInput v-model="form.price" type="number" min="0" step="0.01" :placeholder="__('0.00')" />
             <span v-if="fieldErrors.price" class="block text-xs text-red-600">{{ fieldErrors.price }}</span>
           </label>
           <label class="flex items-center gap-2 self-end pb-1 text-sm text-ink-gray-7">
