@@ -123,6 +123,12 @@
     :reference-name="leadId"
   />
 
+  <ZaloRecordChat
+    v-else-if="activeTabName === 'Zalo OA'"
+    reference-doctype="DoubleT Lead"
+    :reference-name="leadId"
+  />
+
   <!-- NORMAL ACTIVITY TABS -->
   <Activities
     v-else
@@ -443,6 +449,7 @@ import DoubleTLeadDataPanel from '@/components/Lead/DoubleTLeadDataPanel.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import SharedNotes from '@/components/Notes/SharedNotes.vue'
+import ZaloRecordChat from '@/components/Zalo/ZaloRecordChat.vue'
 import AssignTo from '@/components/AssignTo.vue'
 import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
 import SLASection from '@/components/SLASection.vue'
@@ -843,6 +850,12 @@ const tabs = computed(() => {
       name: 'Calls',
       label: __('Calls'),
       icon: PhoneIcon,
+    },
+
+    {
+      name: 'Zalo OA',
+      label: __('Zalo OA'),
+      icon: WhatsAppIcon,
     },
 
     {

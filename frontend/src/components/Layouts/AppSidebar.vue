@@ -117,6 +117,7 @@ const links = [
   { label: 'Quotations', icon: 'file-text', to: 'Quotations' },
   { label: 'Notes', icon: NoteIcon, to: 'Notes' },
   { label: 'Tasks', icon: TaskIcon, to: 'Tasks' },
+  { label: 'Inbox', icon: 'inbox', to: 'Inbox' },
   { label: 'Call Logs', icon: PhoneIcon, to: 'Call Logs' },
 ]
 </script>
