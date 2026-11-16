@@ -115,6 +115,7 @@ const links = [
   { label: 'Products', icon: 'package', to: 'Products' },
   { label: 'Price Lists', icon: 'tags', to: 'PriceLists' },
   { label: 'Quotations', icon: 'file-text', to: 'Quotations' },
+  { label: 'Orders', icon: 'shopping-cart', to: 'Orders' },
   { label: 'Notes', icon: NoteIcon, to: 'Notes' },
   { label: 'Tasks', icon: TaskIcon, to: 'Tasks' },
   { label: 'Inbox', icon: 'inbox', to: 'Inbox' },

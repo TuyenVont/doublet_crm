@@ -13,6 +13,8 @@ const ProductCategoriesView = () => import('@/pages/ProductCategoriesView.vue')
 const PriceListsView = () => import('@/pages/PriceListsView.vue')
 const QuotationsView = () => import('@/pages/QuotationsView.vue')
 const QuotationForm = () => import('@/pages/QuotationForm.vue')
+const OrdersView = () => import('@/pages/OrdersView.vue')
+const OrderForm = () => import('@/pages/OrderForm.vue')
 const CompanyDetailView = () => import('@/pages/CompanyDetailView.vue')
 import PlaceholderView from '@/pages/PlaceholderView.vue'
 const Dashboard = () => import('@/pages/Dashboard.vue')
@@ -101,6 +103,9 @@ const routes = [
     name: 'PriceLists',
     component: PriceListsView,
   },
+  { path: '/orders', name: 'Orders', component: OrdersView },
+  { path: '/orders/new', name: 'OrderCreate', component: OrderForm },
+  { path: '/orders/:orderId', name: 'OrderDetail', component: OrderForm },
   { path: '/quotations', name: 'Quotations', component: QuotationsView },
   { path: '/quotations/new', name: 'QuotationCreate', component: QuotationForm },
   { path: '/quotations/:quotationId', name: 'QuotationDetail', component: QuotationForm, props: true },
