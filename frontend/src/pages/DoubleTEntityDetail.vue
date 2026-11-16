@@ -41,12 +41,31 @@
             <button v-for="entry in group.rows" :key="entry.name" class="mb-2 block text-left text-blue-600 hover:underline" @click="router.push({ name: group.route, params: { [group.param]: entry.name } })">{{ entry.label }}</button>
           </div>
         </section>
-        <section v-if="!isNew && !editing" class="rounded border border-outline-gray-2 p-5">
-          <h2 class="mb-3 text-lg font-semibold">Tasks</h2>
-          <Activities :doctype="doctype" :docname="recordName" :tabs="taskTabs" />
-        </section>
-        <section v-if="!isNew && !editing" class="rounded border border-outline-gray-2">
-          <SharedNotes :reference-doctype="doctype" :reference-name="recordName" />
+        <section v-if="!isNew && !editing" class="min-h-[32rem] overflow-hidden rounded border border-outline-gray-2">
+          <Tabs
+            v-model="relatedTabIndex"
+            :tabs="relatedTabs"
+            class="flex min-h-[32rem] flex-col overflow-hidden [&_[role='tab']]:shrink-0 [&_[role='tablist']]:overflow-x-auto [&_[role='tablist']]:px-5 [&_[role='tabpanel']:not([hidden])]:flex [&_[role='tabpanel']:not([hidden])]:min-h-0 [&_[role='tabpanel']:not([hidden])]:flex-1"
+          >
+            <template #tab-panel>
+              <Activities
+                v-if="activeRelatedTab === 'Tasks'"
+                :doctype="doctype"
+                :docname="recordName"
+                :tabs="taskTabs"
+              />
+              <SharedNotes
+                v-else-if="activeRelatedTab === 'Notes'"
+                :reference-doctype="doctype"
+                :reference-name="recordName"
+              />
+              <ZaloRecordChat
+                v-else-if="activeRelatedTab === 'Zalo OA'"
+                :reference-doctype="doctype"
+                :reference-name="recordName"
+              />
+            </template>
+          </Tabs>
         </section>
       </template>
     </div>
@@ -56,11 +75,14 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { call, Button } from 'frappe-ui'
+import { call, Button, Tabs } from 'frappe-ui'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import SharedNotes from '@/components/Notes/SharedNotes.vue'
+import ZaloRecordChat from '@/components/Zalo/ZaloRecordChat.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
+import NoteIcon from '@/components/Icons/NoteIcon.vue'
+import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
 import Link from '@/components/Controls/Link.vue'
 
 const props = defineProps({ kind: { type: String, required: true } })
@@ -73,6 +95,13 @@ const titleField = computed(() => isContact.value ? 'first_name' : 'company_name
 const recordName = computed(() => route.params[isContact.value ? 'contactId' : 'companyId'])
 const isNew = computed(() => !recordName.value)
 const taskTabs = [{ name: 'Tasks', label: __('Tasks'), icon: TaskIcon }]
+const relatedTabs = [
+  { name: 'Tasks', label: __('Tasks'), icon: TaskIcon },
+  { name: 'Zalo OA', label: __('Zalo OA'), icon: WhatsAppIcon },
+  { name: 'Notes', label: __('Notes'), icon: NoteIcon },
+]
+const relatedTabIndex = ref(0)
+const activeRelatedTab = computed(() => relatedTabs[relatedTabIndex.value]?.name || 'Tasks')
 const contactFields = [
   { key: 'first_name', label: 'First Name', required: true }, { key: 'last_name', label: 'Last Name' },
   { key: 'phone', label: 'Phone' }, { key: 'email', label: 'Email', type: 'email' },

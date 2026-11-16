@@ -1,4 +1,56 @@
-CURRENT TASK — Lead-to-Quotation workflow and UI fixes
+# CURRENT TASK — Zalo OA Inbox and reply experience
+
+Status — Task 24C implemented in the current WSL worktree. Backend regression, production build and API acceptance on `doublet.localhost` pass; interactive browser checks remain pending.
+
+## Task 24C objective
+
+Upgrade the standalone Inbox with global search, OA and reply-state filters, latest-message previews and stable activity ordering. Add a permission-aware Customer details panel and improve the shared composer used by Inbox and the four record tabs.
+
+## Task 24C implementation verification — 2026-11-16
+
+- PASS — Inbox filtering and pagination are server-side across the full permission-filtered conversation set. Six backend tests cover search outside page one, OA filtering, stable latest activity, Needs reply/Replied transitions, future-dated inbound handling, deep links and restricted users.
+- PASS — `doublet.localhost` has two acceptance conversations across `mock-oa-01` and `mock-oa-02`. Searching `task24c-user-02` and filtering `mock-oa-02 / Needs reply` returned the expected conversation.
+- PASS — saving a mock reply changed the `mock-oa-02` conversation to Replied, updated its preview and made the reply its latest activity. Customer details returned the readable Lead with source and status.
+- PASS — production build completed with only the existing large-chunk warning.
+- NOT TESTED — interactive browser behavior for the responsive Customer details panel, filter controls, Enter/Shift+Enter and Vietnamese IME in Inbox and all four record tabs. Restricted-user API behavior passes automated coverage; restricted-user browser behavior is not tested.
+
+## Task 24B baseline — record chat
+
+Status — Implemented in the current WSL worktree; automated backend and production-build checks pass. Browser verification of the four record tabs remains pending. Mock inbound and Lead linking passed the reported Postman cases on `doublet.localhost`. The standalone Inbox was observed in the browser with two inbound messages, a mock reply and navigation to the linked Lead.
+
+## Objective
+
+Add a `Zalo OA` tab to Lead, Deal, Contact and Company details. Users can select a linked conversation, read its history and save a mock reply from the record detail page.
+
+## Implementation scope
+
+1. Read root and frontend Graphify before inspecting source. Verify the WSL branch, local changes, routes and APIs against the running checkout.
+2. Add the tab to the existing detail navigation. Adapt the Company detail layout to expose the same chat functionality.
+3. Reuse Inbox message history and reply behavior. Show sender context, timestamps, message direction, mock labels and older messages. Keep an optional deep link to the selected conversation in Inbox.
+4. Resolve records through `Conversation.lead`, `Deal.source_lead`, and the Lead conversion fields `converted_deal`, `converted_contact` and `converted_company`, as appropriate to the record being viewed.
+5. Enforce backend permissions and verify record-to-conversation membership on record-scoped requests. Handle empty, loading, error and restricted states. Clear stale results when changing records or conversations.
+6. Preserve the standalone Inbox and existing detail workflows. Live OA webhook and live outbound delivery remain pending OA access.
+
+## Acceptance checks
+
+| Case | Expected result |
+|---|---|
+| Lead with Zalo history | The Zalo OA tab on `Zalo user mock-user-01` shows its two inbound messages and the saved mock reply. |
+| Reply from the record | Saving a mock reply in the tab adds one outbound message to the same thread. The message remains after refresh and appears in Inbox. |
+| Deal, Contact and Company | Related records show the conversation reached through their saved Lead relationships. A record without a linked conversation shows an empty state. |
+| Access and record isolation | A user lacking access cannot read or reply. Changing the record or conversation ID never returns another record's history through the record-scoped API. |
+| Inbox navigation | Open in Inbox selects the correct conversation, including conversations outside the first list page. |
+| Regression | Existing tabs work, the tab is reachable at narrow widths, and existing Postman responses retain their behavior. |
+
+Record the tested commit, site and role with PASS / FAIL / NOT TESTED. Record build results and browser results independently.
+
+## Implementation verification — 2026-11-16
+
+- PASS — `npm run build`; Vite completed with only the existing large-chunk warning.
+- PASS — `test_zalo_inbox`: 4 tests, including Lead/Deal/Contact/Company relationship resolution, record/conversation isolation, mock reply persistence, whitelist validation and restricted-role behavior.
+- PASS — `doublet.localhost` record-scoped APIs returned the `mock-user-01` conversation with two mock inbound messages and one saved mock reply. Direct conversation lookup for Inbox deep-linking also passed.
+- PASS — replaying `mock-message-01` and `mock-message-02` returned `duplicate: true` with the existing conversation, messages and Lead.
+- NOT TESTED — interactive Lead/Deal/Contact/Company tabs, narrow viewport, reply submission from the browser and refresh into Inbox. The site Lead currently has no converted Deal/Contact/Company, so those browser paths need linked acceptance data.
 Status — Ready for implementation. Dashboard implementation and target-site API/data regression were reported complete. Remaining Dashboard checks are recorded below.
 
 Working checkout — The reported WSL checkout was fix/regression-task-notes-product at base commit 09bb5163, mounted into crm-frappe-1 for site doublet.localhost. Verify the current branch, commit, working tree and running build before editing. Preserve in-progress changes to Dashboard and Call Log.

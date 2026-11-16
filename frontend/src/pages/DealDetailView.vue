@@ -155,6 +155,12 @@
             :deal-id="dealId"
           />
 
+          <ZaloRecordChat
+            v-else-if="activeTabName === 'Zalo OA'"
+            reference-doctype="DoubleT Deal"
+            :reference-name="dealId"
+          />
+
           <Activities
             v-else
             ref="activities"
@@ -333,6 +339,7 @@ import {
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import SharedNotes from '@/components/Notes/SharedNotes.vue'
+import ZaloRecordChat from '@/components/Zalo/ZaloRecordChat.vue'
 import DealQuotations from '@/components/Deal/DealQuotations.vue'
 import Resizer from '@/components/Resizer.vue'
 import AssignTo from '@/components/AssignTo.vue'
@@ -348,6 +355,7 @@ import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
+import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
 
 import {
   formatCurrency,
@@ -544,6 +552,12 @@ const tabs = computed(() => {
       name: 'Calls',
       label: __('Calls'),
       icon: PhoneIcon,
+    },
+
+    {
+      name: 'Zalo OA',
+      label: __('Zalo OA'),
+      icon: WhatsAppIcon,
     },
 
     {
