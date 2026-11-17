@@ -129,6 +129,12 @@
     :reference-name="leadId"
   />
 
+  <QuotationEmails
+    v-else-if="activeTabName === 'Emails'"
+    reference-doctype="DoubleT Lead"
+    :reference-name="leadId"
+  />
+
   <!-- NORMAL ACTIVITY TABS -->
   <Activities
     v-else
@@ -450,6 +456,7 @@ import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import SharedNotes from '@/components/Notes/SharedNotes.vue'
 import ZaloRecordChat from '@/components/Zalo/ZaloRecordChat.vue'
+import QuotationEmails from '@/components/QuotationEmails.vue'
 import AssignTo from '@/components/AssignTo.vue'
 import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
 import SLASection from '@/components/SLASection.vue'

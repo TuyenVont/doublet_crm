@@ -5,7 +5,7 @@
       <template #right-header>
         <Button v-if="!isNew && doc && !editing" :label="__('Export PDF')" :loading="exporting" @click="exportPdf" />
         <Button v-if="!isNew && doc?.deal" :label="__('Back to Deal')" @click="router.push({ name: 'DealDetail', params: { dealId: doc.deal }, hash: '#quotations' })" />
-        <Button v-if="!isNew && doc && canWrite && doc.status === 'Draft' && !editing" :label="__('Edit')" @click="editing = true" />
+        <Button v-if="!isNew && doc && canWrite && doc.status === 'Draft' && !editing" :label="__('Edit')" @click="startEditing" />
         <Button v-if="editable" variant="solid" :label="isNew ? __('Create') : __('Save')" :loading="saving" :disabled="dealLoading || pricingPending" @click="save" />
         <Button v-if="!isNew && editing" :label="__('Cancel')" @click="loadDocument" />
         <Button v-if="doc && canDelete && doc.status === 'Draft' && !editing" :label="__('Delete')" :loading="saving" @click="remove" />
@@ -16,10 +16,29 @@
       <template v-else>
         <ErrorMessage v-if="error" class="mb-4" :message="error" />
         <p v-if="emailQueue" class="mb-4 text-sm text-ink-gray-7" role="status">
-          {{ __('Email queued. Check Email Queue for delivery status.') }} {{ emailQueue }}
+          {{ __('Email queued for automatic delivery. Its status will update in the Emails tab.') }} {{ emailQueue }}
         </p>
         <Button v-if="conflict" class="mb-4" :label="__('Reload latest quotation')" @click="loadDocument" />
-        <div v-if="doc" class="mx-auto max-w-5xl space-y-5">
+        <div v-if="doc" class="mx-auto w-full min-w-0 max-w-[1440px] space-y-5">
+          <div v-if="!isNew" class="flex gap-1 border-b border-outline-gray-2" role="tablist" :aria-label="__('Quotation sections')">
+            <Button
+              :label="__('Details')"
+              variant="ghost"
+              :class="activeTab === 'details' ? 'border-b-2 border-ink-gray-8 rounded-b-none' : ''"
+              role="tab"
+              :aria-selected="activeTab === 'details'"
+              @click="activeTab = 'details'"
+            />
+            <Button
+              :label="__('Emails')"
+              variant="ghost"
+              :class="activeTab === 'emails' ? 'border-b-2 border-ink-gray-8 rounded-b-none' : ''"
+              role="tab"
+              :aria-selected="activeTab === 'emails'"
+              @click="activeTab = 'emails'"
+            />
+          </div>
+          <template v-if="isNew || activeTab === 'details'">
           <div class="flex flex-wrap items-center gap-3">
             <span class="font-semibold">{{ __('Status') }}: {{ doc.status || 'Draft' }}</span>
             <span v-if="doc.deal">{{ __('Deal') }}: <button v-if="dealLabel" class="font-medium hover:underline" @click="openDeal">{{ dealLabel }}</button><span v-else>—</span></span>
@@ -50,7 +69,7 @@
             <span class="text-xs text-ink-gray-5">{{ __('Only active Standard Products and Variants are available.') }}</span>
           </div>
           <div v-if="productPickerError" class="mt-2 text-sm text-red-600">{{ productPickerError }}</div>
-          <div class="overflow-x-auto rounded-lg border border-outline-gray-2">
+          <div class="max-w-full min-w-0 overflow-x-auto rounded-lg border border-outline-gray-2">
             <table class="w-full min-w-[1120px] table-fixed text-left text-sm"><thead class="bg-surface-gray-1 text-ink-gray-6"><tr><th class="w-[29%] p-3">{{ __('Product') }}</th><th class="w-[16%] p-3">{{ __('Unit Price (USD)') }}</th><th class="w-[10%] p-3">{{ __('Quantity') }}</th><th class="w-[13%] p-3">{{ __('Discount Type') }}</th><th class="w-[14%] p-3">{{ __('Discount') }}</th><th class="w-[12%] p-3 text-right">{{ __('Line Total (USD)') }}</th><th class="w-[6%] p-3" /></tr></thead>
               <tbody><tr v-for="(item, index) in doc.items" :key="item.name || index" class="border-t border-outline-gray-2 align-top">
                 <td class="p-3"><select v-if="editable && !item.name" v-model="item.product" @change="selectProduct(item)"><option value="">{{ __('Select product') }}</option><option v-for="product in products" :key="product.name" :value="product.name">{{ productPickerLabel(product) }}</option></select><div v-else class="font-medium text-ink-gray-8">{{ item.product_name || item.product || '—' }}</div><div v-if="item.sku" class="mt-1 text-xs text-ink-gray-5">{{ __('SKU') }}: {{ item.sku }}</div></td>
@@ -65,25 +84,63 @@
           </div>
           <Button v-if="editable" :label="__('Add item')" iconLeft="plus" @click="addItem" />
           <div class="ml-auto max-w-xs space-y-2 text-right text-sm"><p>{{ __('Subtotal') }}: {{ money(editable ? totals.gross : doc.subtotal) }}</p><p>{{ __('Total discount') }}: {{ money(editable ? totals.discount : doc.total_discount) }}</p><p class="font-semibold">{{ __('Grand total') }}: {{ money(editable ? totals.total : doc.grand_total) }}</p><p v-if="editable" class="text-xs text-ink-gray-5">{{ __('Preview; final amounts are calculated by the server.') }}</p></div>
+          </template>
+          <QuotationEmails
+            v-else
+            :quotation="doc.name"
+            :status="doc.status"
+            :can-write="canWrite"
+            :refresh-key="emailRefreshKey"
+            @send-pdf="openEmailDialog"
+          />
         </div>
       </template>
     </div>
-    <Dialog v-model:open="showEmailDialog" :title="__('Send Quotation by Email')" :dismissible="!sendingEmail" :showCloseButton="!sendingEmail">
-      <form class="space-y-4" @submit.prevent="sendEmail">
-        <label class="field">{{ __('To') }}
-          <TextInput v-model="email.recipient" type="email" required :disabled="sendingEmail" />
-        </label>
-        <label class="field">{{ __('Subject') }}
-          <TextInput v-model="email.subject" maxlength="140" required :disabled="sendingEmail" />
-        </label>
-        <label class="field">{{ __('Message') }}
-          <textarea v-model="email.body" rows="4" maxlength="10000" required :disabled="sendingEmail" />
-        </label>
-        <p class="text-sm text-ink-gray-6">{{ __('Attachment') }}: {{ doc?.name }}.pdf</p>
-        <ErrorMessage v-if="emailError" :message="emailError" />
-        <div class="flex justify-end gap-2">
+    <Dialog v-model:open="showEmailDialog" :title="__('Send Quotation by Email')" size="3xl" :dismissible="!sendingEmail" :showCloseButton="!sendingEmail">
+      <form class="flex max-h-[80vh] min-h-0 flex-col" @submit.prevent="sendEmail">
+        <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-1 pb-4">
+          <label class="field">{{ __('To') }}
+            <TextInput v-model="email.recipient" type="email" required :disabled="sendingEmail" @update:modelValue="recipientEdited" />
+          </label>
+          <p v-if="emailContextLoading" class="text-xs text-ink-gray-5">{{ __('Finding customer email…') }}</p>
+          <p v-else-if="recipientSource" class="break-words text-xs text-ink-gray-6">
+            {{ recipientSource }}
+          </p>
+          <p v-else-if="!email.recipient" class="text-xs text-ink-gray-5">
+            {{ __('No readable customer email was found. Select a Company Contact below or enter an address manually.') }}
+          </p>
+
+          <div v-if="emailContext.company" class="space-y-2 rounded-md border border-outline-gray-2 p-3">
+            <p class="text-sm font-medium">{{ __('Choose a Contact from {0}', [emailContext.company.label]) }}</p>
+            <TextInput
+              v-model="emailContactSearch"
+              type="search"
+              :placeholder="__('Search Contact name or email…')"
+              :disabled="sendingEmail"
+            />
+            <select v-model="selectedEmailContact" :disabled="sendingEmail || emailContextLoading" @change="applyCompanyContact">
+              <option value="">{{ emailContext.companyContacts.length ? __('Select a Contact') : __('No Contact with email found') }}</option>
+              <option v-for="contact in emailContext.companyContacts" :key="contact.name" :value="contact.name">
+                {{ contact.label }} &lt;{{ contact.email }}&gt;
+              </option>
+            </select>
+          </div>
+
+          <label class="field">{{ __('Subject') }}
+            <TextInput v-model="email.subject" maxlength="140" required :disabled="sendingEmail" />
+          </label>
+          <label class="field">{{ __('Message') }}
+            <textarea v-model="email.body" rows="7" maxlength="10000" required :disabled="sendingEmail" />
+          </label>
+          <p class="break-all text-sm text-ink-gray-6">{{ __('Attachment') }}: {{ doc?.name }}.pdf</p>
+          <p v-if="emailContext.isExpired" class="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800" role="alert">
+            {{ __('This quotation expired on {0}. Sending the PDF requires confirmation.', [emailContext.validUntil]) }}
+          </p>
+          <ErrorMessage v-if="emailError" :message="emailError" />
+        </div>
+        <div class="flex shrink-0 flex-wrap justify-end gap-2 border-t border-outline-gray-2 bg-surface-white pt-3">
           <Button type="button" :label="__('Cancel')" :disabled="sendingEmail" @click="showEmailDialog = false" />
-          <Button type="submit" variant="solid" :label="__('Send Email')" :loading="sendingEmail" />
+          <Button type="submit" variant="solid" :label="__('Send Email')" :loading="sendingEmail" :disabled="emailContextLoading" />
         </div>
       </form>
     </Dialog>
@@ -95,14 +152,18 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button, Dialog, TextInput, call } from 'frappe-ui'
 import LayoutHeader from '@/components/LayoutHeader.vue'
+import QuotationEmails from '@/components/QuotationEmails.vue'
 import { dealsForCustomer, lineAmounts, message, money } from '@/utils/quotation'
 
 const route = useRoute(), router = useRouter()
 const isNew = computed(() => route.name === 'QuotationCreate')
 const doc = ref(null), loading = ref(true), saving = ref(false), editing = ref(false)
 const exporting = ref(false)
+const activeTab = ref('details'), emailRefreshKey = ref(0)
 const showEmailDialog = ref(false), sendingEmail = ref(false), emailError = ref(''), emailQueue = ref('')
 const email = reactive({ recipient: '', subject: '', body: '' })
+const emailContextLoading = ref(false), emailContactSearch = ref(''), selectedEmailContact = ref(''), recipientSource = ref('')
+const emailContext = reactive({ suggested: null, company: null, companyContacts: [], validUntil: '', isExpired: false })
 const canWrite = ref(false), canDelete = ref(false), error = ref(''), dealError = ref(''), optionsError = ref(''), conflict = ref(false)
 const contacts = ref([]), companies = ref([]), deals = ref([]), priceLists = ref([]), products = ref([])
 const productSearch = ref('')
@@ -112,6 +173,8 @@ const dealLabel = ref('')
 let dealRequestId = 0
 let productRequestId = 0
 let productSearchTimer = null
+let emailContactSearchTimer = null
+let emailContextRequest = 0
 const productPageLength = 20
 const pricingStates = new WeakMap()
 const editable = computed(() => (isNew.value && canWrite.value) || (!isNew.value && editing.value && canWrite.value && doc.value?.status === 'Draft'))
@@ -139,6 +202,12 @@ async function loadOptions() {
 watch(productSearch, () => {
   clearTimeout(productSearchTimer)
   productSearchTimer = setTimeout(() => loadProducts(), 250)
+})
+
+watch(emailContactSearch, () => {
+  clearTimeout(emailContactSearchTimer)
+  if (!showEmailDialog.value || !emailContext.company || emailContextLoading.value) return
+  emailContactSearchTimer = setTimeout(() => loadEmailContext(emailContactSearch.value, false), 250)
 })
 
 async function loadProducts({ append = false } = {}) {
@@ -286,6 +355,7 @@ async function loadDealLabel(value) {
   } catch { /* An unread Deal stays neutral in the UI. */ }
 }
 function openDeal() { if (doc.value?.deal && dealLabel.value) router.push({ name: 'DealDetail', params: { dealId: doc.value.deal } }) }
+function startEditing() { activeTab.value = 'details'; editing.value = true }
 function isPermissionError(e) { return e?.httpStatusCode === 403 || e?.status === 403 || e?.exc_type === 'PermissionError' || /\b(permission|not permitted|not allowed)\b/i.test(message(e)) }
 async function selectDeal(value = doc.value?.deal) {
   const requestId = ++dealRequestId
@@ -477,16 +547,75 @@ async function exportPdf() {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   } catch (e) { error.value = message(e) } finally { exporting.value = false }
 }
-function openEmailDialog() {
+function resetEmailContext() {
+  emailContextRequest += 1
   email.recipient = ''
+  recipientSource.value = ''
+  emailContactSearch.value = ''
+  selectedEmailContact.value = ''
+  Object.assign(emailContext, { suggested: null, company: null, companyContacts: [], validUntil: '', isExpired: false })
+}
+
+async function loadEmailContext(search = '', applySuggestion = false) {
+  const request = ++emailContextRequest
+  const quotation = doc.value?.name
+  if (!quotation) return
+  emailContextLoading.value = true
+  try {
+    const result = await call(
+      'doublet_crm.doublet_crm.doctype.doublet_quotation.quotation_email.get_quotation_email_context',
+      { name: quotation, search },
+    )
+    if (request !== emailContextRequest || quotation !== doc.value?.name) return
+    Object.assign(emailContext, {
+      suggested: result.suggested || null,
+      company: result.company || null,
+      companyContacts: result.company_contacts || [],
+      validUntil: result.valid_until || doc.value.valid_until || '',
+      isExpired: Boolean(result.is_expired),
+    })
+    if (applySuggestion && result.suggested) {
+      email.recipient = result.suggested.email
+      recipientSource.value = `${result.suggested.label} · ${__(result.suggested.source)}`
+    }
+  } catch (exception) {
+    if (request === emailContextRequest) emailError.value = message(exception)
+  } finally {
+    if (request === emailContextRequest) emailContextLoading.value = false
+  }
+}
+
+function recipientEdited() {
+  recipientSource.value = ''
+  selectedEmailContact.value = ''
+}
+
+function applyCompanyContact() {
+  const contact = emailContext.companyContacts.find((row) => row.name === selectedEmailContact.value)
+  if (!contact) return
+  email.recipient = contact.email
+  recipientSource.value = `${contact.label} · ${__(contact.source)}`
+}
+
+async function openEmailDialog() {
+  resetEmailContext()
   email.subject = __('Quotation {0}', [doc.value.name])
   email.body = __('Please find our quotation attached.')
   emailError.value = ''
   showEmailDialog.value = true
+  await loadEmailContext('', true)
 }
 
 async function sendEmail() {
   if (sendingEmail.value || doc.value?.status !== 'Draft') return
+  let confirmExpired = 0
+  if (emailContext.isExpired) {
+    const confirmed = window.confirm(
+      __('This quotation expired on {0}. Send the PDF anyway?', [emailContext.validUntil]),
+    )
+    if (!confirmed) return
+    confirmExpired = 1
+  }
   sendingEmail.value = true
   emailError.value = ''
   try {
@@ -496,9 +625,12 @@ async function sendEmail() {
       recipient: email.recipient,
       subject: email.subject,
       body: email.body,
+      confirm_expired: confirmExpired,
     })
     emailQueue.value = result.email_queue
     showEmailDialog.value = false
+    activeTab.value = 'emails'
+    emailRefreshKey.value += 1
   } catch (e) {
     emailError.value = message(e)
   } finally {
@@ -534,7 +666,17 @@ onMounted(async () => {
   const queryDeal = Array.isArray(route.query.deal) ? '' : dealName(route.query.deal)
   if (isNew.value && queryDeal && doc.value) await selectDeal(queryDeal)
 })
-onBeforeUnmount(() => clearTimeout(productSearchTimer))
+watch(() => route.params.quotationId, async (current, previous) => {
+  if (!previous || current === previous) return
+  resetEmailContext()
+  showEmailDialog.value = false
+  activeTab.value = 'details'
+  await loadDocument()
+})
+onBeforeUnmount(() => {
+  clearTimeout(productSearchTimer)
+  clearTimeout(emailContactSearchTimer)
+})
 </script>
 
 <style scoped>
