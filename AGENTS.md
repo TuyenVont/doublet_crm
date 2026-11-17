@@ -36,7 +36,13 @@ Do **not** reread every file on every turn. Read the relevant sections; inspect 
 
 ## Repository-specific note
 The October 31 source snapshot already has Tasks UI in Lead/Deal/Contact and Company detail, yet some of their shared handlers still reference `CRM Task`. The November 4 Task MVP patch replaces the standalone Tasks page with `DoubleT Task`. **First reconcile this integration rather than rebuilding the tabs.**
+## Contact Center and record chat
 
+- Contact Center uses `DoubleT Conversation` and `DoubleT Message` as the shared conversation history. The standalone Inbox and record-level Zalo OA tabs use the same history and reply logic.
+- Reuse the existing detail tabs, route names and frontend components. Record chat applies to `DoubleT Lead`, `DoubleT Deal`, `DoubleT Contact` and `DoubleT Company`.
+- Resolve relationships on the backend using stored CRM links. For record-scoped history and replies, check access to the record and verify that the selected conversation belongs to it. Apply the existing conversation and message permissions.
+- Keep the mock reply label visible in the UI. Record mock and live Zalo OA test results as distinct acceptance items.
+- Use the user's existing WSL checkout and Docker site for verification. Preserve local changes during source edits and builds.
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
@@ -50,3 +56,12 @@ Rules:
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 - A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.
+## Frontend consistency
+
+- Use the Frappe CRM reference screenshots as a visual guide. Before changing a screen, follow the Graphify rules below and inspect the closest existing DoubleT CRM screen of the same type. Implement the change with the repository's existing Vue and frappe-ui stack.
+- Reuse existing layout, theme tokens and components for page headers, buttons, forms, tables, tabs and loading, empty and error states. Search for an existing component or variant before adding one.
+- For list views, place the breadcrumb and primary action in the page header, with search and filters above the table. Follow the reference screen's conventions for row actions, status indicators and pagination.
+- For record detail views, keep the record name and primary action in the header and place tabs below it. Use a side summary when users need record information alongside the active tab. On narrow screens, let that summary collapse or stack below the main content.
+- For forms and dialogs, follow existing conventions for labels, required fields, validation and save actions. Give wide content such as quotation items and email composition enough room. Keep the primary action visible and confine horizontal scrolling to the table when needed.
+- Match the existing UI language and naming conventions. Keep visual changes within the current task's scope and preserve existing navigation, permissions and workflows.
+- Verify changed screens in the browser at desktop and narrow widths. Check the primary action, filters or tabs as applicable, and any fields or columns affected by layout changes. In the handoff, name the reference screen and reused components, and record checks that could not be run as `NOT TESTED`.

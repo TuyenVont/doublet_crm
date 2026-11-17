@@ -161,6 +161,12 @@
             :reference-name="dealId"
           />
 
+          <QuotationEmails
+            v-else-if="activeTabName === 'Emails'"
+            reference-doctype="DoubleT Deal"
+            :reference-name="dealId"
+          />
+
           <Activities
             v-else
             ref="activities"
@@ -341,6 +347,7 @@ import Activities from '@/components/Activities/Activities.vue'
 import SharedNotes from '@/components/Notes/SharedNotes.vue'
 import ZaloRecordChat from '@/components/Zalo/ZaloRecordChat.vue'
 import DealQuotations from '@/components/Deal/DealQuotations.vue'
+import QuotationEmails from '@/components/QuotationEmails.vue'
 import Resizer from '@/components/Resizer.vue'
 import AssignTo from '@/components/AssignTo.vue'
 

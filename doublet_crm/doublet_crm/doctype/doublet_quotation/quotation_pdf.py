@@ -1,9 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
-from html import escape
-
 import frappe
-from frappe import _
-from frappe.utils import formatdate, validate_email_address
+from frappe.utils import formatdate
 from frappe.utils.pdf import get_pdf
 
 
@@ -62,35 +59,16 @@ def download_quotation_pdf(name):
 
 
 @frappe.whitelist(methods=["POST"])
-def send_quotation_email(name: str, recipient: str, subject: str, body: str, modified: str):
-	quote = frappe.get_doc("DoubleT Quotation", name)
-	quote.check_permission("read")
-	quote.check_permission("write")
-	if quote.status != "Draft" or str(quote.modified) != modified:
-		frappe.throw(_("Reload the latest draft before sending this quotation."))
+def send_quotation_email(
+	name: str,
+	recipient: str,
+	subject: str,
+	body: str,
+	modified: str,
+	confirm_expired: int | str = 0,
+):
+	# Keep the original endpoint stable for existing clients while the email
+	# implementation lives with quotation history and threaded replies.
+	from doublet_crm.doublet_crm.doctype.doublet_quotation.quotation_email import send_quotation_email as send
 
-	recipient = recipient.strip()
-	if (
-		recipient.count("@") != 1
-		or any(char.isspace() for char in recipient)
-		or validate_email_address(recipient) != recipient
-	):
-		frappe.throw(_("Enter one valid recipient email address."))
-	if not subject.strip() or len(subject) > 140 or "\r" in subject or "\n" in subject:
-		frappe.throw(_("Enter a subject of up to 140 characters on one line."))
-	if not body.strip() or len(body) > 10000:
-		frappe.throw(_("Enter a message of up to 10,000 characters."))
-
-	pdf = _pdf_content(_render_quotation(quote))
-	queue = frappe.sendmail(
-		recipients=[recipient],
-		subject=subject.strip(),
-		message=escape(body.strip()).replace("\n", "<br>"),
-		attachments=[{"fname": _pdf_filename(quote.name), "fcontent": pdf}],
-		reference_doctype=quote.doctype,
-		reference_name=quote.name,
-		add_unsubscribe_link=0,
-	)
-	if not queue:
-		frappe.throw(_("The quotation email could not be queued. Check the outgoing email account."))
-	return {"email_queue": queue.name}
+	return send(name, recipient, subject, body, modified, confirm_expired)

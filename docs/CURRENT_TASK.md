@@ -1,4 +1,52 @@
-# CURRENT TASK — Zalo OA Inbox and reply experience
+# CURRENT TASK — Quotation Emails and threaded replies
+
+Status — COMPLETION PASS IMPLEMENTED in the current WSL worktree. Automated/API/build verification passes; browser and live-mail verification remain for Tuyền. Preserve the existing Order, Call Log, Zalo OA and generated-asset changes.
+
+## Completion pass — recipient, layout and automatic delivery
+
+1. Resolve the initial PDF recipient from the readable Quotation Contact, then Company email; expose readable Contacts from the same Company for name/email search while preserving manual entry and clearing state between quotations.
+2. Use the available page width, keep product-table overflow local, widen the Send and Reply composers, and distinguish Outgoing/Received direction from Queued/Sent/Failed/Unknown delivery state.
+3. Build mail with the configured CRM outgoing account as From and its receiving inbox as Reply-To. Enqueue the newly committed Email Queue immediately with a deduplicated background job instead of waiting for the scheduler's next `all` tick.
+4. Poll queued mail for a bounded interval, prefer Communication delivery state when Queue records have been cleaned up, and retain manual Refresh.
+5. Only allow Reply to a Received Communication. Warn and require explicit confirmation when sending a PDF after the site's `valid_until` date; Reply remains available.
+
+## Objective
+
+Add an Emails tab to saved `DoubleT Quotation` records so Sales can read inbound and outbound Frappe `Communication` history, see real Email Queue delivery status and attachments, and reply in the same email thread without leaving DoubleT CRM.
+
+## Implementation scope
+
+1. Reuse the existing email presentation/editor patterns where compatible, but expose quotation-specific, permission-checked DoubleT APIs.
+2. Load Communications linked to the quotation, including inbound mail such as `CRM-INBOUND-01`; show sender, recipients, subject, timestamp, content, attachments, loading, empty and error states.
+3. Send quotation PDFs through the existing Email Queue while creating exactly one outbound Communication linked to the quotation. Show Queued, Sent or Failed from the actual queue state. Preserve the existing quotation lifecycle and manual `Mark as Sent` behavior.
+4. Reply to a selected Communication with recipients prefilled, Frappe threading metadata preserved and the outbound Communication linked to the same quotation. Prevent duplicate submission and retain the draft after errors.
+5. Require quotation read permission for history, quotation write permission for send/reply, verify that the replied-to Communication belongs to the quotation, and preserve normal File permissions.
+6. Keep Deal email, automatic Contact/Lead association and a global Inbox outside this task.
+
+## Acceptance checks
+
+| Case | Expected result |
+|---|---|
+| Existing inbound | Opening `QUO-00005` → Emails shows `CRM-INBOUND-01` immediately from its saved Communication link. |
+| PDF delivery | One Send action creates one outbound Communication and one queued email with the quotation PDF; the tab reports Queued / Sent / Failed from Email Queue. |
+| Threaded reply | Reply prefills the original counterparty, uses Frappe reply/thread headers, links the outbound Communication to the quotation and resists double clicks. A failed attempt keeps the draft. |
+| Permissions | Users without quotation read access cannot fetch history or attachments; users without quotation write access cannot send or reply; a Communication from another record cannot be used as the reply source. |
+| Regression | PDF export, quotation status transitions and manual `Mark as Sent` retain their current behavior. Production build and focused backend tests pass. |
+
+## Verification record — 2026-11-17
+
+- PASS — `get_quotation_emails("QUO-00005")` returned the Received Communication with subject `Re: Quotation QUO-00005` and content containing `CRM-INBOUND-01`.
+- PASS — `get_quotation_email_context("QUO-00005")` resolved Contact `Đỗ Hoa <dohoa@gmail.com>`, listed that Contact under the linked Company, and reported `valid_until=2026-11-15` as expired on the site date.
+- PASS — focused Quotation Email suite: 7/7. Coverage includes Contact/Company/no-email recipient resolution and same-company search, linked inbound history, private attachment filtering, Guest/read-only denial, one Communication and one queue job per send call, scheduler-compatible queue locking, PDF attachment, Communication-first/Unknown status, expired confirmation, Received-only threaded Reply and cross-quotation rejection.
+- PASS — production build completed for 2,461 modules with only the existing large-chunk warning. Python compile and `git diff --check` pass.
+- PASS — queue diagnosis for `k1v4krnns6`: it changed from Not Sent to Sent after about four minutes; scheduler and worker were online. The wait was the scheduler's `all` interval, not an observed SMTP failure. The completion pass now enqueues that queue's `send` method after commit.
+- PARTIAL — the existing Quotation regression suite passed 18/19. The remaining test compares Decimal totals before reload with float totals after reload; no quotation email file participates in that conversion.
+- NOT TESTED — authenticated browser opening `QUO-00005` → Emails, visual content/attachment behavior, responsive layout and refresh.
+- NOT TESTED — real PDF delivery through the completion-pass path, resulting automatic Queued → Sent/Failed transition, corrected live From/Reply-To headers, and a real reply grouped in the recipient mailbox thread.
+
+---
+
+# Previous task — Zalo OA Inbox and reply experience
 
 Status — Task 24C implemented in the current WSL worktree. Backend regression, production build and API acceptance on `doublet.localhost` pass; interactive browser checks remain pending.
 
