@@ -1,0 +1,150 @@
+{
+  "doctype": "DocType",
+  "name": "DoubleT Order",
+  "module": "DoubleT CRM",
+  "autoname": "naming_series:",
+  "engine": "InnoDB",
+  "track_changes": 1,
+  "field_order": [
+    "naming_series",
+    "order_date",
+    "customer_type",
+    "contact",
+    "company",
+    "deal",
+    "quotation",
+    "currency",
+    "status",
+    "items",
+    "subtotal",
+    "total_discount",
+    "total",
+    "notes"
+  ],
+  "fields": [
+    {
+      "fieldname": "naming_series",
+      "fieldtype": "Select",
+      "label": "Series",
+      "options": "ORD-.#####",
+      "default": "ORD-.#####",
+      "reqd": 1,
+      "hidden": 1
+    },
+    {
+      "fieldname": "order_date",
+      "fieldtype": "Date",
+      "label": "Order Date",
+      "default": "Today",
+      "reqd": 1
+    },
+    {
+      "fieldname": "customer_type",
+      "fieldtype": "Select",
+      "label": "Customer Type",
+      "options": "\nPERSONAL\nCOMPANY",
+      "reqd": 1
+    },
+    {
+      "fieldname": "contact",
+      "fieldtype": "Link",
+      "label": "Contact",
+      "options": "DoubleT Contact"
+    },
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "label": "Company",
+      "options": "DoubleT Company"
+    },
+    {
+      "fieldname": "deal",
+      "fieldtype": "Link",
+      "label": "Deal",
+      "options": "DoubleT Deal"
+    },
+    {
+      "fieldname": "quotation",
+      "fieldtype": "Link",
+      "label": "Quotation",
+      "options": "DoubleT Quotation",
+      "unique": 1,
+      "no_copy": 1
+    },
+    {
+      "fieldname": "currency",
+      "fieldtype": "Select",
+      "label": "Currency",
+      "options": "USD",
+      "default": "USD",
+      "reqd": 1
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "Draft\nConfirmed\nCompleted\nCancelled",
+      "default": "Draft",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "items",
+      "fieldtype": "Table",
+      "label": "Items",
+      "options": "DoubleT Order Item",
+      "reqd": 1
+    },
+    {
+      "fieldname": "subtotal",
+      "fieldtype": "Currency",
+      "label": "Subtotal before Discounts",
+      "options": "currency",
+      "precision": "2",
+      "read_only": 1
+    },
+    {
+      "fieldname": "total_discount",
+      "fieldtype": "Currency",
+      "label": "Total Discount",
+      "options": "currency",
+      "precision": "2",
+      "read_only": 1
+    },
+    {
+      "fieldname": "total",
+      "fieldtype": "Currency",
+      "label": "Total",
+      "options": "currency",
+      "precision": "2",
+      "read_only": 1
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Small Text",
+      "label": "Notes"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "create": 1,
+      "write": 1,
+      "delete": 1
+    },
+    {
+      "role": "Sales Manager",
+      "read": 1,
+      "create": 1,
+      "write": 1,
+      "delete": 1
+    },
+    {
+      "role": "Sales User",
+      "read": 1,
+      "create": 1,
+      "write": 1
+    }
+  ]
+}

@@ -3,6 +3,7 @@
     <LayoutHeader>
       <template #left-header><Button variant="subtle" :label="__('Quotations')" @click="router.push({ name: 'Quotations' })" /><span class="ml-2 text-base font-semibold">{{ isNew ? __('New Quotation') : (doc?.name || __('Quotation')) }}</span></template>
       <template #right-header>
+        <Button v-if="!isNew && doc && !editing && canCreateOrder" :label="__('Create Order')" :loading="creatingOrder" :disabled="saving" @click="createOrder" />
         <Button v-if="!isNew && doc && !editing" :label="__('Export PDF')" :loading="exporting" @click="exportPdf" />
         <Button v-if="!isNew && doc?.deal" :label="__('Back to Deal')" @click="router.push({ name: 'DealDetail', params: { dealId: doc.deal }, hash: '#quotations' })" />
         <Button v-if="!isNew && doc && canWrite && doc.status === 'Draft' && !editing" :label="__('Edit')" @click="startEditing" />
@@ -154,28 +155,26 @@ import { Button, Dialog, TextInput, call } from 'frappe-ui'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import QuotationEmails from '@/components/QuotationEmails.vue'
 import { dealsForCustomer, lineAmounts, message, money } from '@/utils/quotation'
+import { useSellableProducts } from '@/composables/useSellableProducts'
 
 const route = useRoute(), router = useRouter()
 const isNew = computed(() => route.name === 'QuotationCreate')
 const doc = ref(null), loading = ref(true), saving = ref(false), editing = ref(false)
 const exporting = ref(false)
 const activeTab = ref('details'), emailRefreshKey = ref(0)
+const creatingOrder = ref(false), canCreateOrder = ref(false)
 const showEmailDialog = ref(false), sendingEmail = ref(false), emailError = ref(''), emailQueue = ref('')
 const email = reactive({ recipient: '', subject: '', body: '' })
 const emailContextLoading = ref(false), emailContactSearch = ref(''), selectedEmailContact = ref(''), recipientSource = ref('')
 const emailContext = reactive({ suggested: null, company: null, companyContacts: [], validUntil: '', isExpired: false })
 const canWrite = ref(false), canDelete = ref(false), error = ref(''), dealError = ref(''), optionsError = ref(''), conflict = ref(false)
-const contacts = ref([]), companies = ref([]), deals = ref([]), priceLists = ref([]), products = ref([])
-const productSearch = ref('')
-const productsLoading = ref(false), productHasNextPage = ref(true), productPickerError = ref('')
+const contacts = ref([]), companies = ref([]), deals = ref([]), priceLists = ref([])
+const { products, productSearch, productsLoading, productHasNextPage, productPickerError, loadProducts, productPickerLabel } = useSellableProducts()
 const dealLoading = ref(false)
 const dealLabel = ref('')
 let dealRequestId = 0
-let productRequestId = 0
-let productSearchTimer = null
 let emailContactSearchTimer = null
 let emailContextRequest = 0
-const productPageLength = 20
 const pricingStates = new WeakMap()
 const editable = computed(() => (isNew.value && canWrite.value) || (!isNew.value && editing.value && canWrite.value && doc.value?.status === 'Draft'))
 const availableContacts = computed(() => doc.value?.customer_type === 'COMPANY' ? contacts.value.filter(c => c.company === doc.value.company) : contacts.value)
@@ -199,109 +198,12 @@ async function loadOptions() {
   if (results.some(r => r.status === 'rejected')) optionsError.value = __('Some linked records could not be loaded. Check your access and retry.')
 }
 
-watch(productSearch, () => {
-  clearTimeout(productSearchTimer)
-  productSearchTimer = setTimeout(() => loadProducts(), 250)
-})
-
 watch(emailContactSearch, () => {
   clearTimeout(emailContactSearchTimer)
   if (!showEmailDialog.value || !emailContext.company || emailContextLoading.value) return
   emailContactSearchTimer = setTimeout(() => loadEmailContext(emailContactSearch.value, false), 250)
 })
 
-async function loadProducts({ append = false } = {}) {
-  if (productsLoading.value && append) return
-  if (append && !productHasNextPage.value) return
-
-  const requestId = ++productRequestId
-  const start = append ? products.value.length : 0
-  if (!append) {
-    products.value = []
-    productHasNextPage.value = true
-  }
-  productsLoading.value = true
-  productPickerError.value = ''
-  const search = productSearch.value.trim()
-  try {
-    const data = await call('frappe.client.get_list', {
-      doctype: 'DoubleT Product',
-      fields: ['name', 'product_name', 'sku', 'product_kind', 'variant_of'],
-      filters: [
-        ['is_active', '=', 1],
-        ['product_kind', 'in', ['Standard', 'Variant']],
-      ],
-      or_filters: search
-        ? [
-            ['product_name', 'like', `%${search}%`],
-            ['sku', 'like', `%${search}%`],
-          ]
-        : undefined,
-      order_by: 'product_name asc',
-      limit_start: start,
-      limit_page_length: productPageLength,
-    })
-    if (requestId !== productRequestId) return
-
-    const page = Array.isArray(data) ? data : []
-    const detailedPage = await hydrateProductDetails(page, requestId)
-    if (requestId !== productRequestId) return
-    const byName = new Map((append ? products.value : []).map((product) => [product.name, product]))
-    detailedPage.forEach((product) => byName.set(product.name, product))
-    products.value = [...byName.values()]
-    productHasNextPage.value = page.length === productPageLength
-  } catch (exception) {
-    if (requestId === productRequestId) productPickerError.value = message(exception)
-  } finally {
-    if (requestId === productRequestId) productsLoading.value = false
-  }
-}
-
-async function hydrateProductDetails(page, requestId) {
-  const variantParents = [...new Set(page.map((product) => product.variant_of).filter(Boolean))]
-  const variantNames = page.filter((product) => product.product_kind === 'Variant').map((product) => product.name)
-  if (!variantParents.length && !variantNames.length) return page
-
-  const [parentsResult, attributesResult] = await Promise.allSettled([
-    variantParents.length
-      ? call('frappe.client.get_list', {
-          doctype: 'DoubleT Product',
-          fields: ['name', 'product_name', 'sku'],
-          filters: [['name', 'in', variantParents]],
-          limit_page_length: variantParents.length,
-        })
-      : Promise.resolve([]),
-    variantNames.length
-      ? call('frappe.client.get_list', {
-          doctype: 'DoubleT Product Variant Attribute',
-          fields: ['parent', 'attribute_name', 'attribute_value'],
-          filters: [
-            ['parent', 'in', variantNames],
-            ['parenttype', '=', 'DoubleT Product'],
-            ['parentfield', '=', 'variant_attributes'],
-          ],
-          limit_page_length: 5000,
-        })
-      : Promise.resolve([]),
-  ])
-  if (requestId !== productRequestId) return []
-
-  const parents = parentsResult.status === 'fulfilled' ? parentsResult.value : []
-  const attributes = attributesResult.status === 'fulfilled' ? attributesResult.value : []
-
-  const parentByName = new Map((parents || []).map((parent) => [parent.name, parent]))
-  const attributesByProduct = {}
-  for (const attribute of attributes || []) {
-    if (!attribute.parent || !attribute.attribute_name) continue
-    const values = attributesByProduct[attribute.parent] || (attributesByProduct[attribute.parent] = [])
-    values.push(`${attribute.attribute_name}: ${attribute.attribute_value}`)
-  }
-  return page.map((product) => ({
-    ...product,
-    variant_parent: parentByName.get(product.variant_of),
-    variant_attributes: attributesByProduct[product.name] || [],
-  }))
-}
 async function loadDocument() {
   loading.value = true; error.value = ''; dealError.value = ''; conflict.value = false
   try {
@@ -504,14 +406,6 @@ function pricingSourceLabel(item) {
   }
   return state.source === 'product' ? __('Product default price') : ''
 }
-function productPickerLabel(product) {
-  const details = [product.sku].filter(Boolean)
-  if (product.product_kind === 'Variant') {
-    if (product.variant_parent) details.push(`${__('Variant of')} ${product.variant_parent.product_name || product.variant_parent.name}`)
-    if (product.variant_attributes?.length) details.push(product.variant_attributes.join(', '))
-  }
-  return `${product.product_name || product.name} — ${details.join(' · ')}`
-}
 function validate() {
   const d = doc.value
   if (dealError.value) return dealError.value
@@ -533,6 +427,15 @@ function setError(e) {
   const text = message(e)
   if (e?.exc_type === 'TimestampMismatchError' || /modified after/i.test(text)) { conflict.value = true; error.value = __('This quotation was changed by another user. Reload the latest version before saving.') }
   else error.value = text
+}
+async function createOrder() {
+  if (creatingOrder.value || saving.value || editing.value || !doc.value?.name) return
+  creatingOrder.value = true
+  error.value = ''
+  try {
+    const orderId = await call('doublet_crm.doublet_crm.doctype.doublet_order.doublet_order.create_order_from_quotation', { quotation: doc.value.name })
+    await router.push({ name: 'OrderDetail', params: { orderId } })
+  } catch (e) { setError(e) } finally { creatingOrder.value = false }
 }
 async function exportPdf() {
   if (exporting.value || !doc.value?.name) return
@@ -660,6 +563,9 @@ async function remove() {
   try { await call('frappe.client.delete', { doctype: 'DoubleT Quotation', name: doc.value.name }); await router.push({ name: 'Quotations' }) } catch (e) { setError(e) } finally { saving.value = false }
 }
 onMounted(async () => {
+  call('frappe.client.has_permission', { doctype: 'DoubleT Order', docname: '', perm_type: 'create' })
+    .then(result => { canCreateOrder.value = Boolean(result?.has_permission) })
+    .catch(() => { canCreateOrder.value = false })
   loadOptions()
   loadProducts()
   await loadDocument()
@@ -674,7 +580,6 @@ watch(() => route.params.quotationId, async (current, previous) => {
   await loadDocument()
 })
 onBeforeUnmount(() => {
-  clearTimeout(productSearchTimer)
   clearTimeout(emailContactSearchTimer)
 })
 </script>
