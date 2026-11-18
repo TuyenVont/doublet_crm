@@ -34,6 +34,7 @@ declare module 'vue' {
     ButtonControl: typeof import('./src/components/Controls/ButtonControl.vue')['default']
     CalendarIcon: typeof import('./src/components/Icons/CalendarIcon.vue')['default']
     CallArea: typeof import('./src/components/Activities/CallArea.vue')['default']
+    CallLogAISummary: typeof import('./src/components/Modals/CallLogAISummary.vue')['default']
     CallLogDetailModal: typeof import('./src/components/Modals/CallLogDetailModal.vue')['default']
     CallLogsListView: typeof import('./src/components/ListViews/CallLogsListView.vue')['default']
     CameraIcon: typeof import('./src/components/Icons/CameraIcon.vue')['default']

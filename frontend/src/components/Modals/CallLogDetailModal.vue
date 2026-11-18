@@ -173,6 +173,15 @@
                 ></audio>
               </section>
 
+              <!-- AI Summary -->
+              <CallLogAISummary
+                :key="callLog.name"
+                :call-log-name="callLog.name || ''"
+                :recording-url="callLog.recording_url || ''"
+                @note-updated="(val) => (callLog.note = val)"
+                @recording-updated="(val) => (callLog.recording_url = val)"
+              />
+
               <!-- Note -->
               <section class="rounded-2xl border bg-white p-4">
                 <div class="flex items-center gap-2">
@@ -246,6 +255,7 @@
 <script setup>
 import { Button, FeatherIcon } from 'frappe-ui'
 import { defineComponent, h } from 'vue'
+import CallLogAISummary from './CallLogAISummary.vue'
 
 const show = defineModel({ type: Boolean })
 const callLog = defineModel('callLog', {
