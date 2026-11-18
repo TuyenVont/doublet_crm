@@ -57,22 +57,34 @@
             <span class="text-xs text-ink-gray-5">{{ __('Only active Standard Products and Variants are available.') }}</span>
           </div>
           <ErrorMessage v-if="editable && productPickerError" :message="productPickerError" />
-          <div class="overflow-x-auto rounded border">
-            <table class="w-full min-w-[1050px] text-left text-sm">
+          <div class="items-table rounded border">
+            <table class="w-full text-left text-sm">
+              <colgroup>
+                <col class="items-col-product" />
+                <col class="items-col-quantity" />
+                <col class="items-col-price" />
+                <col class="items-col-discount-type" />
+                <col class="items-col-discount" />
+                <col class="items-col-subtotal" />
+                <col class="items-col-action" />
+              </colgroup>
               <thead class="bg-surface-gray-1"><tr><th class="p-3">{{ __('Product') }}</th><th class="p-3">{{ __('Quantity') }}</th><th class="p-3">{{ __('Unit Price (USD)') }}</th><th class="p-3">{{ __('Discount Type') }}</th><th class="p-3">{{ __('Discount') }}</th><th class="p-3 text-right">{{ __('Subtotal (USD)') }}</th><th /></tr></thead>
               <tbody>
-                <tr v-for="(item, index) in doc.items" :key="item.name || index" class="border-t align-top">
-                  <td class="min-w-64 p-3">
-                    <select v-if="editable && !item.name" v-model="item.product" :disabled="saving" @change="selectProduct(item)"><option value="">{{ __('Select product') }}</option><option v-if="item.product && !products.some(p => p.name === item.product)" :value="item.product">{{ item.product_name || item.product }}</option><option v-for="product in products" :key="product.name" :value="product.name">{{ productPickerLabel(product) }}</option></select>
-                    <span v-else>{{ item.product_name || item.product }}</span>
-                    <div v-if="item.sku" class="mt-1 text-xs text-ink-gray-5">{{ item.sku }}</div>
+                <tr v-for="(item, index) in doc.items" :key="item.name || index" class="item-row border-t align-top">
+                  <td class="item-product-cell p-3">
+                    <span class="item-field-label">{{ __('Product') }}</span>
+                    <div class="item-field-value">
+                      <select v-if="editable && !item.name" v-model="item.product" :disabled="saving" @change="selectProduct(item)"><option value="">{{ __('Select product') }}</option><option v-if="item.product && !products.some(p => p.name === item.product)" :value="item.product">{{ item.product_name || item.product }}</option><option v-for="product in products" :key="product.name" :value="product.name">{{ productPickerLabel(product) }}</option></select>
+                      <span v-else class="item-product-name">{{ item.product_name || item.product }}</span>
+                      <div v-if="item.sku" class="item-product-sku mt-1 text-xs text-ink-gray-5">{{ item.sku }}</div>
+                    </div>
                   </td>
-                  <td class="p-3"><TextInput v-if="editable" v-model="item.quantity" type="number" min="0" step="any" :disabled="saving" /><span v-else>{{ item.quantity }}</span></td>
-                  <td class="p-3"><TextInput v-if="editable" v-model="item.unit_price" type="number" min="0" step="0.01" :disabled="saving" @update:modelValue="markManualPrice(item)" /><span v-else>{{ money(item.unit_price) }}</span><div v-if="itemPricing(item).loading" class="mt-1 text-xs">{{ __('Loading price...') }}</div><div v-if="itemPricing(item).error" class="mt-1 text-xs text-red-600">{{ itemPricing(item).error }}</div></td>
-                  <td class="p-3"><select v-if="editable" v-model="item.discount_type" :disabled="saving" @change="discountTypeChanged(item)"><option value="Percentage">{{ __('Percentage') }}</option><option value="Amount">{{ __('Amount') }}</option></select><span v-else>{{ item.discount_type === 'Amount' ? __('Amount') : __('Percentage') }}</span></td>
-                  <td class="p-3"><TextInput v-if="editable && item.discount_type === 'Amount'" v-model="item.discount_amount" type="number" min="0" step="0.01" :disabled="saving" /><TextInput v-else-if="editable" v-model="item.discount_percent" type="number" min="0" max="100" step="any" :disabled="saving" /><span v-else>{{ item.discount_type === 'Amount' ? money(item.discount_amount) : `${item.discount_percent || 0}%` }}</span></td>
-                  <td class="p-3 text-right">{{ money(editable ? lineAmounts(item).total : item.subtotal) }}</td>
-                  <td class="p-3"><Button v-if="editable" icon="trash-2" variant="ghost" :tooltip="__('Remove')" :disabled="saving" @click="doc.items.splice(index, 1)" /></td>
+                  <td class="item-quantity-cell p-3"><span class="item-field-label">{{ __('Quantity') }}</span><div class="item-field-value"><TextInput v-if="editable" v-model="item.quantity" type="number" min="0" step="any" :disabled="saving" /><span v-else>{{ item.quantity }}</span></div></td>
+                  <td class="item-price-cell p-3"><span class="item-field-label">{{ __('Unit Price (USD)') }}</span><div class="item-field-value"><TextInput v-if="editable" v-model="item.unit_price" type="number" min="0" step="0.01" :disabled="saving" @update:modelValue="markManualPrice(item)" /><span v-else>{{ money(item.unit_price) }}</span><div v-if="itemPricing(item).loading" class="mt-1 text-xs">{{ __('Loading price...') }}</div><div v-if="itemPricing(item).error" class="mt-1 text-xs text-red-600">{{ itemPricing(item).error }}</div></div></td>
+                  <td class="item-discount-type-cell p-3"><span class="item-field-label">{{ __('Discount Type') }}</span><div class="item-field-value"><select v-if="editable" v-model="item.discount_type" :disabled="saving" @change="discountTypeChanged(item)"><option value="Percentage">{{ __('Percentage') }}</option><option value="Amount">{{ __('Amount') }}</option></select><span v-else>{{ item.discount_type === 'Amount' ? __('Amount') : __('Percentage') }}</span></div></td>
+                  <td class="item-discount-cell p-3"><span class="item-field-label">{{ __('Discount') }}</span><div class="item-field-value"><TextInput v-if="editable && item.discount_type === 'Amount'" v-model="item.discount_amount" type="number" min="0" step="0.01" :disabled="saving" /><TextInput v-else-if="editable" v-model="item.discount_percent" type="number" min="0" max="100" step="any" :disabled="saving" /><span v-else>{{ item.discount_type === 'Amount' ? money(item.discount_amount) : `${item.discount_percent || 0}%` }}</span></div></td>
+                  <td class="item-subtotal-cell p-3 text-right"><span class="item-field-label">{{ __('Subtotal (USD)') }}</span><div class="item-field-value item-subtotal-value">{{ money(editable ? lineAmounts(item).total : item.subtotal) }}</div></td>
+                  <td class="item-action-cell p-3"><span v-if="editable" class="item-field-label">{{ __('Remove') }}</span><div class="item-field-value"><Button v-if="editable" icon="trash-2" variant="ghost" :tooltip="__('Remove')" :disabled="saving" @click="doc.items.splice(index, 1)" /></div></td>
                 </tr>
               </tbody>
             </table>
@@ -274,4 +286,30 @@ onMounted(() => { loadOptions(); loadProducts() })
 .field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.875rem; }
 select, textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 0.25rem; padding: 0.4rem; background: white; }
 fieldset:disabled { opacity: 0.8; }
+.items-table { max-width: 100%; }
+.items-table table { table-layout: fixed; }
+.items-table th, .items-table td { min-width: 0; }
+.items-col-product { width: 27%; }
+.items-col-quantity { width: 10%; }
+.items-col-price { width: 15%; }
+.items-col-discount-type { width: 16%; }
+.items-col-discount { width: 12%; }
+.items-col-subtotal { width: 12%; }
+.items-col-action { width: 8%; }
+.item-field-label { display: none; }
+.item-field-value, .item-product-name, .item-product-sku { min-width: 0; overflow-wrap: anywhere; }
+.item-product-name, .item-product-sku { white-space: normal; }
+.item-subtotal-value { white-space: nowrap; }
+
+@media (max-width: 767px) {
+  .items-table colgroup { display: none; }
+  .items-table table, .items-table tbody, .items-table tr, .items-table td { display: block; }
+  .items-table thead { display: none; }
+  .items-table tr.item-row { display: grid; gap: 0.5rem; padding: 0.75rem; }
+  .items-table td { display: grid; grid-template-columns: minmax(7rem, 38%) minmax(0, 1fr); gap: 0.75rem; align-items: start; width: 100%; padding: 0; text-align: left; }
+  .items-table td.item-subtotal-cell { text-align: left; }
+  .item-field-label { display: block; padding-top: 0.4rem; color: #6b7280; font-size: 0.75rem; font-weight: 500; line-height: 1.25rem; }
+  .item-subtotal-value { text-align: right; }
+  .item-action-cell .item-field-value { display: flex; align-items: center; }
+}
 </style>
