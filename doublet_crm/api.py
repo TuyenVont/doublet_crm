@@ -785,3 +785,97 @@ def create_call_log(
         "reference_name": doc.reference_name,
         "duplicate": False,
     }
+
+
+@frappe.whitelist()
+def get_call_log_stats():
+    """Summarize all calls readable by the current user."""
+    frappe.has_permission("DoubleT Call Log", "read", throw=True)
+    rows = frappe.get_list(
+        "DoubleT Call Log",
+        fields=["status", "count(*) as call_count", "sum(duration) as duration_sum"],
+        group_by="status",
+        order_by="status asc",
+        limit_page_length=0,
+    )
+
+    total = completed = missed = duration = 0
+    for row in rows:
+        count = int(row.call_count or 0)
+        total += count
+        duration += int(row.duration_sum or 0)
+        if row.status == "Completed":
+            completed += count
+        elif row.status in ("Missed", "No Answer"):
+            missed += count
+
+    return {
+        "total": total,
+        "completed": completed,
+        "missed": missed,
+        "avg_duration": int(duration / total + 0.5) if total else 0,
+    }
+
+
+@frappe.whitelist()
+def get_call_logs_page(page=1, page_size=25, search=None, status=None, call_type=None):
+    """Page through Call Logs using the same row permissions as the statistics."""
+    frappe.has_permission("DoubleT Call Log", "read", throw=True)
+    page = _page_value(page, 1, 1, _("Page"))
+    page_size = _page_value(page_size, 25, 1, _("Page size"))
+    if page_size > 100:
+        frappe.throw(_("Page size cannot exceed 100."), frappe.ValidationError)
+
+    status = cstr(status).strip()
+    call_type = cstr(call_type).strip()
+    if status and status not in CALL_LOG_STATUSES:
+        frappe.throw(_("Invalid Call Log status."), frappe.ValidationError)
+    if call_type and call_type not in CALL_LOG_TYPES:
+        frappe.throw(_("Invalid Call Type."), frappe.ValidationError)
+
+    filters = {}
+    if status:
+        filters["status"] = status
+    if call_type:
+        filters["call_type"] = call_type
+
+    or_filters = None
+    term = cstr(search).strip()[:100]
+    if term:
+        term = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        or_filters = {
+            field: ["like", f"%{term}%"]
+            for field in (
+                "from_number", "to_number", "agent", "reference_name",
+                "reference_doctype", "external_call_id", "line_number", "status", "call_type",
+            )
+        }
+
+    counts = frappe.get_list(
+        "DoubleT Call Log",
+        fields=["count(*) as total"],
+        filters=filters,
+        or_filters=or_filters,
+        order_by=None,
+        limit_page_length=1,
+    )
+    total = int(counts[0].total or 0) if counts else 0
+    offset = (page - 1) * page_size
+    rows = []
+    if offset < total:
+        rows = frappe.get_list(
+            "DoubleT Call Log",
+            fields=[
+                "name", "agent", "line_number", "call_type", "duration", "start_time",
+                "end_time", "status", "from_number", "to_number", "recording_url",
+                "reference_doctype", "reference_name", "note", "external_call_id",
+                "creation", "modified",
+            ],
+            filters=filters,
+            or_filters=or_filters,
+            order_by="start_time desc, creation desc, name desc",
+            limit_start=offset,
+            limit_page_length=page_size,
+        )
+
+    return {"rows": rows, "total": total, "page": page, "page_size": page_size}
