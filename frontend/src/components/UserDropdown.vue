@@ -47,6 +47,9 @@
 
 <script setup>
 import BrandLogo from '@/components/BrandLogo.vue'
+import { sessionStore } from '@/stores/session'
+import { usersStore } from '@/stores/users'
+import { currentUserDisplayName } from '@/utils/userDisplay'
 import { Dropdown } from 'frappe-ui'
 import { computed } from 'vue'
 
@@ -54,8 +57,13 @@ defineProps({
   isCollapsed: { type: Boolean, default: false },
 })
 
+const session = sessionStore()
+const { getUser } = usersStore()
+
 const brandName = computed(() => 'DoubleT CRM')
-const userFullName = computed(() => window.boot?.user || 'Administrator')
+const userFullName = computed(() =>
+  currentUserDisplayName(session.user, getUser, __('Not signed in')),
+)
 
 const dropdownItems = computed(() => [
   {

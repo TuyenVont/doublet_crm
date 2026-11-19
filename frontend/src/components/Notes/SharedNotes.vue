@@ -9,6 +9,7 @@
           </p>
         </div>
         <Button
+          v-if="canCreateNote"
           :label="__('Add Note')"
           icon-left="plus"
           variant="solid"
@@ -201,9 +202,10 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Button, call } from 'frappe-ui'
+import { getCreatePermission } from '@/utils/permissions'
 
 const props = defineProps({
   management: { type: Boolean, default: false },
@@ -239,6 +241,7 @@ const referenceFilter = ref('')
 const referenceOptions = ref([])
 const referencesLoading = ref(false)
 const hasMore = ref(false)
+const canCreateNote = ref(false)
 const form = reactive({ title: '', content: '', reference_doctype: '', reference_name: '' })
 let requestSerial = 0
 let referenceRequestSerial = 0
@@ -269,6 +272,7 @@ function closeEditor() {
 }
 
 function startCreate() {
+  if (!canCreateNote.value) return
   editingName.value = ''
   form.title = ''
   form.content = ''
@@ -512,5 +516,10 @@ watch(referenceFilter, () => {
 onBeforeUnmount(() => {
   clearTimeout(searchTimer)
   requestSerial += 1
+})
+
+onMounted(async () => {
+  const permission = await getCreatePermission(call, 'DoubleT Note')
+  canCreateNote.value = permission.allowed
 })
 </script>

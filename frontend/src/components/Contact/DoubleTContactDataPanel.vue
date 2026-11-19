@@ -4,10 +4,12 @@
       <div class="mb-6 flex items-center justify-between">
         <div>
           <h2 class="text-xl font-semibold text-ink-gray-9">{{ __('Data') }}</h2>
-          <p class="mt-1 text-sm text-ink-gray-5">{{ __('Edit contact information directly.') }}</p>
+          <p class="mt-1 text-sm text-ink-gray-5">
+            {{ canWrite ? __('Edit contact information directly.') : __('View contact information.') }}
+          </p>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div v-if="canWrite" class="flex items-center gap-2">
           <button
             v-if="dirty && !isNew"
             type="button"
@@ -80,6 +82,7 @@
         </div>
       </div>
 
+      <fieldset :disabled="!canWrite">
       <section class="rounded-xl border border-outline-gray-2 bg-white">
         <div class="border-b px-5 py-4">
           <h3 class="font-semibold text-ink-gray-9">{{ __('Contact Information') }}</h3>
@@ -150,6 +153,7 @@
             <Link
               :value="form.source"
               doctype="DoubleT Lead Source"
+              :disabled="!canWrite"
               :placeholder="__('Select Source')"
               @change="value => (form.source = value || '')"
             />
@@ -160,6 +164,7 @@
             <Link
               :value="form.contact_owner"
               doctype="User"
+              :disabled="!canWrite"
               :hide-me="true"
               :placeholder="__('Select Primary Owner')"
               @change="value => (form.contact_owner = value || '')"
@@ -179,6 +184,7 @@
             <Link
               :value="form.company"
               doctype="DoubleT Company"
+              :disabled="!canWrite"
               :placeholder="__('Select Company')"
               @change="value => (form.company = value || '')"
             />
@@ -189,6 +195,7 @@
             <Link
               :value="form.price_list"
               doctype="DoubleT Price List"
+              :disabled="!canWrite"
               :placeholder="__('Select Price List')"
               @change="value => (form.price_list = value || '')"
             />
@@ -220,6 +227,7 @@
           />
         </div>
       </section>
+      </fieldset>
     </div>
   </div>
 </template>
@@ -233,6 +241,7 @@ import Link from '@/components/Controls/Link.vue'
 const props = defineProps({
   contact: { type: Object, default: null },
   isNew: { type: Boolean, default: false },
+  canWrite: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['saved'])
@@ -334,7 +343,7 @@ async function checkDuplicates() {
 }
 
 async function save(force = false) {
-  if (saving.value) return
+  if (!props.canWrite || saving.value) return
   error.value = ''
 
   if (!form.first_name.trim()) {

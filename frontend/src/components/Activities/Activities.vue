@@ -9,6 +9,8 @@
     :doc="doc"
     :whatsappBox="whatsappBox"
     :modalRef="modalRef"
+    :can-create-task="canCreateTask"
+    :can-create-note="canCreateNote"
   />
   <FadedScrollableDiv class="flex flex-col h-full overflow-y-auto">
     <div
@@ -489,6 +491,7 @@ import { startCase } from '@/utils'
 import { globalStore } from '@/stores/global'
 import { usersStore } from '@/stores/users'
 import { useTimelinePreferences } from '@/composables/useTimelinePreferences'
+import { getActivityCreatePermissions } from '@/utils/activityPermissions'
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
 import { useTelemetry } from 'frappe-ui/frappe'
@@ -532,6 +535,14 @@ const doc = computed(() => _document.doc || {})
 const reload_email = ref(false)
 const modalRef = ref(null)
 const showFilesUploader = ref(false)
+const canCreateTask = ref(false)
+const canCreateNote = ref(false)
+
+async function loadCreatePermissions() {
+  const permissions = await getActivityCreatePermissions(call)
+  canCreateTask.value = permissions.canCreateTask
+  canCreateNote.value = permissions.canCreateNote
+}
 
 const title = computed(() => props.tabs?.[tabIndex.value]?.name || 'Activity')
 
@@ -671,6 +682,7 @@ onBeforeUnmount(() => {
 })
 
 onMounted(() => {
+  loadCreatePermissions()
   $socket.on('whatsapp_message', (data) => {
     if (
       data.reference_doctype === props.doctype &&

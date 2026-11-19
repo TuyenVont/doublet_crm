@@ -2,7 +2,7 @@
   <Dialog v-model:open="show" :size="'xl'">
     <template #body>
       <div
-        v-if="!confirmDeleteInfo.show"
+        v-if="lookup.status === 'success' && !confirmDeleteInfo.show"
         class="bg-surface-elevation-1 px-4 pb-6 pt-5 sm:px-6"
       >
         <div class="mb-6 flex items-center justify-between">
@@ -60,7 +60,31 @@
           </div>
         </div>
       </div>
-      <div v-if="!confirmDeleteInfo.show" class="px-4 pb-7 pt-0 sm:px-6">
+      <div
+        v-else-if="!confirmDeleteInfo.show"
+        class="bg-surface-elevation-1 px-4 pb-7 pt-5 sm:px-6"
+      >
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-semibold text-ink-gray-9">
+              {{ lookup.status === 'loading' ? __('Checking linked documents...') : __('Unable to verify linked documents') }}
+            </h3>
+            <p v-if="lookup.status === 'error'" class="mt-2 text-sm text-red-600">
+              {{ __(lookup.message) }}
+            </p>
+          </div>
+          <Button
+            v-if="lookup.status === 'error'"
+            :label="__('Retry')"
+            :loading="linkedDocsResource.loading"
+            @click="linkedDocsResource.reload()"
+          />
+        </div>
+      </div>
+      <div
+        v-if="lookup.status === 'success' && !confirmDeleteInfo.show"
+        class="px-4 pb-7 pt-0 sm:px-6"
+      >
         <div class="flex flex-row-reverse gap-2">
           <Button
             v-if="linkedDocs?.length > 0"
@@ -91,7 +115,7 @@
             variant="solid"
             icon-left="lucide-trash-2"
             :label="__('Delete')"
-            :loading="isDealCreating"
+            :loading="deleting"
             theme="red"
             @click="deleteDoc()"
           />
@@ -134,6 +158,7 @@
 import { createResource, call } from 'frappe-ui'
 import { useRouter } from 'vue-router'
 import { computed, ref } from 'vue'
+import { linkedDocLookupState } from '@/utils/linkedDocDelete'
 
 const show = defineModel({ type: Boolean })
 const router = useRouter()
@@ -154,9 +179,10 @@ const confirmDeleteInfo = ref({
   show: false,
   title: '',
 })
+const deleting = ref(false)
 
 const linkedDocsResource = createResource({
-  url: 'crm.api.doc.get_linked_docs_of_document',
+  url: 'doublet_crm.api.get_linked_docs_of_document',
   params: {
     doctype: props.doctype,
     docname: props.docname,
@@ -169,9 +195,10 @@ const linkedDocsResource = createResource({
   },
 })
 
+const lookup = computed(() => linkedDocLookupState(linkedDocsResource))
 const linkedDocs = computed(() => {
   return (
-    linkedDocsResource.data?.map((doc) => ({
+    lookup.value.docs.map((doc) => ({
       id: doc.reference_docname,
       ...doc,
     })) || []
@@ -214,6 +241,7 @@ const unlinkLinkedDoc = (doc) => {
 }
 
 const confirmDelete = () => {
+  if (lookup.value.status !== 'success') return
   const items =
     viewControls.value.selections.length == 0
       ? 'all'
@@ -227,6 +255,7 @@ const confirmDelete = () => {
 }
 
 const confirmUnlink = () => {
+  if (lookup.value.status !== 'success') return
   const items =
     viewControls.value.selections.length == 0
       ? 'all'
@@ -249,11 +278,17 @@ const removeDocLinks = () => {
 }
 
 const deleteDoc = async () => {
-  await call('frappe.client.delete', {
-    doctype: props.doctype,
-    name: props.docname,
-  })
-  router.push({ name: props.name })
-  props?.reload?.()
+  if (lookup.value.status !== 'success' || linkedDocs.value.length || deleting.value) return
+  deleting.value = true
+  try {
+    await call('frappe.client.delete', {
+      doctype: props.doctype,
+      name: props.docname,
+    })
+    router.push({ name: props.name })
+    props?.reload?.()
+  } finally {
+    deleting.value = false
+  }
 }
 </script>

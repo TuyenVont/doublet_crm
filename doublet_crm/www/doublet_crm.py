@@ -4,6 +4,20 @@ from frappe.translate import get_messages_for_boot
 no_cache = 1
 
 
+def get_whatsapp_feature_state():
+    if not frappe.db.exists("DocType", "WhatsApp Settings"):
+        return {"whatsapp_installed": False, "whatsapp_enabled": False}
+
+    default_outgoing = frappe.get_cached_value(
+        "WhatsApp Settings", "WhatsApp Settings", "default_outgoing_account"
+    )
+    enabled = bool(
+        default_outgoing
+        and frappe.get_cached_value("WhatsApp Account", default_outgoing, "status") == "Active"
+    )
+    return {"whatsapp_installed": True, "whatsapp_enabled": enabled}
+
+
 def get_context(context):
     if frappe.session.user == "Guest":
         frappe.local.flags.redirect_location = "/login?redirect-to=/doublet-crm"
@@ -46,6 +60,7 @@ def get_doublet_crm_settings():
         "favicon": favicon,
         "crm_timeline_timestamp_format": timestamp_format,
         "crm_timeline_sort_order": sort_order,
+        **get_whatsapp_feature_state(),
     }
 
 
