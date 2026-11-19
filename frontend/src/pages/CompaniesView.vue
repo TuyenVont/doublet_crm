@@ -56,7 +56,7 @@
 
     <div class="relative flex-1 overflow-hidden">
       <div
-        v-if="companiesResource.loading && !filteredRows.length"
+        v-if="companiesResource.loading && !rows.length"
         class="flex h-64 items-center justify-center text-sm text-ink-gray-5"
       >
         <LoadingIndicator class="mr-2 size-5" />
@@ -64,13 +64,14 @@
       </div>
 
       <DealsListView
-        v-else-if="filteredRows.length"
+        v-else-if="rows.length"
         doctype="DoubleT Company"
         detailRoute="CompanyDetail"
         detailParam="companyId"
-        :rows="filteredRows"
+        rowClickable
+        :rows="rows"
         :columns="columns"
-        :rowCount="filteredRows.length"
+        :rowCount="rows.length"
         :totalCount="totalCount"
         :options="{
           selectable: true,
@@ -91,7 +92,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 const router = useRouter()
 
@@ -115,23 +116,15 @@ import {
 
 const {
   companiesResource,
+  searchQuery,
+  selectedIndustry,
+  industryOptions,
   columns,
   rows,
   totalCount,
   reload,
   loadMore,
 } = useDoubleTCompanies()
-
-const searchQuery = ref('')
-const selectedIndustry = ref('')
-
-const industries = computed(() => [
-  ...new Set(
-    rows.value
-      .map((row) => row.industry)
-      .filter((value) => value && value !== '-')
-  ),
-])
 
 const industryDropdownOptions = computed(() => [
   {
@@ -141,38 +134,13 @@ const industryDropdownOptions = computed(() => [
     },
   },
 
-  ...industries.value.map((industry) => ({
+  ...industryOptions.value.map((industry) => ({
     label: industry,
     onClick: () => {
       selectedIndustry.value = industry
     },
   })),
 ])
-
-const filteredRows = computed(() => {
-  let result = rows.value
-
-  if (selectedIndustry.value) {
-    result = result.filter(
-      (row) => row.industry === selectedIndustry.value
-    )
-  }
-
-  if (searchQuery.value.trim()) {
-    const q = searchQuery.value.trim().toLowerCase()
-
-    result = result.filter((row) => {
-      return (
-        String(row.company_name || '').toLowerCase().includes(q) ||
-        String(row.industry || '').toLowerCase().includes(q) ||
-        String(row.email || '').toLowerCase().includes(q) ||
-        String(row.phone || '').toLowerCase().includes(q)
-      )
-    })
-  }
-
-  return result
-})
 
 function openDeskCreate() {
   router.push({ name: 'CompanyCreate' })

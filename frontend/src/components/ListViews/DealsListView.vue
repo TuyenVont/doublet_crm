@@ -1,9 +1,10 @@
 <template>
   <ListView
-    class="h-full overflow-hidden"
+    class="h-full overflow-hidden [&_a:focus-visible]:outline [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-offset-[-2px] [&_a:focus-visible]:outline-blue-500"
     :columns="columns"
     :rows="rows"
     :options="{
+      getRowRoute: rowClickable && detailRoute ? getRowRoute : null,
       selectable: options.selectable,
       showTooltip: options.showTooltip,
       resizeColumn: options.resizeColumn,
@@ -51,7 +52,7 @@
             </Tooltip>
           </div>
           <button
-            v-else-if="label && column.key === columns[0]?.key && detailRoute"
+            v-else-if="label && column.key === columns[0]?.key && detailRoute && !rowClickable"
             type="button"
             class="truncate text-left text-base hover:underline"
             @click.stop="openDetail(row.name)"
@@ -83,10 +84,6 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
-const router = useRouter()
-function openDetail(name) {
-  if (props.detailRoute && name) router.push({ name: props.detailRoute, params: { [props.detailParam]: name } })
-}
 
 import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import ListRows from '@/components/ListViews/ListRows.vue'
@@ -102,10 +99,13 @@ import {
   Button,
 } from 'frappe-ui'
 
+const router = useRouter()
+
 const props = defineProps({
   doctype: { type: String, default: 'DoubleT Deal' },
   detailRoute: { type: String, default: '' },
   detailParam: { type: String, default: 'id' },
+  rowClickable: { type: Boolean, default: false },
   rows: { type: Array, required: true },
   columns: { type: Array, required: true },
   rowCount: { type: Number, default: 0 },
@@ -119,6 +119,20 @@ const props = defineProps({
     }),
   },
 })
+
+function openDetail(name) {
+  const rowRoute = getRowRoute({ name })
+  if (rowRoute) router.push(rowRoute)
+}
+
+function getRowRoute(row) {
+  if (!props.detailRoute || !row?.name) return null
+
+  return {
+    name: props.detailRoute,
+    params: { [props.detailParam]: row.name },
+  }
+}
 
 const emit = defineEmits([
   'loadMore',
