@@ -11,6 +11,7 @@
 
       <template #right-header>
         <Button
+          v-if="canCreate"
           variant="solid"
           :label="__('Create')"
           iconLeft="plus"
@@ -129,7 +130,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import LayoutHeader from '@/components/LayoutHeader.vue'
@@ -142,15 +143,18 @@ import RefreshIcon from '@/components/Icons/RefreshIcon.vue'
 import LoadingIndicator from '@/components/Icons/LoadingIndicator.vue'
 
 import { useDoubleTContacts } from '@/composables/useDoubleTContacts'
+import { getCreatePermission } from '@/utils/permissions'
 
 import {
   Button,
   TextInput,
   Dropdown,
   FeatherIcon,
+  call,
 } from 'frappe-ui'
 
 const router = useRouter()
+const canCreate = ref(false)
 
 const {
   loading,
@@ -191,8 +195,14 @@ const sourceDropdownOptions =
   ])
 
 function openCreate() {
+  if (!canCreate.value) return
   router.push({
     name: 'ContactCreate',
   })
 }
+
+onMounted(async () => {
+  const permission = await getCreatePermission(call, 'DoubleT Contact')
+  canCreate.value = permission.allowed
+})
 </script>

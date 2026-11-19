@@ -18,22 +18,25 @@
       <template #right-header>
         <div v-if="!isNew && contact" class="flex items-center gap-2">
           <AssignTo
+            v-if="canWrite"
             v-model="assignees"
             doctype="DoubleT Contact"
             :docname="contact.name"
           />
-          <Button variant="subtle" icon="trash-2" :label="__('Delete')" @click="remove" />
+          <Button v-if="canDelete" variant="subtle" icon="trash-2" :label="__('Delete')" @click="remove" />
           <Button variant="subtle" icon="refresh-cw" :loading="loading" @click="reloadContact" />
         </div>
       </template>
     </LayoutHeader>
 
-    <div v-if="loading && !contact && !isNew" class="flex flex-1 items-center justify-center text-ink-gray-5">
-      {{ __('Loading Contact...') }}
+    <div v-if="loading && !contact" class="flex flex-1 items-center justify-center text-ink-gray-5">
+      {{ isNew ? __('Checking Contact permissions...') : __('Loading Contact...') }}
     </div>
 
-    <div v-else-if="error && !contact && !isNew" class="flex flex-1 flex-col items-center justify-center gap-3">
-      <div class="text-lg font-medium text-ink-gray-9">{{ __('Unable to load Contact') }}</div>
+    <div v-else-if="error && !contact" class="flex flex-1 flex-col items-center justify-center gap-3">
+      <div class="text-lg font-medium text-ink-gray-9">
+        {{ isNew ? __('Unable to create Contact') : __('Unable to load Contact') }}
+      </div>
       <p class="text-sm text-red-600">{{ error }}</p>
       <Button :label="__('Retry')" @click="reloadContact" />
     </div>
@@ -42,6 +45,7 @@
       <DoubleTContactDataPanel
         :contact="null"
         :is-new="true"
+        :can-write="canWrite"
         @saved="onCreated"
       />
     </div>
@@ -56,6 +60,7 @@
           <DoubleTContactDataPanel
             v-if="activeTabName === 'Data'"
             :contact="contact"
+            :can-write="canWrite"
             @saved="onContactSaved"
           />
 
@@ -151,6 +156,10 @@ import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
+import {
+  getCreatePermission,
+  getDocumentMutationPermissions,
+} from '@/utils/permissions'
 
 const route = useRoute()
 const router = useRouter()
@@ -165,6 +174,8 @@ const reloadActivities = ref(false)
 const activities = ref(null)
 const assignees = ref([])
 const companyLabel = ref('')
+const canWrite = ref(false)
+const canDelete = ref(false)
 
 const title = computed(() => {
   if (!contact.value) return __('Contact')
@@ -227,15 +238,36 @@ function openCompany() {
 }
 
 async function loadContact() {
-  if (isNew.value || !contactId.value) return null
   loading.value = true
   error.value = ''
+  canWrite.value = false
+  canDelete.value = false
   try {
-    const result = await call('frappe.client.get', {
+    if (isNew.value) {
+      const permission = await getCreatePermission(call, 'DoubleT Contact')
+      if (permission.error) throw permission.error
+      if (!permission.allowed) {
+        throw new Error(__('You do not have permission to create Contacts.'))
+      }
+      canWrite.value = true
+      return null
+    }
+    if (!contactId.value) return null
+
+    const documentRequest = call('frappe.client.get', {
       doctype: 'DoubleT Contact',
       name: contactId.value,
     })
+    const permissionRequest = getDocumentMutationPermissions(
+      call,
+      'DoubleT Contact',
+      contactId.value,
+    )
+    const [result, permissions] = await Promise.all([documentRequest, permissionRequest])
     contact.value = result
+    canWrite.value = permissions.write
+    canDelete.value = permissions.delete
+    if (permissions.error) console.error('Load Contact permissions failed:', permissions.error)
     assignees.value = parseAssignees(result?._assign)
     await loadCompanyLabel()
     return result
@@ -270,7 +302,7 @@ async function onContactSaved(data) {
 }
 
 async function remove() {
-  if (!contact.value?.name) return
+  if (!canDelete.value || !contact.value?.name) return
   const ok = window.confirm(__('Delete this contact? This cannot be undone.'))
   if (!ok) return
 
@@ -302,7 +334,7 @@ watch(
     contact.value = null
     companyLabel.value = ''
     error.value = ''
-    if (!isNew.value) await loadContact()
+    await loadContact()
   },
   { immediate: true },
 )

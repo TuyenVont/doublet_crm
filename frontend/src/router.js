@@ -9,6 +9,7 @@ import ContactsView from '@/pages/ContactsView.vue'
 const ContactDetailView = () => import('@/pages/ContactDetailView.vue')
 import CompaniesView from '@/pages/CompaniesView.vue'
 const ProductsView = () => import('@/pages/ProductsView.vue')
+const ProductDetailView = () => import('@/pages/ProductDetailView.vue')
 const ProductCategoriesView = () => import('@/pages/ProductCategoriesView.vue')
 const PriceListsView = () => import('@/pages/PriceListsView.vue')
 const QuotationsView = () => import('@/pages/QuotationsView.vue')
@@ -97,6 +98,12 @@ const routes = [
     path: '/products',
     name: 'Products',
     component: ProductsView,
+  },
+  {
+    path: '/products/:productId',
+    name: 'ProductDetail',
+    component: ProductDetailView,
+    props: true,
   },
   {
     path: '/price-lists',

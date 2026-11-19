@@ -2,6 +2,7 @@
 import { computed, reactive } from 'vue'
 import { call } from 'frappe-ui'
 import { formatCurrency } from '@/utils'
+import { buildProductListRequest } from '@/utils/productCatalog'
 
 export function useDoubleTProducts() {
   const pageLength = 20
@@ -12,6 +13,7 @@ export function useDoubleTProducts() {
     'product_kind',
     'variant_of',
     'category',
+    'image',
     'price',
     'description',
     'is_active',
@@ -72,14 +74,6 @@ export function useDoubleTProducts() {
 
   const totalCount = computed(() => productsResource.data?.length || 0)
 
-  function getQueryFilters() {
-    const filters = {}
-    if (currentFilters.category) filters.category = currentFilters.category
-    if (currentFilters.status === 'active') filters.is_active = 1
-    if (currentFilters.status === 'inactive') filters.is_active = 0
-    return filters
-  }
-
   async function fetchProducts({ append = false } = {}) {
     if (append && (productsResource.loading || !productsResource.hasNextPage)) return
 
@@ -94,20 +88,14 @@ export function useDoubleTProducts() {
 
     const search = currentFilters.search.trim()
     try {
-      const data = await call('frappe.client.get_list', {
-        doctype: 'DoubleT Product',
+      const data = await call('frappe.client.get_list', buildProductListRequest({
         fields: productFields,
-        filters: getQueryFilters(),
-        or_filters: search
-          ? [
-              ['product_name', 'like', `%${search}%`],
-              ['sku', 'like', `%${search}%`],
-            ]
-          : undefined,
-        order_by: 'modified desc',
-        limit_start: start,
-        limit_page_length: pageLength,
-      })
+        search,
+        category: currentFilters.category,
+        status: currentFilters.status,
+        start,
+        pageLength,
+      }))
       if (requestVersion !== productRequestVersion) return
 
       const page = Array.isArray(data) ? data : []
@@ -152,7 +140,7 @@ export function useDoubleTProducts() {
     try {
       const data = await call('frappe.client.get_list', {
         doctype: 'DoubleT Product',
-        fields: ['name', 'product_name', 'sku', 'is_active'],
+        fields: ['name', 'product_name', 'sku', 'image', 'is_active'],
         filters: { product_kind: 'Template' },
         order_by: 'product_name asc',
         limit_page_length: 500,

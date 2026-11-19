@@ -10,6 +10,37 @@
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">
+          <div class="sm:col-span-2">
+            <span class="mb-2 block text-sm text-ink-gray-7">{{ __('Product Image') }}</span>
+            <div class="flex flex-col gap-3 rounded-lg border border-outline-gray-2 p-3 sm:flex-row sm:items-center">
+              <ProductThumbnail
+                class="h-28 w-full sm:w-36"
+                :src="displayImage.url"
+                :alt="form.product_name || __('Product image preview')"
+              />
+              <div class="min-w-0 flex-1 space-y-2">
+                <p class="text-sm text-ink-gray-6">
+                  {{ imageSourceDescription }}
+                </p>
+                <div class="flex flex-wrap gap-2">
+                  <Button
+                    variant="subtle"
+                    :label="form.image ? __('Replace Image') : __('Add Image')"
+                    :disabled="!props.canEditImage"
+                    @click="showImageUploader = true"
+                  />
+                  <Button
+                    v-if="form.image"
+                    variant="subtle"
+                    :label="__('Remove Image')"
+                    :disabled="!props.canEditImage"
+                    @click="form.image = ''"
+                  />
+                </div>
+                <p v-if="!props.canEditImage" class="text-xs text-ink-gray-5">{{ __('You need write permission to change this image.') }}</p>
+              </div>
+            </div>
+          </div>
           <label class="space-y-1 sm:col-span-2">
             <span class="text-sm text-ink-gray-7">{{ __('Product Name') }} *</span>
             <TextInput v-model="form.product_name" :placeholder="__('Product Name')" />
@@ -138,16 +169,28 @@
       </div>
     </template>
   </Dialog>
+  <FilesUploader
+    v-if="showImageUploader"
+    v-model="showImageUploader"
+    doctype=""
+    docname=""
+    :options="imageUploadOptions"
+    @after="applyUploadedImage"
+  />
 </template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { Button, Dialog, Popover, TextInput, call } from 'frappe-ui'
+import FilesUploader from '@/components/FilesUploader/FilesUploader.vue'
+import ProductThumbnail from '@/components/ProductThumbnail.vue'
+import { resolveProductImage } from '@/utils/productCatalog'
 
 const props = defineProps({
   product: { type: Object, default: null },
   categories: { type: Array, default: () => [] },
   templates: { type: Array, default: () => [] },
+  canEditImage: { type: Boolean, default: true },
 })
 const emit = defineEmits(['saved', 'reload-latest'])
 const show = defineModel({ type: Boolean })
@@ -155,8 +198,15 @@ const submitting = ref(false)
 const error = ref('')
 const fieldErrors = reactive({})
 const needsReload = ref(false)
+const showImageUploader = ref(false)
+const imageUploadOptions = {
+  folder: 'Home/Attachments',
+  allowMultiple: false,
+  restrictions: { maxNumberOfFiles: 1, allowedFileTypes: ['image/*'] },
+}
 const form = reactive({
   product_name: '',
+  image: '',
   sku: '',
   product_kind: 'Standard',
   category: '',
@@ -171,6 +221,16 @@ const form = reactive({
 const isEditMode = computed(() => Boolean(props.product?.name))
 const isExistingVariant = computed(() => isEditMode.value && props.product?.product_kind === 'Variant')
 const availableTemplates = computed(() => props.templates.filter((template) => template.name !== props.product?.name))
+const displayImage = computed(() => resolveProductImage({
+  image: form.image,
+  product_kind: form.product_kind,
+  variant_of: form.variant_of,
+}, props.templates))
+const imageSourceDescription = computed(() => {
+  if (displayImage.value.source === 'product') return __('This Product uses its own image.')
+  if (displayImage.value.source === 'template') return __('Previewing the linked Template image. Add an image to override it for this Variant.')
+  return __('No image yet. A placeholder is used until you add one.')
+})
 const selectedCategories = computed(() => uniqueCategories([form.category, ...form.categories]).map((name) => {
   const category = props.categories.find((item) => item.name === name)
   return { name, label: category?.category_name || name }
@@ -189,8 +249,10 @@ function populateForm() {
   error.value = ''
   clearFieldErrors()
   needsReload.value = false
+  showImageUploader.value = false
   Object.assign(form, {
     product_name: props.product?.product_name || '',
+    image: props.product?.image || '',
     sku: props.product?.sku || '',
     product_kind: props.product?.product_kind || 'Standard',
     category: props.product?.category || '',
@@ -246,6 +308,7 @@ async function saveProduct() {
   submitting.value = true
   const fields = {
     product_name: form.product_name.trim(),
+    image: form.image || null,
     category: form.category,
     categories: uniqueCategories([...form.categories, form.category]).map((category) => ({ category })),
     product_kind: form.product_kind,
@@ -283,6 +346,11 @@ async function saveProduct() {
 
 function clearFieldErrors() {
   Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
+}
+
+function applyUploadedImage(files) {
+  const image = files?.[0]?.file_url
+  if (image) form.image = image
 }
 
 function uniqueCategories(categories) {

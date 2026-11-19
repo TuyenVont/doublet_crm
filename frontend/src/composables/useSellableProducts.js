@@ -1,19 +1,26 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { call } from 'frappe-ui'
 import { message } from '@/utils/quotation'
+import { buildSellableProductListRequest, resolveProductImage } from '@/utils/productCatalog'
 
 // Shared sellable Product search used by Quotation and Order. Prices are resolved
 // separately so loading this picker never overwrites saved transaction prices.
 export function useSellableProducts() {
-  const products = ref([]), productSearch = ref('')
+  const products = ref([]), productSearch = ref(''), productCategory = ref('')
   const productsLoading = ref(false), productHasNextPage = ref(true), productPickerError = ref('')
+  const productCategories = ref([]), productCategoriesLoading = ref(false), productCategoriesError = ref('')
   let productRequestId = 0
+  let productCategoryRequestId = 0
   let productSearchTimer = null
   const productPageLength = 20
 
   watch(productSearch, () => {
     clearTimeout(productSearchTimer)
     productSearchTimer = setTimeout(() => loadProducts(), 250)
+  })
+  watch(productCategory, () => {
+    clearTimeout(productSearchTimer)
+    void loadProducts()
   })
 
   async function loadProducts({ append = false } = {}) {
@@ -30,23 +37,13 @@ export function useSellableProducts() {
     productPickerError.value = ''
     const search = productSearch.value.trim()
     try {
-      const data = await call('frappe.client.get_list', {
-        doctype: 'DoubleT Product',
-        fields: ['name', 'product_name', 'sku', 'product_kind', 'variant_of'],
-        filters: [
-          ['is_active', '=', 1],
-          ['product_kind', 'in', ['Standard', 'Variant']],
-        ],
-        or_filters: search
-          ? [
-              ['product_name', 'like', `%${search}%`],
-              ['sku', 'like', `%${search}%`],
-            ]
-          : undefined,
-        order_by: 'product_name asc',
-        limit_start: start,
-        limit_page_length: productPageLength,
-      })
+      const data = await call('frappe.client.get_list', buildSellableProductListRequest({
+        fields: ['name', 'product_name', 'sku', 'product_kind', 'variant_of', 'image'],
+        search,
+        category: productCategory.value,
+        start,
+        pageLength: productPageLength,
+      }))
       if (requestId !== productRequestId) return
 
       const page = Array.isArray(data) ? data : []
@@ -63,16 +60,43 @@ export function useSellableProducts() {
     }
   }
 
+  async function loadProductCategories() {
+    const requestId = ++productCategoryRequestId
+    productCategoriesLoading.value = true
+    productCategoriesError.value = ''
+    try {
+      const data = await call('frappe.client.get_list', {
+        doctype: 'DoubleT Product Category',
+        fields: ['name', 'category_name'],
+        order_by: 'category_name asc',
+        limit_page_length: 500,
+      })
+      if (requestId === productCategoryRequestId) {
+        productCategories.value = Array.isArray(data) ? data : []
+      }
+    } catch (exception) {
+      if (requestId === productCategoryRequestId) productCategoriesError.value = message(exception)
+    } finally {
+      if (requestId === productCategoryRequestId) productCategoriesLoading.value = false
+    }
+  }
+
   async function hydrateProductDetails(page, requestId) {
     const variantParents = [...new Set(page.map((product) => product.variant_of).filter(Boolean))]
     const variantNames = page.filter((product) => product.product_kind === 'Variant').map((product) => product.name)
-    if (!variantParents.length && !variantNames.length) return page
+    if (!variantParents.length && !variantNames.length) {
+      return page.map(product => ({
+        ...product,
+        resolved_image: resolveProductImage(product).url,
+        variant_attributes: [],
+      }))
+    }
 
     const [parentsResult, attributesResult] = await Promise.allSettled([
       variantParents.length
         ? call('frappe.client.get_list', {
             doctype: 'DoubleT Product',
-            fields: ['name', 'product_name', 'sku'],
+            fields: ['name', 'product_name', 'sku', 'image'],
             filters: [['name', 'in', variantParents]],
             limit_page_length: variantParents.length,
           })
@@ -103,11 +127,15 @@ export function useSellableProducts() {
       const values = attributesByProduct[attribute.parent] || (attributesByProduct[attribute.parent] = [])
       values.push(`${attribute.attribute_name}: ${attribute.attribute_value}`)
     }
-    return page.map((product) => ({
-      ...product,
-      variant_parent: parentByName.get(product.variant_of),
-      variant_attributes: attributesByProduct[product.name] || [],
-    }))
+    return page.map((product) => {
+      const variantParent = parentByName.get(product.variant_of)
+      return {
+        ...product,
+        resolved_image: resolveProductImage(product, variantParent ? [variantParent] : []).url,
+        variant_parent: variantParent,
+        variant_attributes: attributesByProduct[product.name] || [],
+      }
+    })
   }
   function productPickerLabel(product) {
     const details = [product.sku].filter(Boolean)
@@ -121,6 +149,20 @@ export function useSellableProducts() {
   onBeforeUnmount(() => {
     clearTimeout(productSearchTimer)
     productRequestId += 1
+    productCategoryRequestId += 1
   })
-  return { products, productSearch, productsLoading, productHasNextPage, productPickerError, loadProducts, productPickerLabel }
+  return {
+    products,
+    productSearch,
+    productCategory,
+    productCategories,
+    productCategoriesLoading,
+    productCategoriesError,
+    productsLoading,
+    productHasNextPage,
+    productPickerError,
+    loadProducts,
+    loadProductCategories,
+    productPickerLabel,
+  }
 }

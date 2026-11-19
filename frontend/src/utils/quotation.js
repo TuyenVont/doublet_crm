@@ -22,6 +22,64 @@ export function dealsForCustomer(deals, customer) {
   return []
 }
 
+export function contactsForCustomer(contacts, customer) {
+  if (!Array.isArray(contacts)) return []
+  if (customer?.customer_type !== 'COMPANY') return contacts
+  if (!customer.company) return []
+  return contacts.filter(contact => contact.company === customer.company)
+}
+
+export function customerFromDeal(deal) {
+  return {
+    customer_type: deal?.deal_type || '',
+    contact: deal?.contact || '',
+    company: deal?.company || '',
+  }
+}
+
+export function shouldRepriceItem(item, pricingState) {
+  return Boolean(
+    !item?.name
+    && item?.product
+    && !pricingState?.manual
+    && (pricingState?.auto || item.unit_price === '' || item.unit_price === null),
+  )
+}
+
+export function createQuotationItem(product = {}, quantity = 1) {
+  const numericQuantity = Number(quantity)
+  return {
+    product: product.name || '',
+    product_name: product.product_name || '',
+    sku: product.sku || '',
+    quantity: numericQuantity > 0 ? numericQuantity : 1,
+    unit_price: '',
+    discount_type: 'Percentage',
+    discount_percent: 0,
+    discount_amount: 0,
+  }
+}
+
+export function productOptionsForItem(products, item) {
+  const options = Array.isArray(products) ? products : []
+  const selected = item?.product
+  if (!selected || options.some(product => product.name === selected)) return options
+  return [{
+    name: selected,
+    product_name: item.product_name || '',
+    sku: item.sku || '',
+  }, ...options]
+}
+
+export async function appendCatalogSelections(items, selections, resolvePrice) {
+  const start = items.length
+  const added = selections.map(({ product, quantity }) => createQuotationItem(product, quantity))
+  items.push(...added)
+  const reactiveRows = items.slice(start)
+  await Promise.allSettled(reactiveRows.map(resolvePrice))
+  return reactiveRows
+}
+
 // Calculate nonnegative decimal products with integer arithmetic, rounding halves up.
 function ratio(value) {
   const text = String(value ?? '').trim()

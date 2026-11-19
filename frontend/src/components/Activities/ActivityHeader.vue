@@ -25,20 +25,24 @@
       variant="solid"
       :options="callActions"
     />
-    <Button
-      v-else-if="title == 'Notes'"
-      variant="solid"
-      :label="__('New Note')"
-      iconLeft="plus"
-      @click="modalRef.showNote()"
-    />
-    <Button
-      v-else-if="title == 'Tasks'"
-      variant="solid"
-      :label="__('New Task')"
-      iconLeft="plus"
-      @click="modalRef.showTask()"
-    />
+    <template v-else-if="title == 'Notes'">
+      <Button
+        v-if="canCreateNote"
+        variant="solid"
+        :label="__('New Note')"
+        iconLeft="plus"
+        @click="openNote"
+      />
+    </template>
+    <template v-else-if="title == 'Tasks'">
+      <Button
+        v-if="canCreateTask"
+        variant="solid"
+        :label="__('New Task')"
+        iconLeft="plus"
+        @click="openTask"
+      />
+    </template>
     <Button
       v-else-if="title == 'Attachments'"
       variant="solid"
@@ -85,6 +89,7 @@ import { whatsappEnabled } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
 import { Dropdown } from 'frappe-ui'
 import { computed, h } from 'vue'
+import { runCreateAction } from '@/utils/activityPermissions'
 
 const props = defineProps({
   tabs: { type: Array, default: () => [] },
@@ -92,6 +97,8 @@ const props = defineProps({
   doc: { type: Object, default: () => ({}) },
   modalRef: { type: Object, default: () => ({}) },
   whatsappBox: { type: Object, default: () => ({}) },
+  canCreateTask: { type: Boolean, default: false },
+  canCreateNote: { type: Boolean, default: false },
 })
 
 const { makeCall } = globalStore()
@@ -129,12 +136,14 @@ const defaultActions = computed(() => {
     {
       icon: h(NoteIcon, { class: 'h-4 w-4' }),
       label: __('Note'),
-      onClick: () => props.modalRef.showNote(),
+      onClick: openNote,
+      condition: () => props.canCreateNote,
     },
     {
       icon: h(TaskIcon, { class: 'h-4 w-4' }),
       label: __('Task'),
-      onClick: () => props.modalRef.showTask(),
+      onClick: openTask,
+      condition: () => props.canCreateTask,
     },
     {
       icon: h(AttachmentIcon, { class: 'h-4 w-4' }),
@@ -152,6 +161,14 @@ const defaultActions = computed(() => {
     action.condition ? action.condition() : true,
   )
 })
+
+function openNote() {
+  return runCreateAction(props.canCreateNote, () => props.modalRef.showNote())
+}
+
+function openTask() {
+  return runCreateAction(props.canCreateTask, () => props.modalRef.showTask())
+}
 
 function getTabIndex(name) {
   return props.tabs.findIndex((tab) => tab.name === name)

@@ -54,6 +54,7 @@ export const usersStore = defineStore('crm-users', () => {
         const existing = usersByName[user.name]
         if (existing) {
           Object.assign(existing, user)
+          delete existing.__isTemporaryProfile
         } else {
           usersByName[user.name] = user
         }
@@ -100,7 +101,9 @@ export const usersStore = defineStore('crm-users', () => {
       })
       const records = await r.fetch()
       for (const u of records || []) {
-        usersByName[u.name] = { ...usersByName[u.name], ...u }
+        const resolved = { ...usersByName[u.name], ...u }
+        delete resolved.__isTemporaryProfile
+        usersByName[u.name] = resolved
       }
     } catch (e) {
       // best-effort — the synthesized stub remains on failure
@@ -120,6 +123,7 @@ export const usersStore = defineStore('crm-users', () => {
         last_name: '',
         user_image: null,
         role: null,
+        __isTemporaryProfile: true,
       }
       // Try to upgrade the stub via a batched fetch unless the full list
       // has already arrived.

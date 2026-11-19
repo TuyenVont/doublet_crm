@@ -29,7 +29,23 @@
           <Button variant="subtle" :label="selectedStatusLabel" :iconRight="open ? 'chevron-up' : 'chevron-down'" />
         </template>
       </Dropdown>
-      <Button class="ml-auto" :tooltip="__('Refresh')" icon="refresh-cw" :loading="productsResource.loading" @click="reload" />
+      <div class="ml-auto flex rounded-md border border-outline-gray-2 p-0.5" role="group" :aria-label="__('Product view')">
+        <Button
+          :variant="viewMode === 'list' ? 'subtle' : 'ghost'"
+          icon="list"
+          :label="__('List')"
+          :aria-pressed="viewMode === 'list'"
+          @click="viewMode = 'list'"
+        />
+        <Button
+          :variant="viewMode === 'grid' ? 'subtle' : 'ghost'"
+          icon="grid-2x2"
+          :label="__('Grid')"
+          :aria-pressed="viewMode === 'grid'"
+          @click="viewMode = 'grid'"
+        />
+      </div>
+      <Button :tooltip="__('Refresh')" icon="refresh-cw" :loading="productsResource.loading" @click="reload" />
     </div>
 
     <div class="relative flex-1 overflow-auto p-5">
@@ -42,7 +58,7 @@
       <template v-else-if="products.length">
         <ErrorMessage v-if="categoriesError" class="mb-4" :message="categoriesError" />
         <ErrorMessage v-if="actionError" class="mb-4" :message="actionError" />
-        <div class="overflow-x-auto rounded border border-outline-gray-2">
+        <div v-if="viewMode === 'list'" class="overflow-x-auto rounded border border-outline-gray-2">
         <table class="w-full min-w-[960px] text-sm">
           <thead class="bg-surface-gray-1 text-left text-ink-gray-6">
             <tr>
@@ -57,8 +73,13 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="product in products" :key="product.name" class="cursor-pointer border-t border-outline-gray-2 hover:bg-surface-gray-1" @click="openEdit(product)">
-              <td class="px-4 py-3 font-medium text-ink-gray-9">{{ product.product_name || product.name }}</td>
+            <tr v-for="product in products" :key="product.name" class="cursor-pointer border-t border-outline-gray-2 hover:bg-surface-gray-1" @click="openProduct(product)">
+              <td class="px-4 py-3 font-medium text-ink-gray-9">
+                <div class="flex items-center gap-3">
+                  <ProductThumbnail class="h-10 w-10" :src="productImage(product).url" :alt="product.product_name || product.name" />
+                  <span>{{ product.product_name || product.name }}</span>
+                </div>
+              </td>
               <td class="px-4 py-3 text-ink-gray-6">{{ product.sku }}</td>
               <td class="px-4 py-3 text-ink-gray-6">
                 <span>{{ productKind(product) }}</span>
@@ -80,6 +101,38 @@
           </tbody>
         </table>
         </div>
+        <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <article
+            v-for="product in products"
+            :key="product.name"
+            class="group cursor-pointer overflow-hidden rounded-lg border border-outline-gray-2 bg-surface-white transition hover:border-outline-gray-3 hover:shadow-sm"
+            tabindex="0"
+            @click="openProduct(product)"
+            @keydown.enter.prevent="openProduct(product)"
+            @keydown.space.prevent="openProduct(product)"
+          >
+            <ProductThumbnail class="aspect-[4/3] w-full rounded-none" :src="productImage(product).url" :alt="product.product_name || product.name" />
+            <div class="space-y-3 p-4">
+              <div class="min-w-0">
+                <h3 class="truncate font-semibold text-ink-gray-9">{{ product.product_name || product.name }}</h3>
+                <p class="mt-1 truncate text-xs text-ink-gray-5">{{ product.sku }}</p>
+              </div>
+              <div class="flex items-center justify-between gap-3 text-sm">
+                <span class="text-ink-gray-6">{{ productKind(product) }}</span>
+                <span class="font-medium text-ink-gray-8">{{ formatCurrency(product.price || 0) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3 border-t border-outline-gray-2 pt-3">
+                <span :class="isActive(product) ? 'text-green-600' : 'text-ink-gray-5'" class="text-sm">
+                  {{ isActive(product) ? __('Active') : __('Inactive') }}
+                </span>
+                <div class="flex gap-1">
+                  <Button variant="ghost" :label="__('Edit')" @click.stop="openEdit(product)" />
+                  <Button variant="ghost" icon="trash-2" :tooltip="__('Delete')" :loading="deletingName === product.name" @click.stop="deleteProduct(product)" />
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
       </template>
       <template v-else>
         <ErrorMessage v-if="categoriesError" class="mb-4" :message="categoriesError" />
@@ -95,7 +148,7 @@
       <Button variant="subtle" :label="__('Load More')" :loading="productsResource.loading" @click="loadMore" />
     </div>
 
-    <ProductModal v-model="showProductModal" :product="selectedProduct" :categories="categories" :templates="templates" @saved="handleSaved" @reload-latest="openEditByName" />
+    <ProductModal v-model="showProductModal" :product="selectedProduct" :categories="categories" :templates="templates" :can-edit-image="canEditSelectedProduct" @saved="handleSaved" @reload-latest="openEditByName" />
   </div>
 </template>
 
@@ -108,15 +161,19 @@ import LayoutHeader from '@/components/LayoutHeader.vue'
 import ViewBreadcrumbs from '@/components/ViewBreadcrumbs.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import ProductModal from '@/components/Modals/ProductModal.vue'
+import ProductThumbnail from '@/components/ProductThumbnail.vue'
 import { useDoubleTProducts } from '@/composables/useDoubleTProducts'
 import { formatCurrency } from '@/utils'
+import { hasProductWritePermission, productDetailLocation, resolveProductImage } from '@/utils/productCatalog'
 
 const { productsResource, categoriesResource, templatesResource, categoryAssignmentsResource, reload, loadMore, reloadTemplates, setFilters } = useDoubleTProducts()
 const router = useRouter()
 const searchQuery = ref('')
 const selectedCategory = ref('')
 const selectedStatus = ref('')
+const viewMode = ref('list')
 const selectedProduct = ref(null)
+const canEditSelectedProduct = ref(false)
 const showProductModal = ref(false)
 const openingProduct = ref(false)
 const deletingName = ref('')
@@ -185,17 +242,39 @@ function templateName(product) {
   return template ? (template.product_name || template.name) : product.variant_of
 }
 
+function productImage(product) {
+  return resolveProductImage(product, templates.value)
+}
+
+function openProduct(product) {
+  if (product?.name) router.push(productDetailLocation(product.name))
+}
+
 async function openCreate() {
   actionError.value = ''
   openingProduct.value = true
   try {
-    const sku = await call('doublet_crm.doublet_crm.doctype.doublet_product.doublet_product.get_suggested_sku')
-    selectedProduct.value = { sku }
+    const permission = await call('frappe.client.has_permission', {
+      doctype: 'DoubleT Product',
+      docname: '',
+      perm_type: 'create',
+    })
+    if (!permission?.has_permission) {
+      actionError.value = __('You do not have permission to create Products.')
+      return
+    }
+    canEditSelectedProduct.value = true
+    try {
+      const sku = await call('doublet_crm.doublet_crm.doctype.doublet_product.doublet_product.get_suggested_sku')
+      selectedProduct.value = { sku }
+    } catch (error) {
+      actionError.value = error?.messages?.[0] || error?.message || __('Unable to suggest a SKU. Leave it blank to generate one when saving.')
+      selectedProduct.value = null
+    }
     showProductModal.value = true
   } catch (error) {
-    actionError.value = error?.messages?.[0] || error?.message || __('Unable to suggest a SKU. Leave it blank to generate one when saving.')
-    selectedProduct.value = null
-    showProductModal.value = true
+    canEditSelectedProduct.value = false
+    actionError.value = error?.messages?.[0] || error?.message || __('Unable to check Product permissions.')
   } finally {
     openingProduct.value = false
   }
@@ -206,10 +285,18 @@ async function openEdit(product) {
   actionError.value = ''
   openingProduct.value = true
   try {
-    selectedProduct.value = await call('frappe.client.get', {
-      doctype: 'DoubleT Product',
-      name: product.name,
-    })
+    const [document, permissions] = await Promise.all([
+      call('frappe.client.get', {
+        doctype: 'DoubleT Product',
+        name: product.name,
+      }),
+      call('frappe.client.get_doc_permissions', {
+        doctype: 'DoubleT Product',
+        docname: product.name,
+      }),
+    ])
+    selectedProduct.value = document
+    canEditSelectedProduct.value = hasProductWritePermission(permissions)
     showProductModal.value = true
   } catch (error) {
     actionError.value = error?.messages?.[0] || error?.message || __('Unable to load the latest Product. Please refresh and try again.')

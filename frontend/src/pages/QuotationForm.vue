@@ -50,15 +50,95 @@
             </template>
             <span v-if="doc.status === 'Sent'" class="text-xs text-ink-gray-5">{{ __('Delivery confirmed manually.') }}</span>
           </div>
-          <fieldset :disabled="!editable" class="grid gap-4 sm:grid-cols-2">
-            <label class="field">{{ __('Customer Type') }} *<select v-model="doc.customer_type" :disabled="!!doc.deal" @change="customerChanged"><option value="">{{ __('Select') }}</option><option value="PERSONAL">Personal</option><option value="COMPANY">Company</option></select></label>
-            <label class="field">{{ __('Deal') }}<select v-model="doc.deal" @change="selectDeal($event.target.value)"><option value="">{{ __('None') }}</option><option v-if="doc.deal && !matchingDeals.some(x => x.name === doc.deal)" :value="doc.deal">{{ dealLabel || __('Unavailable') }}</option><option v-for="deal in matchingDeals" :key="deal.name" :value="deal.name">{{ deal.deal_title || deal.name }}</option><option v-if="dealContextReady && !matchingDeals.length && !doc.deal" disabled>{{ __('No matching deals') }}</option></select><span v-if="dealError" class="text-xs text-red-600">{{ dealError }}</span></label>
-            <label v-if="doc.customer_type === 'COMPANY'" class="field">{{ __('Company') }} *<select v-model="doc.company" :disabled="!!doc.deal" @change="companyChanged"><option value="">{{ __('Select') }}</option><option v-if="doc.company && !companies.some(x => x.name === doc.company)" :value="doc.company">{{ doc.company }} ({{ __('unavailable') }})</option><option v-for="company in companies" :key="company.name" :value="company.name">{{ company.company_name || company.name }}</option></select></label>
-            <label class="field">{{ __('Contact') }} {{ doc.customer_type === 'PERSONAL' ? '*' : '' }}<select v-model="doc.contact" :disabled="!!doc.deal" @change="customerContextChanged"><option value="">{{ __('None') }}</option><option v-if="doc.contact && !contacts.some(x => x.name === doc.contact)" :value="doc.contact">{{ doc.contact }} ({{ __('unavailable') }})</option><option v-for="contact in availableContacts" :key="contact.name" :value="contact.name">{{ [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.name }}</option></select></label>
-            <label class="field">{{ __('Price List') }}<select v-model="doc.price_list" @change="pricingContextChanged"><option value="">{{ __('Automatic (customer/default)') }}</option><option v-if="doc.price_list && !priceLists.some(x => x.name === doc.price_list)" :value="doc.price_list">{{ doc.price_list }} ({{ __('unavailable') }})</option><option v-for="priceList in priceLists" :key="priceList.name" :value="priceList.name">{{ priceList.price_list_name || priceList.name }}</option></select><span class="text-xs text-ink-gray-5">{{ __('Applied when pricing newly added products.') }}</span></label>
-            <label class="field">{{ __('Quotation Date') }} *<TextInput v-model="doc.quotation_date" type="date" /></label>
-            <label class="field">{{ __('Valid Until') }} *<TextInput v-model="doc.valid_until" type="date" /></label>
-            <label class="field sm:col-span-2">{{ __('Notes') }}<textarea v-model="doc.notes" rows="2" /></label>
+          <fieldset :disabled="!editable" class="space-y-4">
+            <div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+              <section class="setup-step">
+                <p class="setup-step-title"><span>1</span>{{ __('Customer Type') }} *</p>
+                <label class="field">
+                  <span class="sr-only">{{ __('Customer Type') }}</span>
+                  <select v-model="doc.customer_type" :disabled="Boolean(doc.deal)" @change="customerChanged">
+                    <option value="">{{ __('Select customer type') }}</option>
+                    <option value="PERSONAL">Personal</option>
+                    <option value="COMPANY">Company</option>
+                  </select>
+                </label>
+                <p v-if="doc.deal" class="setup-guidance">{{ __('Unlink the Deal before changing Customer Type.') }}</p>
+                <p v-else class="setup-guidance">{{ __('Choose Personal or Company to continue.') }}</p>
+              </section>
+
+              <section class="setup-step">
+                <p class="setup-step-title"><span>2</span>{{ __('Contact / Company') }}</p>
+                <p v-if="!doc.customer_type" class="setup-placeholder">{{ __('Select a customer type first.') }}</p>
+                <template v-else-if="doc.customer_type === 'PERSONAL'">
+                  <label class="field">{{ __('Contact') }} *
+                    <select v-model="doc.contact" :disabled="Boolean(doc.deal)" @change="contactChanged">
+                      <option value="">{{ __('Select Contact') }}</option>
+                      <option v-if="doc.contact && !contacts.some(x => x.name === doc.contact)" :value="doc.contact">{{ doc.contact }} ({{ __('unavailable') }})</option>
+                      <option v-for="contact in availableContacts" :key="contact.name" :value="contact.name">{{ contactLabel(contact) }}</option>
+                    </select>
+                  </label>
+                </template>
+                <template v-else>
+                  <label class="field">{{ __('Company') }} *
+                    <select v-model="doc.company" :disabled="Boolean(doc.deal)" @change="companyChanged">
+                      <option value="">{{ __('Select Company') }}</option>
+                      <option v-if="doc.company && !companies.some(x => x.name === doc.company)" :value="doc.company">{{ doc.company }} ({{ __('unavailable') }})</option>
+                      <option v-for="company in companies" :key="company.name" :value="company.name">{{ company.company_name || company.name }}</option>
+                    </select>
+                  </label>
+                  <label class="field">{{ __('Contact') }} <span class="font-normal text-ink-gray-5">({{ __('optional') }})</span>
+                    <select v-model="doc.contact" :disabled="Boolean(doc.deal) || !doc.company" @change="contactChanged">
+                      <option value="">{{ doc.company ? __('No Contact') : __('Select a Company first') }}</option>
+                      <option v-if="doc.contact && !availableContacts.some(x => x.name === doc.contact)" :value="doc.contact">{{ doc.contact }} ({{ __('unavailable') }})</option>
+                      <option v-for="contact in availableContacts" :key="contact.name" :value="contact.name">{{ contactLabel(contact) }}</option>
+                    </select>
+                  </label>
+                  <p v-if="!doc.company" class="setup-guidance">{{ __('Select a Company before choosing its Contact.') }}</p>
+                </template>
+                <p v-if="customerNotice" class="text-xs text-amber-700" role="status">{{ customerNotice }}</p>
+              </section>
+
+              <section class="setup-step">
+                <p class="setup-step-title"><span>3</span>{{ __('Deal') }} <span class="font-normal text-ink-gray-5">({{ __('optional') }})</span></p>
+                <p v-if="!dealContextReady" class="setup-placeholder">{{ __('Select a customer first.') }}</p>
+                <div v-else-if="doc.deal" class="space-y-2">
+                  <p class="rounded-md bg-surface-gray-1 px-3 py-2 text-sm font-medium text-ink-gray-8">{{ dealLabel || doc.deal }}</p>
+                  <Button variant="subtle" :label="__('Unlink Deal')" :disabled="dealLoading" @click="unlinkDeal" />
+                  <p class="setup-guidance">{{ __('Unlink the Deal to change Customer Type, Contact, or Company.') }}</p>
+                </div>
+                <label v-else class="field">
+                  <span class="sr-only">{{ __('Deal') }}</span>
+                  <select :value="doc.deal" :disabled="dealLoading" @change="selectDeal($event.target.value)">
+                    <option value="">{{ __('No Deal (standalone quotation)') }}</option>
+                    <option v-for="deal in matchingDeals" :key="deal.name" :value="deal.name">{{ deal.deal_title || deal.name }}</option>
+                    <option v-if="!matchingDeals.length" disabled>{{ __('No matching deals') }}</option>
+                  </select>
+                  <span class="setup-guidance">{{ matchingDeals.length ? __('Only Deals matching this customer are shown.') : __('No matching Deal is required to create this quotation.') }}</span>
+                </label>
+                <span v-if="dealError" class="text-xs text-red-600">{{ dealError }}</span>
+                <span v-else-if="dealNotice" class="text-xs text-amber-700" role="status">{{ dealNotice }}</span>
+              </section>
+
+              <section class="setup-step">
+                <p class="setup-step-title"><span>4</span>{{ __('Price List') }}</p>
+                <p v-if="!dealContextReady" class="setup-placeholder">{{ __('Select a customer first.') }}</p>
+                <label v-else class="field">
+                  <span class="sr-only">{{ __('Price List') }}</span>
+                  <select v-model="doc.price_list" @change="pricingContextChanged">
+                    <option value="">{{ __('Automatic') }}</option>
+                    <option v-if="doc.price_list && !priceLists.some(x => x.name === doc.price_list)" :value="doc.price_list">{{ doc.price_list }} ({{ __('unavailable') }})</option>
+                    <option v-for="priceList in priceLists" :key="priceList.name" :value="priceList.name">{{ priceList.price_list_name || priceList.name }}</option>
+                  </select>
+                  <span class="setup-guidance">{{ pricingExplanation }}</span>
+                  <span class="setup-guidance">{{ __('Saved or manually entered unit prices are never changed automatically.') }}</span>
+                </label>
+              </section>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="field">{{ __('Quotation Date') }} *<TextInput v-model="doc.quotation_date" type="date" /></label>
+              <label class="field">{{ __('Valid Until') }} *<TextInput v-model="doc.valid_until" type="date" /></label>
+              <label class="field sm:col-span-2">{{ __('Notes') }}<textarea v-model="doc.notes" rows="2" /></label>
+            </div>
           </fieldset>
           <div v-if="optionsError" class="text-sm text-red-600">{{ optionsError }}</div>
           <div v-if="editable" class="flex flex-wrap items-end gap-2 rounded border p-3">
@@ -73,7 +153,7 @@
           <div class="max-w-full min-w-0 overflow-x-auto rounded-lg border border-outline-gray-2">
             <table class="w-full min-w-[1120px] table-fixed text-left text-sm"><thead class="bg-surface-gray-1 text-ink-gray-6"><tr><th class="w-[29%] p-3">{{ __('Product') }}</th><th class="w-[16%] p-3">{{ __('Unit Price (USD)') }}</th><th class="w-[10%] p-3">{{ __('Quantity') }}</th><th class="w-[13%] p-3">{{ __('Discount Type') }}</th><th class="w-[14%] p-3">{{ __('Discount') }}</th><th class="w-[12%] p-3 text-right">{{ __('Line Total (USD)') }}</th><th class="w-[6%] p-3" /></tr></thead>
               <tbody><tr v-for="(item, index) in doc.items" :key="item.name || index" class="border-t border-outline-gray-2 align-top">
-                <td class="p-3"><select v-if="editable && !item.name" v-model="item.product" @change="selectProduct(item)"><option value="">{{ __('Select product') }}</option><option v-for="product in products" :key="product.name" :value="product.name">{{ productPickerLabel(product) }}</option></select><div v-else class="font-medium text-ink-gray-8">{{ item.product_name || item.product || '—' }}</div><div v-if="item.sku" class="mt-1 text-xs text-ink-gray-5">{{ __('SKU') }}: {{ item.sku }}</div></td>
+                <td class="p-3"><select v-if="editable && !item.name" v-model="item.product" @change="selectProduct(item)"><option value="">{{ __('Select product') }}</option><option v-for="product in productOptionsForItem(products, item)" :key="product.name" :value="product.name">{{ productPickerLabel(product) }}</option></select><div v-else class="font-medium text-ink-gray-8">{{ item.product_name || item.product || '—' }}</div><div v-if="item.sku" class="mt-1 text-xs text-ink-gray-5">{{ __('SKU') }}: {{ item.sku }}</div></td>
                 <td class="p-3"><TextInput v-if="editable" v-model="item.unit_price" type="number" min="0" step="0.01" @update:modelValue="markManualPrice(item)" /><span v-else>{{ money(item.unit_price) }}</span><div v-if="itemPricing(item).loading" class="mt-1 text-xs text-ink-gray-5">{{ __('Loading price...') }}</div><div v-else-if="itemPricing(item).error" class="mt-1 text-xs text-red-600">{{ itemPricing(item).error }}</div><div v-else-if="itemPricing(item).source" class="mt-1 text-xs text-ink-gray-5">{{ pricingSourceLabel(item) }}</div></td>
                 <td class="p-3"><TextInput v-if="editable" v-model="item.quantity" type="number" min="0" step="any" /><span v-else>{{ item.quantity }}</span></td>
                 <td class="p-3"><select v-if="editable" v-model="item.discount_type" @change="discountTypeChanged(item)"><option value="Percentage">{{ __('Percentage') }}</option><option value="Amount">{{ __('Amount') }}</option></select><span v-else>{{ item.discount_type === 'Amount' ? __('Amount') : __('Percentage') }}</span></td>
@@ -83,7 +163,16 @@
               </tr></tbody>
             </table>
           </div>
-          <Button v-if="editable" :label="__('Add item')" iconLeft="plus" @click="addItem" />
+          <div v-if="editable" class="flex flex-wrap gap-2">
+            <Button :label="__('Add item')" iconLeft="plus" @click="addItem" />
+            <Button
+              :label="__('Browse Catalog')"
+              iconLeft="layout-grid"
+              :disabled="!dealContextReady"
+              :tooltip="dealContextReady ? __('Select several products at once') : __('Select a customer first')"
+              @click="openCatalog"
+            />
+          </div>
           <div class="ml-auto max-w-xs space-y-2 text-right text-sm"><p>{{ __('Subtotal') }}: {{ money(editable ? totals.gross : doc.subtotal) }}</p><p>{{ __('Total discount') }}: {{ money(editable ? totals.discount : doc.total_discount) }}</p><p class="font-semibold">{{ __('Grand total') }}: {{ money(editable ? totals.total : doc.grand_total) }}</p><p v-if="editable" class="text-xs text-ink-gray-5">{{ __('Preview; final amounts are calculated by the server.') }}</p></div>
           </template>
           <QuotationEmails
@@ -97,6 +186,71 @@
         </div>
       </template>
     </div>
+    <Dialog v-model:open="showCatalogDialog" :title="__('Browse Catalog')" size="3xl" :dismissible="!catalogAdding" :showCloseButton="!catalogAdding">
+      <div class="flex max-h-[80vh] min-h-0 flex-col">
+        <div class="flex shrink-0 flex-wrap items-end gap-2 border-b border-outline-gray-2 pb-3">
+          <label class="min-w-64 flex-1 text-sm text-ink-gray-7">{{ __('Search products') }}
+            <TextInput v-model="productSearch" type="search" :placeholder="__('Search name or SKU...')" :disabled="catalogAdding" />
+          </label>
+          <label class="w-full text-sm text-ink-gray-7 sm:w-56">{{ __('Category') }}
+            <select v-model="productCategory" :disabled="catalogAdding || productCategoriesLoading">
+              <option value="">{{ __('All Categories') }}</option>
+              <option v-for="category in productCategories" :key="category.name" :value="category.name">{{ category.category_name || category.name }}</option>
+            </select>
+          </label>
+          <span class="text-xs text-ink-gray-5">{{ __('Active Standard Products and Variants only.') }}</span>
+        </div>
+        <div class="min-h-0 flex-1 overflow-y-auto py-3">
+          <p v-if="productCategoriesError" class="mb-3 rounded-md bg-red-50 p-3 text-sm text-red-700">{{ productCategoriesError }}</p>
+          <p v-if="productPickerError" class="rounded-md bg-red-50 p-3 text-sm text-red-700">{{ productPickerError }}</p>
+          <p v-else-if="productsLoading && !products.length" class="p-8 text-center text-sm text-ink-gray-5">{{ __('Loading products...') }}</p>
+          <p v-else-if="!products.length" class="p-8 text-center text-sm text-ink-gray-5">{{ __('No matching products.') }}</p>
+          <div v-else class="grid gap-3 sm:grid-cols-2">
+            <label
+              v-for="product in products"
+              :key="product.name"
+              class="flex cursor-pointer gap-3 rounded-lg border border-outline-gray-2 p-3 hover:bg-surface-gray-1"
+            >
+              <input
+                type="checkbox"
+                class="mt-1 h-4 w-4 shrink-0"
+                :checked="catalogProductSelected(product.name)"
+                :disabled="catalogAdding"
+                @change="toggleCatalogProduct(product.name, $event.target.checked)"
+              />
+              <ProductThumbnail class="h-16 w-16" :src="product.resolved_image" :alt="product.product_name || product.name" />
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-medium text-ink-gray-8">{{ product.product_name || product.name }}</span>
+                <span class="mt-1 block text-xs text-ink-gray-5">{{ product.sku || __('No SKU') }} · {{ __(product.product_kind) }}</span>
+                <span v-if="product.variant_attributes?.length" class="mt-1 block text-xs text-ink-gray-5">{{ product.variant_attributes.join(', ') }}</span>
+                <span class="mt-2 flex items-center gap-2 text-xs text-ink-gray-6">
+                  {{ __('Quantity') }}
+                  <TextInput
+                    v-model="catalogQuantities[product.name]"
+                    class="w-20"
+                    type="number"
+                    min="1"
+                    step="1"
+                    :disabled="catalogAdding || !catalogProductSelected(product.name)"
+                    @click.stop
+                  />
+                </span>
+              </span>
+            </label>
+          </div>
+          <div v-if="productHasNextPage && products.length" class="mt-3 text-center">
+            <Button variant="subtle" :label="__('Load more products')" :loading="productsLoading" :disabled="catalogAdding" @click="loadProducts({ append: true })" />
+          </div>
+        </div>
+        <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-outline-gray-2 bg-surface-white pt-3">
+          <span class="text-sm text-ink-gray-6">{{ __('{0} selected', [catalogSelectedNames.length]) }}</span>
+          <div class="flex gap-2">
+            <Button :label="__('Cancel')" :disabled="catalogAdding" @click="showCatalogDialog = false" />
+            <Button variant="solid" :label="__('Add selected')" :loading="catalogAdding" :disabled="!catalogSelectedNames.length" @click="addSelectedProducts" />
+          </div>
+        </div>
+      </div>
+    </Dialog>
     <Dialog v-model:open="showEmailDialog" :title="__('Send Quotation by Email')" size="3xl" :dismissible="!sendingEmail" :showCloseButton="!sendingEmail">
       <form class="flex max-h-[80vh] min-h-0 flex-col" @submit.prevent="sendEmail">
         <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-1 pb-4">
@@ -153,8 +307,9 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button, Dialog, TextInput, call } from 'frappe-ui'
 import LayoutHeader from '@/components/LayoutHeader.vue'
+import ProductThumbnail from '@/components/ProductThumbnail.vue'
 import QuotationEmails from '@/components/QuotationEmails.vue'
-import { dealsForCustomer, lineAmounts, message, money } from '@/utils/quotation'
+import { appendCatalogSelections, contactsForCustomer, createQuotationItem, customerFromDeal, dealsForCustomer, lineAmounts, message, money, productOptionsForItem, shouldRepriceItem } from '@/utils/quotation'
 import { useSellableProducts } from '@/composables/useSellableProducts'
 
 const route = useRoute(), router = useRouter()
@@ -164,12 +319,30 @@ const exporting = ref(false)
 const activeTab = ref('details'), emailRefreshKey = ref(0)
 const creatingOrder = ref(false), canCreateOrder = ref(false)
 const showEmailDialog = ref(false), sendingEmail = ref(false), emailError = ref(''), emailQueue = ref('')
+const showCatalogDialog = ref(false), catalogAdding = ref(false)
+const catalogSelectedProducts = reactive({})
+const catalogQuantities = reactive({})
+const catalogSelectedNames = computed(() => Object.keys(catalogSelectedProducts))
 const email = reactive({ recipient: '', subject: '', body: '' })
 const emailContextLoading = ref(false), emailContactSearch = ref(''), selectedEmailContact = ref(''), recipientSource = ref('')
 const emailContext = reactive({ suggested: null, company: null, companyContacts: [], validUntil: '', isExpired: false })
 const canWrite = ref(false), canDelete = ref(false), error = ref(''), dealError = ref(''), optionsError = ref(''), conflict = ref(false)
+const customerNotice = ref(''), dealNotice = ref('')
 const contacts = ref([]), companies = ref([]), deals = ref([]), priceLists = ref([])
-const { products, productSearch, productsLoading, productHasNextPage, productPickerError, loadProducts, productPickerLabel } = useSellableProducts()
+const {
+  products,
+  productSearch,
+  productCategory,
+  productCategories,
+  productCategoriesLoading,
+  productCategoriesError,
+  productsLoading,
+  productHasNextPage,
+  productPickerError,
+  loadProducts,
+  loadProductCategories,
+  productPickerLabel,
+} = useSellableProducts()
 const dealLoading = ref(false)
 const dealLabel = ref('')
 let dealRequestId = 0
@@ -177,8 +350,13 @@ let emailContactSearchTimer = null
 let emailContextRequest = 0
 const pricingStates = new WeakMap()
 const editable = computed(() => (isNew.value && canWrite.value) || (!isNew.value && editing.value && canWrite.value && doc.value?.status === 'Draft'))
-const availableContacts = computed(() => doc.value?.customer_type === 'COMPANY' ? contacts.value.filter(c => c.company === doc.value.company) : contacts.value)
+const availableContacts = computed(() => contactsForCustomer(contacts.value, doc.value))
 const dealContextReady = computed(() => doc.value?.customer_type === 'PERSONAL' ? Boolean(doc.value.contact) : doc.value?.customer_type === 'COMPANY' ? Boolean(doc.value.company) : false)
+const pricingExplanation = computed(() => {
+  if (doc.value?.price_list) return __('New automatically priced lines use the selected Price List, then the Product default when no matching row exists.')
+  if (doc.value?.customer_type === 'COMPANY') return __('Automatic checks the Company Price List, optional Contact Price List, system default, then Product default.')
+  return __('Automatic checks the Contact Price List, system default, then Product default.')
+})
 const matchingDeals = computed(() => {
   if (!doc.value || !dealContextReady.value) return []
   return dealsForCustomer(deals.value, doc.value)
@@ -205,7 +383,7 @@ watch(emailContactSearch, () => {
 })
 
 async function loadDocument() {
-  loading.value = true; error.value = ''; dealError.value = ''; conflict.value = false
+  loading.value = true; error.value = ''; dealError.value = ''; customerNotice.value = ''; dealNotice.value = ''; conflict.value = false
   try {
     if (isNew.value) {
       const permission = await call('frappe.client.has_permission', { doctype: 'DoubleT Quotation', docname: '', perm_type: 'create' })
@@ -224,26 +402,43 @@ async function loadDocument() {
   } catch (e) { error.value = message(e); doc.value = null } finally { loading.value = false }
 }
 function customerChanged() {
-  if (doc.value.customer_type === 'PERSONAL') doc.value.company = ''
-  if (doc.value.customer_type === 'COMPANY' && doc.value.contact) {
-    const contact = contacts.value.find(row => row.name === doc.value.contact)
-    if (contact?.company && !doc.value.company) doc.value.company = contact.company
-    else if (contact && contact.company !== doc.value.company) doc.value.contact = ''
-  }
-  customerContextChanged()
+  const clearedCustomer = Boolean(doc.value.contact || doc.value.company)
+  doc.value.contact = ''
+  doc.value.company = ''
+  customerNotice.value = clearedCustomer ? __('Customer Type changed. The previous Contact and Company selections were cleared.') : ''
+  customerContextChanged(__('The linked Deal was removed because Customer Type changed.'))
 }
 function companyChanged() {
   const contact = contacts.value.find(row => row.name === doc.value.contact)
-  if (contact && contact.company !== doc.value.company) doc.value.contact = ''
-  customerContextChanged()
+  if (doc.value.contact && (!doc.value.company || !contact || contact.company !== doc.value.company)) {
+    doc.value.contact = ''
+    customerNotice.value = __('The previous Contact was cleared because it does not belong to the selected Company.')
+  } else customerNotice.value = ''
+  customerContextChanged(__('The linked Deal was removed because it does not match the selected Company.'))
 }
-function customerContextChanged() {
+function contactChanged() {
+  customerNotice.value = ''
+  customerContextChanged(__('The linked Deal was removed because it does not match the selected Contact.'))
+}
+function clearDeal(notice = '') {
+  dealRequestId += 1
+  doc.value.deal = ''
+  dealLoading.value = false
+  dealLabel.value = ''
+  dealError.value = ''
+  dealNotice.value = notice
+}
+function customerContextChanged(notice = __('The linked Deal was removed because it no longer matches the customer.')) {
   if (doc.value.deal && !matchingDeals.value.some(deal => deal.name === doc.value.deal)) {
-    doc.value.deal = ''
-    dealLabel.value = ''
-    dealError.value = ''
+    clearDeal(notice)
   }
   pricingContextChanged()
+}
+function contactLabel(contact) { return [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.name }
+function unlinkDeal() {
+  const label = dealLabel.value || doc.value?.deal
+  if (!label) return
+  clearDeal(__('Deal {0} was unlinked. You can now change the customer.', [label]))
 }
 function dealName(value) { return typeof value === 'string' ? value.trim() : '' }
 async function loadDealLabel(value) {
@@ -263,16 +458,14 @@ async function selectDeal(value = doc.value?.deal) {
   const requestId = ++dealRequestId
   const name = dealName(value)
   if (!name) {
-    doc.value.deal = ''
-    dealLoading.value = false
-    dealLabel.value = ''
-    dealError.value = ''
+    clearDeal()
     return
   }
 
   doc.value.deal = name
   dealLoading.value = true
   dealError.value = ''
+  dealNotice.value = ''
   try {
     const deal = await call('frappe.client.get', { doctype: 'DoubleT Deal', name })
     if (requestId !== dealRequestId) return
@@ -280,7 +473,8 @@ async function selectDeal(value = doc.value?.deal) {
     if (!['PERSONAL', 'COMPANY'].includes(deal.deal_type) || (deal.deal_type === 'COMPANY' && !deal.company) || (deal.deal_type === 'PERSONAL' && !deal.contact)) {
       throw new Error(__('The Deal customer information is incomplete or unavailable. Check the Deal customer or ask an administrator to check your access.'))
     }
-    Object.assign(doc.value, { customer_type: deal.deal_type, contact: deal.contact || '', company: deal.company || '' })
+    Object.assign(doc.value, customerFromDeal(deal))
+    customerNotice.value = ''
     await loadDealLabel(name)
     dealError.value = ''
     await repriceAutomaticItems()
@@ -309,9 +503,48 @@ function itemPricing(item) {
 }
 
 function addItem() {
-  const item = { product: '', product_name: '', sku: '', quantity: 1, unit_price: '', discount_type: 'Percentage', discount_percent: 0, discount_amount: 0 }
+  const item = createQuotationItem()
   doc.value.items.push(item)
   itemPricing(item)
+}
+
+function catalogProductSelected(name) {
+  return Boolean(catalogSelectedProducts[name])
+}
+
+function toggleCatalogProduct(name, selected) {
+  if (selected) {
+    const product = products.value.find(row => row.name === name)
+    if (product) catalogSelectedProducts[name] = product
+    if (!catalogQuantities[name]) catalogQuantities[name] = 1
+    return
+  }
+  delete catalogSelectedProducts[name]
+}
+
+function openCatalog() {
+  if (!editable.value || !dealContextReady.value) return
+  Object.keys(catalogSelectedProducts).forEach(name => delete catalogSelectedProducts[name])
+  Object.keys(catalogQuantities).forEach(name => delete catalogQuantities[name])
+  showCatalogDialog.value = true
+}
+
+async function addSelectedProducts() {
+  if (catalogAdding.value || !editable.value || !dealContextReady.value) return
+  const selections = catalogSelectedNames.value
+    .map(name => ({ product: catalogSelectedProducts[name], quantity: catalogQuantities[name] }))
+  if (!selections.length) return
+
+  catalogAdding.value = true
+  try {
+    await appendCatalogSelections(doc.value.items, selections, async item => {
+      itemPricing(item)
+      await resolveItemPrice(item)
+    })
+    showCatalogDialog.value = false
+  } finally {
+    catalogAdding.value = false
+  }
 }
 
 function discountTypeChanged(item) {
@@ -388,13 +621,13 @@ async function resolveItemPrice(item) {
 
 async function repriceAutomaticItems() {
   const items = (doc.value?.items || []).filter(item => {
-    const state = itemPricing(item)
-    return !item.name && item.product && !state.manual && (state.auto || item.unit_price === '' || item.unit_price === null)
+    return shouldRepriceItem(item, itemPricing(item))
   })
   await Promise.allSettled(items.map(resolveItemPrice))
 }
 
 function pricingContextChanged() {
+  if (!dealContextReady.value) return
   void repriceAutomaticItems()
 }
 
@@ -403,6 +636,10 @@ function pricingSourceLabel(item) {
   if (state.source === 'price_list' && state.priceList) {
     const priceList = priceLists.value.find(row => row.name === state.priceList)
     return `${__('Price List')}: ${priceList?.price_list_name || state.priceList}`
+  }
+  if (state.source === 'product' && state.priceList) {
+    const priceList = priceLists.value.find(row => row.name === state.priceList)
+    return __('Product default price (no matching row in {0})', [priceList?.price_list_name || state.priceList])
   }
   return state.source === 'product' ? __('Product default price') : ''
 }
@@ -567,6 +804,7 @@ onMounted(async () => {
     .then(result => { canCreateOrder.value = Boolean(result?.has_permission) })
     .catch(() => { canCreateOrder.value = false })
   loadOptions()
+  loadProductCategories()
   loadProducts()
   await loadDocument()
   const queryDeal = Array.isArray(route.query.deal) ? '' : dealName(route.query.deal)
@@ -586,6 +824,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.875rem; }
+.setup-step { min-width: 0; border: 1px solid var(--outline-gray-2, #e5e7eb); border-radius: 0.5rem; padding: 0.75rem; }
+.setup-step-title { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.65rem; font-size: 0.875rem; font-weight: 600; color: var(--ink-gray-8, #1f2937); }
+.setup-step-title > span:first-child { display: inline-grid; width: 1.25rem; height: 1.25rem; place-items: center; border-radius: 9999px; background: var(--surface-gray-2, #f3f4f6); font-size: 0.75rem; }
+.setup-placeholder { display: grid; min-height: 4.5rem; place-items: center; border: 1px dashed var(--outline-gray-2, #d1d5db); border-radius: 0.375rem; padding: 0.75rem; text-align: center; font-size: 0.75rem; color: var(--ink-gray-5, #6b7280); }
+.setup-guidance { font-size: 0.75rem; line-height: 1.25rem; color: var(--ink-gray-5, #6b7280); }
 select, textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 0.25rem; padding: 0.4rem; background: white; }
 fieldset:disabled { opacity: 0.8; }
 </style>

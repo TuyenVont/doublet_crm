@@ -3,6 +3,7 @@ import json
 
 import frappe
 from frappe import _
+from frappe.model.delete_doc import get_dynamic_linked_docs, get_linked_docs
 from frappe.utils import cint, cstr, get_datetime, get_system_timezone, now
 
 from doublet_crm.doublet_crm.doctype.doublet_call_log.doublet_call_log import normalize_phone_number
@@ -36,6 +37,16 @@ TASK_FIELDS = [
     "creation",
 ]
 TASK_ORDER_BY = "modified desc, name desc"
+ATTACHMENT_FIELDS = [
+    "name",
+    "file_name",
+    "file_url",
+    "file_type",
+    "file_size",
+    "is_private",
+    "creation",
+    "modified",
+]
 
 
 def _note_reference_label(doctype, docname):
@@ -284,6 +295,57 @@ def _check_activity_reference(doctype, docname):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 
+def _get_readable_attachments(doctype, docname, order_by="creation desc"):
+    attachments = []
+    for row in frappe.get_all(
+        "File",
+        filters={"attached_to_doctype": doctype, "attached_to_name": docname},
+        fields=["name"],
+        order_by=order_by,
+    ):
+        file = frappe.get_doc("File", row.name)
+        if not file.has_permission("read"):
+            continue
+        file.apply_fieldlevel_read_permissions()
+        attachments.append(frappe._dict({field: file.get(field) for field in ATTACHMENT_FIELDS}))
+    return attachments
+
+
+@frappe.whitelist()
+def get_linked_docs_of_document(doctype, docname):
+    if doctype not in ALLOWED_REFERENCES:
+        frappe.throw(_("Unsupported reference DocType"), frappe.ValidationError)
+
+    source = frappe.get_doc(doctype, docname)
+    source.check_permission("read")
+    links = get_linked_docs(source) + get_dynamic_linked_docs(source)
+    unique_links = {
+        (link.get("reference_doctype"), link.get("reference_docname")): link
+        for link in links
+        if link.get("reference_doctype") and link.get("reference_docname")
+    }
+
+    complete = True
+    docs = []
+    for reference_doctype, reference_docname in unique_links:
+        try:
+            linked = frappe.get_doc(reference_doctype, reference_docname)
+        except (frappe.DoesNotExistError, frappe.ValidationError):
+            continue
+        if not linked.has_permission("read"):
+            complete = False
+            continue
+        linked.apply_fieldlevel_read_permissions()
+        docs.append({
+            "doc": linked.doctype,
+            "title": linked.get("title") or linked.get_title() or linked.name,
+            "reference_docname": reference_docname,
+            "reference_doctype": reference_doctype,
+        })
+
+    return {"docs": docs, "complete": complete}
+
+
 @frappe.whitelist()
 def get_activities(doctype, docname):
     """Timeline data for a single DoubleT record, in the shared Activities shape."""
@@ -294,12 +356,14 @@ def get_activities(doctype, docname):
         owner=record.owner, creation=record.creation, is_lead=doctype == "DoubleT Lead",
     )]
 
-    comments = frappe.get_list(
-        "Comment", filters={"reference_doctype": doctype, "reference_name": docname,
-                            "comment_type": "Comment"},
-        fields=["name", "content", "owner", "creation"],
-        order_by="creation asc",
-    )
+    comments = []
+    if frappe.has_permission("Comment", "read"):
+        comments = frappe.get_list(
+            "Comment", filters={"reference_doctype": doctype, "reference_name": docname,
+                                "comment_type": "Comment"},
+            fields=["name", "content", "owner", "creation"],
+            order_by="creation asc",
+        )
     for comment in comments:
         comment.update(activity_type="comment", is_lead=doctype == "DoubleT Lead")
     versions.extend(comments)
@@ -336,9 +400,8 @@ def get_activities(doctype, docname):
         email["activity_type"] = "communication"
         email["data"] = {key: email.get(key) for key in (
             "sender", "sender_full_name", "recipients", "cc", "bcc", "subject", "content", "delivery_status")}
-        email["data"]["attachments"] = frappe.get_list(
-            "File", filters={"attached_to_doctype": "Communication", "attached_to_name": email.name},
-            fields=["file_name", "file_url"],
+        email["data"]["attachments"] = _get_readable_attachments(
+            "Communication", email.name, order_by="creation asc"
         )
     versions.extend(emails)
 
@@ -359,11 +422,7 @@ def get_activities(doctype, docname):
 
     notes = get_linked_notes(doctype, docname) if frappe.has_permission("DoubleT Note", "read") else []
     tasks = get_linked_tasks(doctype, docname)[3] if frappe.has_permission("DoubleT Task", "read") else []
-    attachments = frappe.get_list(
-        "File", filters={"attached_to_doctype": doctype, "attached_to_name": docname},
-        fields=["name", "file_name", "file_url", "file_type", "file_size", "is_private", "creation", "modified"],
-        order_by="creation desc",
-    )
+    attachments = _get_readable_attachments(doctype, docname)
     return [versions, calls, notes, tasks, attachments]
 
 

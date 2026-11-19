@@ -1,12 +1,10 @@
 import { defineStore } from 'pinia'
 import { createResource } from 'frappe-ui'
 import { reactive, ref } from 'vue'
+import { sessionStore } from './session'
 
-export const viewsStore = defineStore('crm-views', (doctype) => {
-  if (typeof doctype !== 'string') {
-    doctype = null
-  }
-
+export const viewsStore = defineStore('crm-views', () => {
+  const session = sessionStore()
   let viewsByName = reactive({})
   let pinnedViews = ref([])
   let publicViews = ref([])
@@ -15,8 +13,35 @@ export const viewsStore = defineStore('crm-views', (doctype) => {
 
   // Views
   const views = createResource({
-    url: 'crm.api.views.get_views',
-    params: { doctype: doctype || '' },
+    url: 'frappe.client.get_list',
+    params: {
+      doctype: 'CRM View Settings',
+      filters: [['user', 'in', ['', session.user]]],
+      fields: [
+        'name',
+        'label',
+        'icon',
+        'user',
+        'is_standard',
+        'is_default',
+        'type',
+        'dt',
+        'route_name',
+        'pinned',
+        'public',
+        'filters',
+        'order_by',
+        'load_default_columns',
+        'columns',
+        'rows',
+        'group_by_field',
+        'column_field',
+        'title_field',
+        'kanban_columns',
+        'kanban_fields',
+      ],
+      limit_page_length: 500,
+    },
     cache: 'crm-views',
     initialData: [],
     auto: true,
