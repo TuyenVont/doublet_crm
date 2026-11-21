@@ -35,6 +35,7 @@ TASK_FIELDS = [
     "status",
     "modified",
     "creation",
+    "callback_call_log",
 ]
 TASK_ORDER_BY = "modified desc, name desc"
 ATTACHMENT_FIELDS = [

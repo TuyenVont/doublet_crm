@@ -1,6 +1,6 @@
 <template>
   <div
-    class="relative flex h-full flex-col justify-between transition-all duration-300 ease-in-out bg-surface-gray-1"
+    class="relative flex h-full shrink-0 flex-col justify-between transition-all duration-300 ease-in-out bg-surface-gray-1"
     :class="isSidebarCollapsed ? 'w-12' : 'w-[220px]'"
   >
     <div class="p-2">
@@ -67,9 +67,27 @@
           />
         </nav>
       </Section>
+      <Section
+        :key="forceCompactRail"
+        :label="__('Contact Center')"
+        :header-class="isSidebarCollapsed ? 'hidden' : 'px-4 pt-[11px] pb-2.5'"
+        label-class="!text-ink-gray-5"
+      >
+        <nav class="flex flex-col" :aria-label="__('Contact Center')">
+          <SidebarLink
+            v-for="link in contactCenterLinks"
+            :key="link.to"
+            :icon="link.icon"
+            :label="__(link.label)"
+            :to="link.to"
+            :isCollapsed="isSidebarCollapsed"
+            class="mx-2 my-[1.5px]"
+          />
+        </nav>
+      </Section>
     </div>
 
-    <div class="m-2 flex flex-col gap-1">
+    <div v-if="!forceCompactRail" class="m-2 flex flex-col gap-1">
       <SidebarLink
         :label="isSidebarCollapsed ? __('Expand') : __('Collapse')"
         :icon="CollapseSidebar"
@@ -82,7 +100,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useMediaQuery } from '@vueuse/core'
+import { useRoute } from 'vue-router'
 import UserDropdown from '@/components/UserDropdown.vue'
 import SidebarLink from '@/components/SidebarLink.vue'
 import Section from '@/components/CollapsibleSection.vue'
@@ -98,12 +118,17 @@ import CollapseSidebar from '@/components/Icons/CollapseSidebar.vue'
 import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import { Badge } from 'frappe-ui'
 
-const isSidebarCollapsed = ref(localStorage.getItem('isSidebarCollapsed') === 'true')
+const route = useRoute()
+const narrow = useMediaQuery('(max-width: 1023px)')
+const contactCenterRoutes = new Set(['Inbox', 'Calls', 'Call Logs'])
+const forceCompactRail = computed(() => narrow.value && route.matched.some((record) => contactCenterRoutes.has(record.name)))
+const collapsedPreference = ref(localStorage.getItem('isSidebarCollapsed') === 'true')
+const isSidebarCollapsed = computed(() => collapsedPreference.value || forceCompactRail.value)
 const unreadNotificationsCount = ref(0)
 
 function toggleCollapse() {
-  isSidebarCollapsed.value = !isSidebarCollapsed.value
-  localStorage.setItem('isSidebarCollapsed', String(isSidebarCollapsed.value))
+  collapsedPreference.value = !collapsedPreference.value
+  localStorage.setItem('isSidebarCollapsed', String(collapsedPreference.value))
 }
 
 const links = [
@@ -118,7 +143,11 @@ const links = [
   { label: 'Orders', icon: 'shopping-cart', to: 'Orders' },
   { label: 'Notes', icon: NoteIcon, to: 'Notes' },
   { label: 'Tasks', icon: TaskIcon, to: 'Tasks' },
+]
+
+const contactCenterLinks = [
   { label: 'Inbox', icon: 'inbox', to: 'Inbox' },
-  { label: 'Call Logs', icon: PhoneIcon, to: 'Call Logs' },
+  { label: 'Calls', icon: PhoneIcon, to: 'Calls' },
+  { label: 'Call Logs', icon: 'list', to: 'Call Logs' },
 ]
 </script>

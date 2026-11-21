@@ -3,7 +3,7 @@
     <div v-for="(task, i) in tasks" :key="task.name">
       <div
         class="activity flex cursor-pointer gap-6 rounded p-2.5 duration-300 ease-in-out hover:bg-surface-gray-1"
-        @click="modalRef.showTask(task)"
+        @click="openTask(task)"
       >
         <div class="flex flex-1 flex-col gap-1.5 text-base truncate">
           <div class="font-medium text-ink-gray-9 truncate">
@@ -36,7 +36,17 @@
             </div>
           </div>
         </div>
-        <div class="flex items-center gap-1">
+        <div v-if="task.callback_call_log" class="flex items-center gap-1">
+          <TaskStatusIcon :status="task.status" />
+          <RouterLink
+            :to="callbackRoute(task)"
+            class="text-sm text-sky-700 hover:underline"
+            @click.stop
+          >
+            {{ __('View call') }}
+          </RouterLink>
+        </div>
+        <div v-else class="flex items-center gap-1">
           <Dropdown
             :options="taskStatusOptions(modalRef.updateTaskStatus, task)"
           >
@@ -103,8 +113,9 @@ import { formatDate, taskStatusOptions } from '@/utils'
 import { usersStore } from '@/stores/users'
 import { globalStore } from '@/stores/global'
 import { Button, Tooltip, Dropdown } from 'frappe-ui'
+import { useRouter } from 'vue-router'
 
-defineProps({
+const props = defineProps({
   tasks: { type: Array, default: () => [] },
   modalRef: { type: Object, default: () => ({}) },
   hasMore: { type: Boolean, default: false },
@@ -115,4 +126,14 @@ defineEmits(['load-more'])
 
 const { getUser } = usersStore()
 const { $dialog } = globalStore()
+const router = useRouter()
+
+function callbackRoute(task) {
+  return { name: 'CallDetail', params: { callId: task.callback_call_log } }
+}
+
+function openTask(task) {
+  if (task.callback_call_log) return router.push(callbackRoute(task))
+  props.modalRef.showTask(task)
+}
 </script>

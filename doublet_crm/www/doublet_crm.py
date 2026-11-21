@@ -69,6 +69,7 @@ def get_boot():
         {
             "frappe_version": frappe.__version__,
             "site_name": frappe.local.site,
+            "socketio_port": frappe.conf.get("socketio_port"),
             "user": frappe.session.user,
             "csrf_token": frappe.sessions.get_csrf_token(),
             "translated_messages": get_messages_for_boot(),

@@ -123,6 +123,12 @@
     :reference-name="leadId"
   />
 
+  <RecordCallHistory
+    v-else-if="activeTabName === 'Calls'"
+    reference-doctype="DoubleT Lead"
+    :reference-name="leadId"
+  />
+
   <ZaloRecordChat
     v-else-if="activeTabName === 'Zalo OA'"
     reference-doctype="DoubleT Lead"
@@ -455,6 +461,7 @@ import DoubleTLeadDataPanel from '@/components/Lead/DoubleTLeadDataPanel.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import SharedNotes from '@/components/Notes/SharedNotes.vue'
+import RecordCallHistory from '@/components/Calls/RecordCallHistory.vue'
 import ZaloRecordChat from '@/components/Zalo/ZaloRecordChat.vue'
 import QuotationEmails from '@/components/QuotationEmails.vue'
 import AssignTo from '@/components/AssignTo.vue'

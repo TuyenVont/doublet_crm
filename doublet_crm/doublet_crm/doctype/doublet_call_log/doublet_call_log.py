@@ -15,6 +15,12 @@ ALLOWED_REFERENCE_DOCTYPES = {"DoubleT Lead", "DoubleT Contact"}
 
 INCOMING_CALL_TYPES = {"Incoming", "Incoming Forwarded"}
 OUTGOING_CALL_TYPES = {"Outgoing", "Callback"}
+MISSED_STATUSES = {"Missed", "No Answer"}
+HANDLING_STATUSES = ("Waiting", "In Progress", "Resolved")
+
+
+def is_missed_incoming(call):
+    return call.call_type in INCOMING_CALL_TYPES and call.status in MISSED_STATUSES
 
 
 class DoubleTCallLog(Document):
@@ -24,8 +30,34 @@ class DoubleTCallLog(Document):
         self.validate_reference()
         self.normalize_phone_fields()
 
-        if not self.reference_doctype and not self.reference_name:
+        previous = self.get_doc_before_save()
+        number_fields = ("call_type", "from_number", "to_number")
+        needs_matching = previous is None or any(self.get(field) != previous.get(field) for field in number_fields)
+        if needs_matching and not self.flags.call_case_workflow and not self.reference_doctype and not self.reference_name:
             self.auto_link_reference()
+
+        self.validate_case_fields()
+        self.queue_priority = int(self.handling_status == "Waiting" and is_missed_incoming(self))
+
+    def validate_case_fields(self):
+        if self.flags.call_case_workflow:
+            return
+
+        if self.is_new():
+            if self.assigned_to or self.handling_status not in (None, "", "Waiting"):
+                frappe.throw(_("Use Contact Center to update call handling."))
+            self.handling_status = "Waiting"
+            return
+
+        previous = self.get_doc_before_save()
+        fields = ("handling_status", "assigned_to")
+        if any((self.get(field) or "") != (previous.get(field) or "") for field in fields):
+            frappe.throw(_("Use Contact Center to update call handling."))
+
+        callback_fields = ("reference_doctype", "reference_name", "call_type", "status")
+        if any((self.get(field) or "") != (previous.get(field) or "") for field in callback_fields):
+            if frappe.db.get_value("DoubleT Task", {"callback_call_log": self.name}, "name", for_update=True):
+                frappe.throw(_("This call is linked to a callback task. Update its customer from Contact Center."))
 
     def validate_duration(self):
         if (self.duration or 0) < 0:
@@ -86,20 +118,9 @@ class DoubleTCallLog(Document):
             return
 
         if len(matches) > 1:
-            self.reference_doctype = None
-            self.reference_name = None
-
-            match_names = ", ".join(
-                f'{match["doctype"]}: {match["name"]}'
-                for match in matches
-            )
-
-            append_note(
-                self,
-                _(
-                    "Auto-link skipped: phone {0} matched multiple CRM records: {1}"
-                ).format(contact_number, match_names),
-            )
+            message = _("Auto-link skipped: phone {0} matched multiple CRM records.").format(contact_number)
+            if message not in (self.note or "").splitlines():
+                append_note(self, message)
 
 
 def normalize_phone_number(phone_number):

@@ -3,355 +3,245 @@
     <Transition name="call-log-drawer">
       <div
         v-if="show"
-        class="fixed inset-0 z-[100] flex justify-end bg-black/25 backdrop-blur-[1px]"
+        class="fixed inset-0 z-[90] flex justify-end bg-black/25"
         @click.self="show = false"
       >
-        <div
-          class="flex h-full w-full flex-col bg-white shadow-2xl sm:max-w-xl"
+        <section
+          ref="panel"
+          class="flex h-full w-full min-w-0 flex-col bg-white shadow-2xl outline-none sm:max-w-[34rem]"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="__('Call details')"
+          tabindex="-1"
+          @keydown="handleKey"
         >
-          <!-- Header -->
-          <div class="border-b px-5 py-4 sm:px-6">
-            <div class="flex items-start justify-between gap-4">
-              <div class="flex min-w-0 items-center gap-3">
-                <div
-                  class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700"
-                >
-                  <FeatherIcon
-                    :name="callTypeIcon(callLog.call_type)"
-                    class="h-5 w-5"
-                  />
-                </div>
-
-                <div class="min-w-0">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <h2 class="text-lg font-semibold text-ink-gray-9">
-                      {{ __(callLog.call_type || 'Call') }}
-                    </h2>
-
-                    <span
-                      class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
-                      :class="statusClass(callLog.status)"
-                    >
-                      {{ __(callLog.status || 'Unknown') }}
-                    </span>
-                  </div>
-
-                  <div class="mt-1 text-sm text-ink-gray-5">
-                    {{ formatDateTime(callLog.start_time) }}
-                  </div>
+          <header class="shrink-0 border-b border-outline-gray-2 px-4 pb-3 pt-4 sm:px-6">
+            <div class="flex items-start gap-3">
+              <span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface-gray-2 text-ink-gray-7">
+                <FeatherIcon :name="callDirectionIcon" class="size-5" aria-hidden="true" />
+              </span>
+              <div class="min-w-0 flex-1">
+                <h2 class="break-words text-lg font-semibold leading-6 text-ink-gray-9">
+                  {{ callLog.customer?.label || callLog.customer_number || __(callLog.call_type || 'Call') }}
+                </h2>
+                <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-gray-6">
+                  <Badge :label="__(callLog.status || 'Unknown')" :theme="callOutcomeTheme(callLog.status)" />
+                  <span>{{ __(callLog.call_type || 'Call') }}</span>
+                  <span>{{ formatCallTime(callLog.start_time) }}</span>
                 </div>
               </div>
-
               <Button
                 variant="ghost"
                 icon="x"
+                :label="__('Close call details')"
+                class="shrink-0"
                 @click="show = false"
               />
             </div>
-          </div>
 
-          <!-- Body -->
-          <div class="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-            <div class="flex flex-col gap-5">
-              <!-- Call summary -->
-              <div class="grid grid-cols-2 gap-3">
-                <InfoCard
-                  :label="__('Duration')"
-                  :value="formatDuration(callLog.duration)"
-                  icon="clock"
-                />
-                <InfoCard
-                  :label="__('Agent')"
-                  :value="callLog.agent || '—'"
-                  icon="user"
-                />
-              </div>
+            <nav v-if="callLog.can_handle" :aria-label="__('Call detail sections')" class="mt-4 flex flex-wrap gap-1.5">
+              <Button
+                v-for="item in sections"
+                :key="item.value"
+                :label="__(item.label)"
+                :variant="activeSection === item.value ? 'subtle' : 'ghost'"
+                :aria-pressed="activeSection === item.value"
+                @click="section = item.value"
+              />
+            </nav>
+          </header>
 
-              <!-- Phone flow -->
-              <section class="rounded-2xl border bg-gray-50/60 p-4">
-                <div class="mb-4 text-xs font-semibold uppercase tracking-wide text-ink-gray-5">
-                  {{ __('Call route') }}
-                </div>
+          <slot name="feedback" />
 
-                <div class="flex items-center gap-3">
-                  <div class="min-w-0 flex-1">
-                    <div class="text-xs text-ink-gray-5">
-                      {{ __('From') }}
-                    </div>
-                    <div class="mt-1 truncate text-base font-semibold text-ink-gray-9">
-                      {{ callLog.from_number || '—' }}
-                    </div>
-                  </div>
-
-                  <div
-                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-sky-700 shadow-sm ring-1 ring-gray-200"
-                  >
-                    <FeatherIcon name="arrow-right" class="h-4 w-4" />
-                  </div>
-
-                  <div class="min-w-0 flex-1 text-right">
-                    <div class="text-xs text-ink-gray-5">
-                      {{ __('To') }}
-                    </div>
-                    <div class="mt-1 truncate text-base font-semibold text-ink-gray-9">
-                      {{ callLog.to_number || '—' }}
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  v-if="callLog.line_number"
-                  class="mt-4 border-t pt-3 text-xs text-ink-gray-5"
-                >
-                  {{ __('Line') }}:
-                  <span class="font-medium text-ink-gray-8">
-                    {{ callLog.line_number }}
-                  </span>
-                </div>
-              </section>
-
-              <!-- Related customer -->
-              <section
-                v-if="callLog.reference_name"
-                class="rounded-2xl border bg-white p-4"
-              >
-                <div class="text-xs font-semibold uppercase tracking-wide text-ink-gray-5">
-                  {{ __('Related customer') }}
-                </div>
-
-                <div class="mt-3 flex items-center gap-3">
-                  <div
-                    class="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-700"
-                  >
-                    <FeatherIcon
-                      :name="callLog.reference_doctype === 'DoubleT Lead' ? 'user' : 'contact'"
-                      class="h-4 w-4"
-                    />
-                  </div>
-
+          <div ref="body" class="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface-gray-1 px-3 py-3 sm:px-5 sm:py-4">
+            <div v-if="activeSection === 'overview'" class="space-y-3 sm:space-y-4">
+              <section class="rounded-xl border border-outline-gray-2 bg-white p-3.5 sm:p-4">
+                <h3 class="text-sm font-semibold text-ink-gray-9">{{ __('Call information') }}</h3>
+                <dl class="mt-3 grid grid-cols-2 gap-x-3 gap-y-3.5 text-sm">
                   <div class="min-w-0">
-                    <div class="truncate text-sm font-semibold text-ink-gray-9">
-                      {{ callLog.reference_name }}
-                    </div>
-                    <div class="text-xs text-ink-gray-5">
-                      {{ callLog.reference_doctype }}
-                    </div>
+                    <dt class="text-xs text-ink-gray-5">{{ __('From') }}</dt>
+                    <dd class="mt-0.5 break-words font-medium tabular-nums text-ink-gray-9">{{ callLog.from_number || '—' }}</dd>
                   </div>
-                </div>
-              </section>
-
-              <!-- Recording -->
-              <section
-                v-if="callLog.recording_url"
-                class="rounded-2xl border bg-white p-4"
-              >
-                <div class="flex items-center justify-between gap-3">
+                  <div class="min-w-0">
+                    <dt class="text-xs text-ink-gray-5">{{ __('To') }}</dt>
+                    <dd class="mt-0.5 break-words font-medium tabular-nums text-ink-gray-9">{{ callLog.to_number || '—' }}</dd>
+                  </div>
                   <div>
-                    <div class="text-xs font-semibold uppercase tracking-wide text-ink-gray-5">
-                      {{ __('Recording') }}
-                    </div>
-                    <div class="mt-1 text-sm text-ink-gray-7">
-                      {{ __('Call recording URL') }}
-                    </div>
+                    <dt class="text-xs text-ink-gray-5">{{ __('Duration') }}</dt>
+                    <dd class="mt-0.5 font-medium tabular-nums text-ink-gray-9">{{ duration }}</dd>
                   </div>
-
-                  <a
-                    :href="callLog.recording_url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-sm font-medium text-sky-700 hover:underline"
-                  >
-                    {{ __('Open') }}
-                  </a>
-                </div>
-
-                <audio
-                  class="mt-4 h-9 w-full"
-                  controls
-                  preload="none"
-                  :src="callLog.recording_url"
-                ></audio>
-              </section>
-
-              <!-- Note -->
-              <section class="rounded-2xl border bg-white p-4">
-                <div class="flex items-center gap-2">
-                  <FeatherIcon
-                    name="file-text"
-                    class="h-4 w-4 text-ink-gray-5"
-                  />
-                  <div class="text-xs font-semibold uppercase tracking-wide text-ink-gray-5">
-                    {{ __('Note') }}
+                  <div class="min-w-0">
+                    <dt class="text-xs text-ink-gray-5">{{ __('Agent') }}</dt>
+                    <dd class="mt-0.5 break-words text-ink-gray-8">{{ callLog.agent || '—' }}</dd>
                   </div>
-                </div>
-
-                <div
-                  v-if="callLog.note"
-                  class="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink-gray-8"
-                >
-                  {{ callLog.note }}
-                </div>
-
-                <div
-                  v-else
-                  class="mt-3 text-sm italic text-ink-gray-4"
-                >
-                  {{ __('No note for this call.') }}
-                </div>
-              </section>
-
-              <!-- Technical -->
-              <section class="rounded-2xl border bg-gray-50/60 p-4">
-                <div class="text-xs font-semibold uppercase tracking-wide text-ink-gray-5">
-                  {{ __('Technical details') }}
-                </div>
-
-                <dl class="mt-3 space-y-3 text-sm">
-                  <div class="flex items-start justify-between gap-4">
-                    <dt class="text-ink-gray-5">
-                      {{ __('Call ID') }}
-                    </dt>
-                    <dd class="max-w-[65%] break-all text-right font-mono text-xs text-ink-gray-8">
-                      {{ callLog.external_call_id || '—' }}
-                    </dd>
-                  </div>
-
-                  <div class="flex items-start justify-between gap-4">
-                    <dt class="text-ink-gray-5">
-                      {{ __('Started') }}
-                    </dt>
-                    <dd class="text-right text-ink-gray-8">
-                      {{ formatDateTime(callLog.start_time) }}
-                    </dd>
-                  </div>
-
-                  <div class="flex items-start justify-between gap-4">
-                    <dt class="text-ink-gray-5">
-                      {{ __('Ended') }}
-                    </dt>
-                    <dd class="text-right text-ink-gray-8">
-                      {{ formatDateTime(callLog.end_time) }}
-                    </dd>
+                  <div v-if="callLog.line_number" class="col-span-2 min-w-0">
+                    <dt class="text-xs text-ink-gray-5">{{ __('Line') }}</dt>
+                    <dd class="mt-0.5 break-words text-ink-gray-8">{{ callLog.line_number }}</dd>
                   </div>
                 </dl>
               </section>
+
+              <section class="rounded-xl border border-outline-gray-2 bg-white p-3.5 sm:p-4">
+                <h3 class="flex items-center gap-2 text-sm font-semibold text-ink-gray-9">
+                  <FeatherIcon name="headphones" class="size-4 text-ink-gray-5" aria-hidden="true" />
+                  {{ __('Recording') }}
+                </h3>
+                <div v-if="callLog.recording?.state === 'Available' && !recordingFailed" class="mt-2 space-y-2">
+                  <a
+                    :href="callLog.recording.url"
+                    :aria-label="__('Open recording')"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="flex items-start gap-1.5 break-all text-sm font-medium text-ink-blue-6 hover:underline"
+                  >
+                    {{ callLog.recording.label }}
+                    <FeatherIcon name="arrow-up-right" class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                  </a>
+                  <audio
+                    class="block h-9 w-full min-w-0"
+                    controls
+                    preload="none"
+                    :src="callLog.recording.url"
+                    :aria-label="__('Call recording')"
+                    @error="recordingFailed = true"
+                  />
+                </div>
+                <div v-else class="mt-2 rounded-md bg-surface-gray-1 p-2.5 text-sm leading-5 text-ink-gray-7">
+                  <p role="status">{{ __(recordingMessage) }}</p>
+                  <Button
+                    v-if="recordingFailed"
+                    class="mt-2"
+                    variant="subtle"
+                    :label="__('Retry playback')"
+                    @click="recordingFailed = false"
+                  />
+                </div>
+              </section>
+
+              <section id="call-customer-details" class="rounded-xl border border-outline-gray-2 bg-white p-3.5 sm:p-4">
+                <h3 class="text-sm font-semibold text-ink-gray-9">{{ __('Related customer') }}</h3>
+                <RouterLink
+                  v-if="customerRoute"
+                  :to="customerRoute"
+                  class="mt-2 inline-flex max-w-full items-start gap-1.5 break-words text-sm font-medium text-ink-blue-6 hover:underline"
+                >
+                  <span class="min-w-0">{{ callLog.customer.label }}</span>
+                  <FeatherIcon name="arrow-up-right" class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                </RouterLink>
+                <p v-else class="mt-1.5 text-sm text-ink-gray-6">{{ __(linkMessages[callLog.link_state]) }}</p>
+                <slot name="customer-actions" />
+              </section>
+
+              <section v-if="callLog.note" class="rounded-xl border border-outline-gray-2 bg-white p-3.5 sm:p-4">
+                <h3 class="text-sm font-semibold text-ink-gray-9">{{ __('Original note') }}</h3>
+                <p class="mt-1.5 whitespace-pre-wrap break-words text-sm leading-5 text-ink-gray-7">{{ callLog.note }}</p>
+              </section>
+
+              <details class="rounded-xl border border-outline-gray-2 bg-white px-3.5 py-3 sm:px-4">
+                <summary class="cursor-pointer text-sm font-medium text-ink-gray-8">{{ __('Technical details') }}</summary>
+                <dl class="mt-3 space-y-2 text-sm">
+                  <div class="flex justify-between gap-3">
+                    <dt class="text-ink-gray-5">{{ __('Log ID') }}</dt>
+                    <dd class="break-all text-right font-mono text-xs text-ink-gray-8">{{ callLog.name }}</dd>
+                  </div>
+                  <div class="flex justify-between gap-3">
+                    <dt class="shrink-0 text-ink-gray-5">{{ __('External Call ID') }}</dt>
+                    <dd class="min-w-0 break-all text-right font-mono text-xs text-ink-gray-8">{{ callLog.external_call_id || '—' }}</dd>
+                  </div>
+                  <div class="flex justify-between gap-3">
+                    <dt class="text-ink-gray-5">{{ __('Ended') }}</dt>
+                    <dd class="text-right text-ink-gray-8">{{ formatCallTime(callLog.end_time) }}</dd>
+                  </div>
+                </dl>
+              </details>
             </div>
+            <slot v-else-if="activeSection === 'handling'" name="handling" />
+            <slot v-else name="history" />
           </div>
-        </div>
+
+          <slot v-if="activeSection === 'handling'" name="footer" />
+        </section>
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <script setup>
-import { Button, FeatherIcon } from 'frappe-ui'
-import { defineComponent, h } from 'vue'
+import { Badge, Button, FeatherIcon } from 'frappe-ui'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { callCustomerRoute, callOutcomeTheme, formatCallTime } from '@/utils/contactCenterCalls'
 
 const show = defineModel({ type: Boolean })
-const callLog = defineModel('callLog', {
-  type: Object,
-  default: () => ({}),
+const section = defineModel('section', { type: String, default: 'overview' })
+const props = defineProps({ callLog: { type: Object, required: true } })
+const panel = ref(null)
+const body = ref(null)
+const recordingFailed = ref(false)
+const customerRoute = computed(() => callCustomerRoute(props.callLog.customer))
+const activeSection = computed(() => props.callLog.can_handle ? section.value : 'overview')
+const callDirectionIcon = computed(() =>
+  props.callLog.call_type?.startsWith('Incoming') ? 'phone-incoming' : 'phone-outgoing',
+)
+const duration = computed(() => {
+  const seconds = Math.max(0, Math.floor(Number(props.callLog.duration) || 0))
+  const minutes = Math.floor(seconds / 60)
+  const pad = (part) => String(part).padStart(2, '0')
+  const time = pad(minutes % 60) + ':' + pad(seconds % 60)
+  return minutes >= 60 ? Math.floor(minutes / 60) + ':' + time : time
 })
+const sections = [
+  { value: 'overview', label: 'Overview' },
+  { value: 'handling', label: 'Handling' },
+  { value: 'history', label: 'History' },
+]
+const recordingMessages = {
+  None: 'No recording attached.',
+  Legacy: 'Attach a private audio file to play this legacy recording.',
+  Ambiguous: 'Multiple audio files are attached. Set the recording link on the Call Log to enable playback.',
+  Missing: 'Recording unavailable. The private audio file may be missing.',
+}
+const recordingMessage = computed(() =>
+  recordingFailed.value
+    ? 'Playback failed. Retry or check the private audio file.'
+    : recordingMessages[props.callLog.recording?.state] || recordingMessages.Missing,
+)
+const linkMessages = {
+  Unmatched: 'No customer is linked. Select a Lead or Contact.',
+  Ambiguous: 'Several customers match this number. Select the correct record.',
+  Restricted: 'The linked customer is outside your access.',
+}
 
-const InfoCard = defineComponent({
-  props: {
-    label: String,
-    value: [String, Number],
-    icon: String,
-  },
-  setup(props) {
-    return () =>
-      h(
-        'div',
-        {
-          class:
-            'rounded-2xl border bg-white p-4 shadow-sm',
-        },
-        [
-          h(
-            'div',
-            {
-              class:
-                'flex items-center gap-2 text-xs font-medium text-ink-gray-5',
-            },
-            [
-              h(FeatherIcon, {
-                name: props.icon,
-                class: 'h-3.5 w-3.5',
-              }),
-              props.label,
-            ],
-          ),
-          h(
-            'div',
-            {
-              class:
-                'mt-2 truncate text-base font-semibold text-ink-gray-9',
-            },
-            props.value || '—',
-          ),
-        ],
-      )
-  },
+let returnFocus = null
+onMounted(async () => {
+  returnFocus = document.activeElement
+  await nextTick()
+  panel.value?.focus({ preventScroll: true })
 })
+onUnmounted(() => {
+  if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true })
+})
+watch(activeSection, () => {
+  if (body.value) body.value.scrollTop = 0
+})
+watch(() => props.callLog.recording?.url, () => { recordingFailed.value = false })
 
-function callTypeIcon(type) {
-  return ['Incoming', 'Incoming Forwarded'].includes(type)
-    ? 'phone-incoming'
-    : 'phone-outgoing'
-}
-
-function statusClass(status) {
-  const classes = {
-    Completed: 'bg-emerald-50 text-emerald-700',
-    Missed: 'bg-red-50 text-red-700',
-    'No Answer': 'bg-red-50 text-red-700',
-    Failed: 'bg-red-50 text-red-700',
-    Busy: 'bg-amber-50 text-amber-700',
-    Canceled: 'bg-gray-100 text-gray-600',
+function handleKey(event) {
+  if (event.key === 'Escape') {
+    event.stopPropagation()
+    show.value = false
   }
-
-  return classes[status] || 'bg-gray-100 text-gray-600'
-}
-
-function formatDuration(seconds) {
-  const total = Math.max(0, Number(seconds || 0))
-
-  if (!Number.isFinite(total)) return '00:00'
-
-  const hours = Math.floor(total / 3600)
-  const minutes = Math.floor((total % 3600) / 60)
-  const secs = Math.floor(total % 60)
-
-  if (hours) {
-    return [
-      hours,
-      String(minutes).padStart(2, '0'),
-      String(secs).padStart(2, '0'),
-    ].join(':')
+  if (event.key !== 'Tab') return
+  const controls = [...panel.value.querySelectorAll('a[href], button, input, select, textarea, summary, audio[controls], [tabindex="0"]')]
+    .filter((element) => element.tabIndex >= 0 && !element.disabled && element.getClientRects().length)
+  const first = controls[0]
+  const last = controls.at(-1)
+  if (event.shiftKey && [first, panel.value].includes(document.activeElement)) {
+    event.preventDefault()
+    last?.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
   }
-
-  return [
-    String(minutes).padStart(2, '0'),
-    String(secs).padStart(2, '0'),
-  ].join(':')
-}
-
-function formatDateTime(value) {
-  if (!value) return '—'
-
-  const parsed = new Date(String(value).replace(' ', 'T'))
-
-  if (Number.isNaN(parsed.getTime())) return value
-
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(parsed)
 }
 </script>
 
@@ -361,8 +251,8 @@ function formatDateTime(value) {
   transition: opacity 0.18s ease;
 }
 
-.call-log-drawer-enter-active > div,
-.call-log-drawer-leave-active > div {
+.call-log-drawer-enter-active > section,
+.call-log-drawer-leave-active > section {
   transition: transform 0.2s ease;
 }
 
@@ -371,8 +261,17 @@ function formatDateTime(value) {
   opacity: 0;
 }
 
-.call-log-drawer-enter-from > div,
-.call-log-drawer-leave-to > div {
+.call-log-drawer-enter-from > section,
+.call-log-drawer-leave-to > section {
   transform: translateX(28px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .call-log-drawer-enter-active,
+  .call-log-drawer-leave-active,
+  .call-log-drawer-enter-active > section,
+  .call-log-drawer-leave-active > section {
+    transition: none;
+  }
 }
 </style>
