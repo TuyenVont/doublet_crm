@@ -9,3 +9,5 @@ doublet_crm.patches.setup_default_price_lists
 doublet_crm.patches.setup_zalo_lead_source
 doublet_crm.patches.backfill_call_queue
 doublet_crm.patches.protect_call_case_history # archive private revisions
+doublet_crm.patches.archive_legacy_call_ai_notes
+doublet_crm.patches.recover_legacy_call_ai_notes

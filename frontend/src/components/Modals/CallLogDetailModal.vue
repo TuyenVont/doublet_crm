@@ -39,7 +39,7 @@
               />
             </div>
 
-            <nav v-if="callLog.can_handle" :aria-label="__('Call detail sections')" class="mt-4 flex flex-wrap gap-1.5">
+            <nav v-if="sections.length > 1" :aria-label="__('Call detail sections')" class="mt-4 flex flex-wrap gap-1.5">
               <Button
                 v-for="item in sections"
                 :key="item.value"
@@ -155,6 +155,11 @@
                 </dl>
               </details>
             </div>
+            <CallLogAISummary
+              v-else-if="activeSection === 'ai'"
+              :call-log-name="callLog.name"
+              :recording-url="callLog.recording?.url || ''"
+            />
             <slot v-else-if="activeSection === 'handling'" name="handling" />
             <slot v-else name="history" />
           </div>
@@ -169,6 +174,7 @@
 <script setup>
 import { Badge, Button, FeatherIcon } from 'frappe-ui'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import CallLogAISummary from '@/components/Modals/CallLogAISummary.vue'
 import { callCustomerRoute, callOutcomeTheme, formatCallTime } from '@/utils/contactCenterCalls'
 
 const show = defineModel({ type: Boolean })
@@ -178,7 +184,9 @@ const panel = ref(null)
 const body = ref(null)
 const recordingFailed = ref(false)
 const customerRoute = computed(() => callCustomerRoute(props.callLog.customer))
-const activeSection = computed(() => props.callLog.can_handle ? section.value : 'overview')
+const activeSection = computed(() =>
+  sections.value.some((item) => item.value === section.value) ? section.value : 'overview',
+)
 const callDirectionIcon = computed(() =>
   props.callLog.call_type?.startsWith('Incoming') ? 'phone-incoming' : 'phone-outgoing',
 )
@@ -189,11 +197,14 @@ const duration = computed(() => {
   const time = pad(minutes % 60) + ':' + pad(seconds % 60)
   return minutes >= 60 ? Math.floor(minutes / 60) + ':' + time : time
 })
-const sections = [
-  { value: 'overview', label: 'Overview' },
-  { value: 'handling', label: 'Handling' },
-  { value: 'history', label: 'History' },
-]
+const sections = computed(() => {
+  const items = [{ value: 'overview', label: 'Overview' }]
+  if (props.callLog.can_handle) {
+    items.push({ value: 'handling', label: 'Handling' }, { value: 'history', label: 'History' })
+  }
+  if (props.callLog.can_use_ai_summary) items.push({ value: 'ai', label: 'AI Summary' })
+  return items
+})
 const recordingMessages = {
   None: 'No recording attached.',
   Legacy: 'Attach a private audio file to play this legacy recording.',

@@ -18,7 +18,7 @@ from doublet_crm.doublet_crm.doctype.doublet_call_log.doublet_call_log import (
 	is_missed_incoming,
 	normalize_phone_number,
 )
-from doublet_crm.permissions import CALL_MANAGER_ROLES, can_handle_call, can_manage_calls
+from doublet_crm.permissions import CALL_MANAGER_ROLES, can_handle_call, can_manage_calls, can_use_call_summary
 
 CALL_LOG = "DoubleT Call Log"
 CALL_EVENT = "DoubleT Call Event"
@@ -93,7 +93,7 @@ def _private_recording_pointer(value):
 	return path, parse_qs(url.query, keep_blank_values=True).get("fid")
 
 
-def _recording(call):
+def _select_recording(call):
 	# A declared private recording may only resolve to a File on this call.
 	recording_url = call.recording_url or ""
 	path, file_ids = _private_recording_pointer(recording_url)
@@ -111,23 +111,30 @@ def _recording(call):
 	private_files = [row for row in files if row.is_private and row.file_url.startswith("/private/files/")]
 	if not private_files:
 		if path:
-			return {"state": "Missing"}
-		return {"state": "Legacy" if recording_url or files else "None"}
+			return "Missing", None
+		return ("Legacy" if recording_url or files else "None"), None
 
 	# Treat a legacy public File and its byte-identical private copy as one
 	# recording. Different sources require a selection, even if one is missing.
 	if not path and len({row.content_hash or row.file_url for row in files}) > 1:
-		return {"state": "Ambiguous"}
+		return "Ambiguous", None
 	for row in private_files:
 		file = frappe.get_doc("File", row.name)
 		if file.is_downloadable() and Path(file.get_full_path()).is_file():
-			return {
-				"state": "Available",
-				"label": row.file_name,
-				"url": f"{quote(row.file_url)}?fid={quote(row.name, safe='')}",
-			}
-	return {"state": "Missing"}
+			return "Available", file
+	return "Missing", None
 
+
+
+def _recording(call):
+	state, file = _select_recording(call)
+	if not file:
+		return {"state": state}
+	return {
+		"state": state,
+		"label": file.file_name,
+		"url": f"{quote(file.file_url)}?fid={quote(file.name, safe='')}",
+	}
 
 def _link_state(call, customer):
 	if call.reference_name:
@@ -158,6 +165,7 @@ def _call_details(call, task):
 		"callback_task": _callback_summary(task) if can_handle else None,
 		"can_manage": can_manage_calls(),
 		"can_handle": can_handle,
+		"can_use_ai_summary": can_use_call_summary(call),
 		"can_link": call.handling_status != "Resolved" and can_handle,
 	})
 	return row

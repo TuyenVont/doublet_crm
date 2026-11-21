@@ -152,6 +152,14 @@ def can_handle_call(assignee, user=None):
     return can_manage_calls(user) or (assignee == user and "Sales User" in frappe.get_roles(user))
 
 
+
+def can_use_call_summary(call, user=None):
+    user = user or frappe.session.user
+    return can_handle_call(call.assigned_to, user) or (
+        not call.assigned_to and call.agent == user and "Sales User" in frappe.get_roles(user)
+    )
+
+
 def _assigned_call_condition(link_field, user):
     return (
         "exists (select 1 from `tabDoubleT Call Log` as handling_call "

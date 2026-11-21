@@ -180,6 +180,9 @@ has_permission = {
 # }
 
 doc_events = {
+	"DoubleT Call Log": {
+		"on_trash": "doublet_crm.call_log.ai_summary.remove_call_summary",
+	},
 	"DoubleT Deal Stage": {
 		"on_update": "doublet_crm.kanban.sync_deal_kanban_board",
 		"after_delete": "doublet_crm.kanban.sync_deal_kanban_board",

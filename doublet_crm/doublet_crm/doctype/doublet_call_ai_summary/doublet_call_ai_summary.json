@@ -1,0 +1,95 @@
+{
+ "doctype": "DocType",
+ "name": "DoubleT Call AI Summary",
+ "module": "DoubleT CRM",
+ "engine": "InnoDB",
+ "autoname": "field:call_log",
+ "field_order": [
+  "call_log",
+  "status",
+  "request_id",
+  "requested_at",
+  "source_key",
+  "generated_at",
+  "transcript",
+  "summary",
+  "customer_needs",
+  "next_step",
+  "error",
+  "legacy_note"
+ ],
+ "fields": [
+  {
+   "fieldname": "call_log",
+   "fieldtype": "Link",
+   "label": "Call Log",
+   "options": "DoubleT Call Log",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "\nQueued\nProcessing\nReady\nError"
+  },
+  {
+   "fieldname": "request_id",
+   "fieldtype": "Data",
+   "label": "Request ID"
+  },
+  {
+   "fieldname": "requested_at",
+   "fieldtype": "Datetime",
+   "label": "Requested At"
+  },
+  {
+   "fieldname": "source_key",
+   "fieldtype": "Data",
+   "label": "Recording Identity"
+  },
+  {
+   "fieldname": "generated_at",
+   "fieldtype": "Datetime",
+   "label": "Generated At"
+  },
+  {
+   "fieldname": "transcript",
+   "fieldtype": "Long Text",
+   "label": "Transcript",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Small Text",
+   "label": "Summary",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "customer_needs",
+   "fieldtype": "Small Text",
+   "label": "Customer Needs",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "next_step",
+   "fieldtype": "Small Text",
+   "label": "Next Steps",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "error",
+   "fieldtype": "Small Text",
+   "label": "Error",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "legacy_note",
+   "fieldtype": "Long Text",
+   "label": "Archived AI Note",
+   "permlevel": 1
+  }
+ ],
+ "permissions": [],
+ "track_changes": 0
+}
