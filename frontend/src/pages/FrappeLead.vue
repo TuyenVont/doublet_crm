@@ -1,5 +1,5 @@
 <template>
-  <LayoutHeader>
+  <LayoutHeader stack-on-mobile>
     <template #left-header>
       <Breadcrumbs :items="breadcrumbs">
         <template #prefix="{ item }">
@@ -92,13 +92,13 @@
   <!-- MAIN CONTENT -->
   <div
     v-if="doc.name"
-    class="flex h-full overflow-hidden"
+    class="flex h-full min-w-0 flex-col overflow-y-auto md:flex-row md:overflow-hidden"
   >
     <!-- ACTIVITY AREA -->
     <Tabs
       v-model="tabIndex"
       :tabs="tabs"
-      class="flex flex-1 overflow-hidden flex-col
+      class="flex min-w-0 flex-1 flex-col overflow-hidden max-md:h-full max-md:flex-none
              [&_[role='tab']]:px-0
              [&_[role='tab']]:shrink-0
              [&_[role='tablist']]:px-5
@@ -159,7 +159,7 @@
 
     <!-- RIGHT SIDEBAR -->
     <Resizer
-      class="flex flex-col justify-between border-l"
+      class="flex flex-col justify-between border-t max-md:!w-full max-md:shrink-0 max-md:[&>.cursor-col-resize]:hidden md:border-l md:border-t-0"
       side="right"
     >
       <!-- LEAD ID -->

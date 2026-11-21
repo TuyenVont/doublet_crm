@@ -120,8 +120,8 @@ import { Badge } from 'frappe-ui'
 
 const route = useRoute()
 const narrow = useMediaQuery('(max-width: 1023px)')
-const contactCenterRoutes = new Set(['Inbox', 'Calls', 'Call Logs'])
-const forceCompactRail = computed(() => narrow.value && route.matched.some((record) => contactCenterRoutes.has(record.name)))
+const compactRoutes = new Set(['Inbox', 'Calls', 'Call Logs', 'LeadDetail'])
+const forceCompactRail = computed(() => narrow.value && route.matched.some((record) => compactRoutes.has(record.name)))
 const collapsedPreference = ref(localStorage.getItem('isSidebarCollapsed') === 'true')
 const isSidebarCollapsed = computed(() => collapsedPreference.value || forceCompactRail.value)
 const unreadNotificationsCount = ref(0)

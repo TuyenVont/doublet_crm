@@ -1,5 +1,6 @@
 import { globalStore } from '@/stores/global'
 import { getMeta } from '@/stores/meta'
+import { getSettings } from '@/stores/settings'
 import { getClassNames, createDocProxy } from '@/utils/scriptHelpers'
 import { renderFieldLayoutDialog } from '@/utils/renderFieldLayoutDialog'
 import { call, createListResource, toast } from 'frappe-ui'
@@ -34,9 +35,10 @@ async function loadFileScript(doctype, view) {
 }
 
 export function getScript(doctype, view = 'Form') {
+  const canReadScripts = getSettings().settings.value.can_read_crm_form_scripts
   const scripts = createListResource({
     doctype: 'CRM Form Script',
-    cache: ['Form Scripts', doctype, view],
+    cache: canReadScripts ? ['Form Scripts', doctype, view] : undefined,
     fields: ['name', 'dt', 'view', 'script'],
     filters: { view, dt: doctype, enabled: 1 },
     onSuccess: (_scripts) => {
@@ -55,7 +57,7 @@ export function getScript(doctype, view = 'Form') {
     },
   })
 
-  if (!doctypeScripts[doctype] && !scripts.loading) {
+  if (canReadScripts && !doctypeScripts[doctype] && !scripts.loading) {
     scripts.fetch()
   }
 
