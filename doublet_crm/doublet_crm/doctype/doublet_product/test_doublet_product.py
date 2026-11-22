@@ -30,22 +30,24 @@ class TestDoubleTProduct(FrappeTestCase):
 		})
 
 	def make_template(self, **values):
-		return self.make_product(
-			product_name=f"Template {self.suffix}",
-			sku=f"TEMPLATE-{self.suffix}",
-			product_kind="Template",
-			**values,
-		)
+		defaults = {
+			"product_name": f"Template {self.suffix}",
+			"sku": f"TEMPLATE-{self.suffix}",
+			"product_kind": "Template",
+		}
+		defaults.update(values)
+		return self.make_product(**defaults)
 
 	def make_variant(self, template, **values):
-		return self.make_product(
-			product_name=f"Variant {self.suffix}",
-			sku=f"VARIANT-{self.suffix}",
-			product_kind="Variant",
-			variant_of=template.name,
-			variant_attributes=[{"attribute_name": "Color", "attribute_value": "Red"}],
-			**values,
-		)
+		defaults = {
+			"product_name": f"Variant {self.suffix}",
+			"sku": f"VARIANT-{self.suffix}",
+			"product_kind": "Variant",
+			"variant_of": template.name,
+			"variant_attributes": [{"attribute_name": "Color", "attribute_value": "Red"}],
+		}
+		defaults.update(values)
+		return self.make_product(**defaults)
 
 	def test_create_valid_product(self):
 		product = self.make_product().insert()
