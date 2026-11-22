@@ -32,12 +32,13 @@
           </div>
 
           <div class="mt-2 text-sm font-medium text-ink-gray-8">
-            {{ formatAmount(column.totalAmount) }}
+            {{ formatAmount(getColumnAmount(column)) }}
           </div>
         </div>
 
         <Draggable
           :list="column.deals"
+          :disabled="movePending"
           item-key="name"
           group="doublet-deals"
           :data-stage="column.name"
@@ -125,7 +126,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Draggable from 'vuedraggable'
 import { Button, FeatherIcon } from 'frappe-ui'
@@ -149,30 +150,33 @@ const STORAGE_KEY = 'doublet-deal-kanban-order-v2'
 
 const localColumns = ref([])
 const dragging = ref(false)
+const movePending = ref(false)
+let savedOrder = loadOrder()
 
 function loadOrder() {
   try {
-    return JSON.parse(
-      localStorage.getItem(STORAGE_KEY) || '{}',
-    )
+    const order = JSON.parse(localStorage.getItem(STORAGE_KEY))
+    return order && typeof order === 'object' && !Array.isArray(order) ? order : {}
   } catch {
     return {}
   }
 }
 
+function savedStageOrder(stageName) {
+  const order = savedOrder[stageName]
+  return Array.isArray(order) ? order : []
+}
+
 function rebuildColumns() {
-  const orderMap = loadOrder()
-
   localColumns.value = props.stages.map((stage) => {
-    let deals = props.deals
+    const deals = props.deals
       .filter((deal) => deal.stage === stage.name)
-      .map((deal) => ({ ...deal }))
 
-    const savedOrder = orderMap[stage.name] || []
+    const order = savedStageOrder(stage.name)
 
     deals.sort((a, b) => {
-      const ai = savedOrder.indexOf(a.name)
-      const bi = savedOrder.indexOf(b.name)
+      const ai = order.indexOf(a.name)
+      const bi = order.indexOf(b.name)
 
       if (ai === -1 && bi === -1) return 0
       if (ai === -1) return 1
@@ -187,35 +191,48 @@ function rebuildColumns() {
       stageType: stage.stage_type,
       color: stage.color,
       deals,
-      totalAmount: deals.reduce(
-        (sum, deal) => sum + Number(deal.amount || 0),
-        0,
-      ),
     }
   })
 }
 
 watch(
   () => [props.stages, props.deals],
-  rebuildColumns,
+  () => {
+    if (!dragging.value && !movePending.value) rebuildColumns()
+  },
   {
     immediate: true,
     deep: true,
   },
 )
 
-function saveOrder() {
-  const result = {}
+function getColumnAmount(column) {
+  return column.deals.reduce((sum, deal) => sum + Number(deal.amount || 0), 0)
+}
 
-  localColumns.value.forEach((column) => {
-    result[column.name] =
-      column.deals.map((deal) => deal.name)
-  })
+function saveOrder(from, to, dealName) {
+  const order = { ...savedOrder }
+  for (const column of localColumns.value) {
+    if (column.name !== from && column.name !== to) continue
 
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(result),
-  )
+    const visibleNames = column.deals.map((deal) => deal.name)
+    const visibleSet = new Set(visibleNames)
+    const previous = new Set(savedStageOrder(column.name))
+    if (from !== to && column.name === from) previous.delete(dealName)
+
+    // Preserve the saved positions of cards hidden by a filter.
+    let index = 0
+    order[column.name] = Array.from(previous, (name) => {
+      return visibleSet.has(name) ? visibleNames[index++] : name
+    }).concat(visibleNames.slice(index))
+  }
+
+  savedOrder = order
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(savedOrder))
+  } catch {
+    // The current board still has its in-memory order.
+  }
 }
 
 function onDragStart() {
@@ -227,30 +244,38 @@ function onDragEnd(event) {
   const toStage = event.to?.dataset?.stage
   const dealName = event.item?.dataset?.name
 
-  saveOrder()
-
-  if (
-    dealName &&
-    fromStage &&
-    toStage &&
-    fromStage !== toStage
-  ) {
-    emit('move', {
-      item: dealName,
-      from: fromStage,
-      to: toStage,
-      oldIndex: event.oldIndex,
-      newIndex: event.newIndex,
-    })
-  }
-
   requestAnimationFrame(() => {
     dragging.value = false
+    if (!movePending.value) rebuildColumns()
+  })
+
+  if (!dealName || !fromStage || !toStage) return
+
+  if (fromStage === toStage) {
+    if (event.oldDraggableIndex !== event.newDraggableIndex) {
+      saveOrder(fromStage, toStage, dealName)
+    }
+    return
+  }
+
+  movePending.value = true
+  emit('move', {
+    item: dealName,
+    to: toStage,
+    async settle(confirmed) {
+      if (confirmed) {
+        saveOrder(fromStage, toStage, dealName)
+        // Let the parent pass down the accepted stage and current filters.
+        await nextTick()
+      }
+      movePending.value = false
+      rebuildColumns()
+    },
   })
 }
 
 function openDeal(deal) {
-  if (dragging.value) return
+  if (dragging.value || movePending.value) return
 
   router.push({
     name: 'DealDetail',
