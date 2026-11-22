@@ -216,6 +216,7 @@ class TestZaloInbox(FrappeTestCase):
             "send_welcome_email": 0,
         }).insert()
         user.add_roles("Sales User")
+        frappe.share.add("DoubleT Lead", inbound["lead"], user.name, read=1)
         frappe.set_user(user.name)
 
         self.assertEqual(list_conversations(), {

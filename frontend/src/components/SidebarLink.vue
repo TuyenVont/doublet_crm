@@ -97,6 +97,6 @@ const isActive = computed(() => {
     return route.query.view == props.to?.query?.view
   }
 
-  return route.name === props.to
+  return route.matched.some((record) => record.name === props.to)
 })
 </script>

@@ -20,6 +20,7 @@ import {
   FeatherIcon,
   setConfig,
   frappeRequest,
+  initSocket,
 } from 'frappe-ui'
 
 setConfig('resourceFetcher', frappeRequest)
@@ -31,6 +32,10 @@ app.use(pinia)
 app.use(FrappeUI)
 app.use(router)
 app.use(translationPlugin)
+
+if (window.site_name) {
+  app.config.globalProperties.$socket = initSocket({ port: window.socketio_port })
+}
 
 const globalComponents = {
   Button,

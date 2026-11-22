@@ -329,17 +329,14 @@
       </div>
     </div>
 
-    <CallLogDetailModal
-      v-model="showCallLogDetailModal"
-      v-model:callLog="selectedCallLog"
-    />
+    <RouterView @changed="refreshCallLogs" />
   </div>
 </template>
 
 <script setup>
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
-import CallLogDetailModal from '@/components/Modals/CallLogDetailModal.vue'
+import { useRouter } from 'vue-router'
 import { Button, FeatherIcon, call, createResource } from 'frappe-ui'
 import { computed, ref, watch, onUnmounted } from 'vue'
 
@@ -451,8 +448,7 @@ const summary = computed(() => {
   }
 })
 
-const showCallLogDetailModal = ref(false)
-const selectedCallLog = ref({})
+const router = useRouter()
 
 function refreshCallLogs() {
   schedulePage()
@@ -466,8 +462,7 @@ function loadCallLogStats() {
 loadCallLogStats()
 
 function openDetail(log) {
-  selectedCallLog.value = { ...log }
-  showCallLogDetailModal.value = true
+  router.push({ name: 'CallHistoryDetail', params: { callId: log.name } })
 }
 
 function formatDuration(seconds) {

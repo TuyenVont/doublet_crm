@@ -70,6 +70,12 @@
             :reference-name="contactId"
           />
 
+          <RecordCallHistory
+            v-else-if="activeTabName === 'Calls'"
+            reference-doctype="DoubleT Contact"
+            :reference-name="contactId"
+          />
+
           <ZaloRecordChat
             v-else-if="activeTabName === 'Zalo OA'"
             reference-doctype="DoubleT Contact"
@@ -140,6 +146,7 @@ import { Button, Tabs, call, toast } from 'frappe-ui'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import SharedNotes from '@/components/Notes/SharedNotes.vue'
+import RecordCallHistory from '@/components/Calls/RecordCallHistory.vue'
 import ZaloRecordChat from '@/components/Zalo/ZaloRecordChat.vue'
 import Resizer from '@/components/Resizer.vue'
 import AssignTo from '@/components/AssignTo.vue'

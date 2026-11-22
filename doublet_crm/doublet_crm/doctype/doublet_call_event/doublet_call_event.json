@@ -1,0 +1,103 @@
+{
+ "doctype": "DocType",
+ "name": "DoubleT Call Event",
+ "module": "DoubleT CRM",
+ "engine": "InnoDB",
+ "field_order": [
+  "call_log",
+  "action",
+  "actor",
+  "occurred_at",
+  "previous_assignee",
+  "new_assignee",
+  "details",
+  "source_version",
+  "revision_data"
+ ],
+ "fields": [
+  {
+   "fieldname": "call_log",
+   "fieldtype": "Link",
+   "label": "Call Log",
+   "options": "DoubleT Call Log",
+   "reqd": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Data",
+   "label": "Action",
+   "in_list_view": 1,
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "actor",
+   "fieldtype": "Link",
+   "label": "Performed By",
+   "options": "User",
+   "in_list_view": 1,
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "occurred_at",
+   "fieldtype": "Datetime",
+   "label": "Time",
+   "in_list_view": 1,
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_assignee",
+   "fieldtype": "Link",
+   "label": "Previous Assignee",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "new_assignee",
+   "fieldtype": "Link",
+   "label": "New Assignee",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "details",
+   "fieldtype": "Small Text",
+   "label": "Details",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_version",
+   "fieldtype": "Data",
+   "label": "Source Version",
+   "unique": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "revision_data",
+   "fieldtype": "Long Text",
+   "label": "Archived Revision",
+   "read_only": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1
+  },
+  {
+   "role": "Sales User",
+   "read": 1
+  }
+ ],
+ "autoname": "hash",
+ "sort_field": "occurred_at",
+ "sort_order": "DESC"
+}

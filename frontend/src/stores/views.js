@@ -2,9 +2,11 @@ import { defineStore } from 'pinia'
 import { createResource } from 'frappe-ui'
 import { reactive, ref } from 'vue'
 import { sessionStore } from './session'
+import { getSettings } from './settings'
 
 export const viewsStore = defineStore('crm-views', () => {
   const session = sessionStore()
+  const canReadViews = getSettings().settings.value.can_read_crm_view_settings
   let viewsByName = reactive({})
   let pinnedViews = ref([])
   let publicViews = ref([])
@@ -42,9 +44,9 @@ export const viewsStore = defineStore('crm-views', () => {
       ],
       limit_page_length: 500,
     },
-    cache: 'crm-views',
+    cache: canReadViews ? 'crm-views' : undefined,
     initialData: [],
-    auto: true,
+    auto: canReadViews,
     transform(views) {
       pinnedViews.value = []
       publicViews.value = []
@@ -92,7 +94,7 @@ export const viewsStore = defineStore('crm-views', () => {
   }
 
   async function reload() {
-    await views.reload()
+    if (canReadViews) await views.reload()
   }
 
   return {

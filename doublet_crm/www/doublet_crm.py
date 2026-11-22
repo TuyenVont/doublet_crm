@@ -28,6 +28,10 @@ def get_context(context):
     return context
 
 
+def _can_read_optional_doctype(doctype):
+    return bool(frappe.db.exists("DocType", doctype, cache=True) and frappe.has_permission(doctype, "read"))
+
+
 def get_doublet_crm_settings():
     timestamp_format = frappe.conf.get(
         "doublet_crm_timeline_timestamp_format", "Relative"
@@ -60,6 +64,9 @@ def get_doublet_crm_settings():
         "favicon": favicon,
         "crm_timeline_timestamp_format": timestamp_format,
         "crm_timeline_sort_order": sort_order,
+        "frappe_crm_installed": "crm" in frappe.get_installed_apps(),
+        "can_read_crm_form_scripts": _can_read_optional_doctype("CRM Form Script"),
+        "can_read_crm_view_settings": _can_read_optional_doctype("CRM View Settings"),
         **get_whatsapp_feature_state(),
     }
 
@@ -69,6 +76,7 @@ def get_boot():
         {
             "frappe_version": frappe.__version__,
             "site_name": frappe.local.site,
+            "socketio_port": frappe.conf.get("socketio_port"),
             "user": frappe.session.user,
             "csrf_token": frappe.sessions.get_csrf_token(),
             "translated_messages": get_messages_for_boot(),

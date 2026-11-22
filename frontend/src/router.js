@@ -21,6 +21,8 @@ import PlaceholderView from '@/pages/PlaceholderView.vue'
 const Dashboard = () => import('@/pages/Dashboard.vue')
 const ZaloInbox = () => import('@/pages/ZaloInbox.vue')
 import CallLogs from '@/pages/CallLogs.vue'
+const ContactCenterCalls = () => import('@/pages/ContactCenterCalls.vue')
+const CallLogDetails = () => import('@/components/Calls/CallLogDetails.vue')
 import NotesView from './pages/Notes.vue'
 import TasksView from './pages/Tasks.vue'
 const routes = [
@@ -132,9 +134,16 @@ const routes = [
     component: ZaloInbox,
   },
   {
+    path: '/contact-center/calls',
+    name: 'Calls',
+    component: ContactCenterCalls,
+    children: [{ path: ':callId', name: 'CallDetail', component: CallLogDetails, props: true }],
+  },
+  {
     path: '/call-logs',
     name: 'Call Logs',
     component: CallLogs,
+    children: [{ path: ':callId', name: 'CallHistoryDetail', component: CallLogDetails, props: true }],
     props: {
       title: 'Call Logs',
       description: 'DoubleT CRM Call Logs Management',

@@ -1,3 +1,4 @@
+import { getSettings } from '@/stores/settings'
 import { createResource } from 'frappe-ui'
 import { computed, ref } from 'vue'
 
@@ -8,7 +9,7 @@ export const callEnabled = ref(false)
 createResource({
   url: 'crm.integrations.api.is_call_integration_enabled',
   cache: 'Is Call Integration Enabled',
-  auto: true,
+  auto: getSettings().settings.value.frappe_crm_installed,
   onSuccess: (data) => {
     integrations.value = data.integrations || {}
     defaultCallingMedium.value = data.default_calling_medium

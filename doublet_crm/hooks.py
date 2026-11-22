@@ -140,10 +140,14 @@ after_migrate = [
 
 permission_query_conditions = {
         "DoubleT Call Log": "doublet_crm.permissions.get_doublet_call_log_permission_query_conditions",
+        "DoubleT Task": "doublet_crm.permissions.get_doublet_task_permission_query_conditions",
+        "DoubleT Call Event": "doublet_crm.permissions.get_doublet_call_event_permission_query_conditions",
 }
 
 has_permission = {
         "DoubleT Call Log": "doublet_crm.permissions.has_doublet_call_log_permission",
+        "DoubleT Task": "doublet_crm.permissions.has_doublet_task_permission",
+        "DoubleT Call Event": "doublet_crm.permissions.has_doublet_call_event_permission",
 }
 
 
@@ -176,6 +180,9 @@ has_permission = {
 # }
 
 doc_events = {
+	"DoubleT Call Log": {
+		"on_trash": "doublet_crm.call_log.ai_summary.remove_call_summary",
+	},
 	"DoubleT Deal Stage": {
 		"on_update": "doublet_crm.kanban.sync_deal_kanban_board",
 		"after_delete": "doublet_crm.kanban.sync_deal_kanban_board",

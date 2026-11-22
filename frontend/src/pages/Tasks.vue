@@ -10,6 +10,7 @@
         </p>
       </div>
       <Button
+        v-if="canCreate && !focusedTask"
         variant="solid"
         iconLeft="plus"
         :label="__('Create Task')"
@@ -44,7 +45,11 @@
 
     <!-- Filters -->
     <section class="task-toolbar">
-      <div class="task-toolbar-left">
+      <div v-if="focusedTask" class="task-toolbar-left">
+        <Button :label="__('All tasks')" icon="arrow-left" @click="clearFocusedTask" />
+        <span class="text-sm text-ink-gray-6">{{ __('Task') }} {{ focusedTask }}</span>
+      </div>
+      <div v-else class="task-toolbar-left">
         <label class="task-check">
           <input v-model="myTasks" type="checkbox" />
           <span>{{ __('My Tasks') }}</span>
@@ -103,8 +108,9 @@
       <div v-else-if="!tasks.length" class="task-empty">
         <div class="empty-icon">✓</div>
         <h3>{{ __('No tasks found') }}</h3>
-        <p>Create a task or adjust your filters.</p>
+        <p v-if="!focusedTask">{{ __('Adjust your filters to see more tasks.') }}</p>
         <Button
+          v-if="canCreate && !focusedTask"
           variant="solid"
           iconLeft="plus"
           :label="__('Create Task')"
@@ -139,6 +145,12 @@
                 <div v-if="task.description" class="task-description">
                   {{ task.description }}
                 </div>
+                <div v-if="task.callback_result" class="task-description">
+                  {{ __('Last callback outcome') }} · {{ __(task.callback_result) }}
+                </div>
+                <p v-if="task.callback_notes" class="task-description whitespace-pre-wrap break-words">
+                  {{ task.callback_notes }}
+                </p>
               </td>
 
               <td>
@@ -199,7 +211,7 @@
                 <Button
                   size="sm"
                   variant="subtle"
-                  :label="__('Edit')"
+                  :label="__(task.callback_call_log ? (task.status === 'Done' ? 'View call' : 'Record callback') : 'Edit')"
                   @click="startEdit(task)"
                 />
               </td>
@@ -392,6 +404,7 @@ import { call } from 'frappe-ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { sessionStore } from '@/stores/session'
+import { getCreatePermission } from '@/utils/permissions'
 
 const TASK_DOCTYPE = 'DoubleT Task'
 const statuses = ['Backlog', 'Todo', 'In Progress', 'Done', 'Canceled']
@@ -406,6 +419,8 @@ const referenceRouteNames = {
 const route = useRoute()
 const router = useRouter()
 const { user } = sessionStore()
+const canCreate = ref(false)
+const focusedTask = computed(() => typeof route.query.task === 'string' ? route.query.task : '')
 const myTasks = ref(route.query.my_tasks !== '0')
 const statusFilter = ref('')
 const dueFilter = ref(['All', 'Overdue', 'Due Today', 'Upcoming'].includes(route.query.due_date_filter) ? route.query.due_date_filter : 'All')
@@ -441,6 +456,7 @@ function routeFor(task) {
 function goToRecord(task) { const target = routeFor(task); if (target) router.push(target) }
 
 const filters = computed(() => {
+  if (focusedTask.value) return [['name', '=', focusedTask.value]]
   const result = []
   if (myTasks.value && user.value) result.push(['assigned_to', '=', user.value])
   if (statusFilter.value) result.push(['status', '=', statusFilter.value])
@@ -456,7 +472,7 @@ const filters = computed(() => {
   }
   return result
 })
-const taskFields = ['name', 'title', 'description', 'status', 'priority', 'due_date', 'assigned_to', 'reference_doctype', 'reference_docname', 'modified']
+const taskFields = ['name', 'title', 'description', 'status', 'priority', 'due_date', 'assigned_to', 'reference_doctype', 'reference_docname', 'modified', 'callback_call_log', 'callback_result', 'callback_notes']
 async function fetchPage(index) {
   return call('frappe.client.get_list', { doctype: TASK_DOCTYPE, fields: taskFields, filters: filters.value, order_by: 'modified desc', limit_start: index * pageSize, limit_page_length: pageSize })
 }
@@ -526,6 +542,10 @@ watch(() => form.value.reference_doctype, async (doctype) => {
 })
 function startCreate() { editingName.value = ''; form.value = emptyForm(); saveError.value = ''; editorOpen.value = true; loadUsers() }
 function startEdit(task) {
+  if (task.callback_call_log) {
+    router.push({ name: 'CallDetail', params: { callId: task.callback_call_log }, query: { from: 'task' } })
+    return
+  }
   editingName.value = task.name
   form.value = { ...emptyForm(), ...task, due_date: task.due_date ? task.due_date.replace(' ', 'T').slice(0, 16) : '' }
   saveError.value = ''; editorOpen.value = true; loadUsers()
@@ -535,6 +555,7 @@ async function saveTask() {
   try {
     const data = { ...form.value }
     delete data.name; delete data.modified
+    delete data.callback_call_log; delete data.callback_result; delete data.callback_notes
     data.due_date = data.due_date ? `${data.due_date.replace('T', ' ')}:00` : null
     if (!data.reference_doctype) data.reference_docname = ''
     if (editingName.value) {
@@ -554,7 +575,16 @@ async function deleteTask() {
   catch (e) { saveError.value = e.message || __('Unable to delete task') }
   finally { saving.value = false }
 }
-onMounted(() => loadTasks())
+function clearFocusedTask() {
+  const { task, ...query } = route.query
+  return router.push({ name: 'Tasks', query })
+}
+
+watch(focusedTask, () => loadTasks())
+onMounted(async () => {
+  loadTasks()
+  canCreate.value = (await getCreatePermission(call, TASK_DOCTYPE)).allowed
+})
 </script>
 
 <style scoped>
