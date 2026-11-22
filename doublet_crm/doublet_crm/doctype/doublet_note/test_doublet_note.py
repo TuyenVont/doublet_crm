@@ -81,13 +81,19 @@ class TestDoubleTNote(FrappeTestCase):
 			with self.assertRaises(frappe.PermissionError):
 				get_activities("DoubleT Lead", self.lead.name)
 
-	def test_timeline_maps_linked_call_without_leaking_other_record(self):
-		call = frappe.get_doc({
+	def test_timeline_reads_legacy_deal_call_without_leaking_other_record(self):
+		call_fields = {
 			"doctype": "DoubleT Call Log", "agent": "Administrator",
 			"call_type": "Outgoing", "status": "Completed",
 			"start_time": frappe.utils.now_datetime(),
-			"reference_doctype": "DoubleT Deal", "reference_name": self.deal.name,
-		}).insert()
+		}
+		deal_link = {"reference_doctype": "DoubleT Deal", "reference_name": self.deal.name}
+		with self.assertRaises(frappe.ValidationError):
+			frappe.get_doc({**call_fields, **deal_link}).insert()
+
+		call = frappe.get_doc(call_fields).insert()
+		# Reproduce a stored Deal reference from before new calls were limited to Leads and Contacts.
+		frappe.db.set_value(call.doctype, call.name, deal_link, update_modified=False)
 		deal_calls = get_activities("DoubleT Deal", self.deal.name)[1]
 		lead_calls = get_activities("DoubleT Lead", self.lead.name)[1]
 		self.assertIn(call.name, {row.name for row in deal_calls})
