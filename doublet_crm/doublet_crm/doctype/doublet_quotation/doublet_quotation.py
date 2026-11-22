@@ -78,6 +78,7 @@ class DoubleTQuotation(Document):
 			row.discount_type or "Percentage",
 			number(row.discount_percent),
 			number(row.discount_amount),
+			number(row.line_total),
 		)
 
 	def validate_customer(self):

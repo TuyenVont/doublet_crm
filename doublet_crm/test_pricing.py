@@ -85,20 +85,50 @@ class TestPricing(FrappeTestCase):
             **values,
         )
 
-    def test_price_list_precedence_and_customer_fallback(self):
+    def test_explicit_price_list_takes_precedence(self):
+        self.company.price_list = self.wholesale.name
+        self.company.save()
+        self.contact.price_list = self.wholesale.name
+        self.contact.save()
+
+        result = self.resolve(price_list=self.retail.name)
+
+        self.assertEqual(
+            (result["price"], result["price_list"], result["source"]),
+            (Decimal("90"), self.retail.name, "price_list"),
+        )
+
+    def test_company_price_list_takes_precedence_over_contact_and_default(self):
         self.company.price_list = self.wholesale.name
         self.company.save()
         self.contact.price_list = self.retail.name
         self.contact.save()
 
-        self.assertEqual(self.resolve(price_list=self.retail.name)["price"], 90)
-        self.assertEqual(self.resolve()["price"], 80)
-        self.company.price_list = None
-        self.company.save()
-        self.assertEqual(self.resolve()["price"], 90)
-        self.contact.price_list = None
+        result = self.resolve()
+
+        self.assertEqual(
+            (result["price"], result["price_list"], result["source"]),
+            (Decimal("80"), self.wholesale.name, "price_list"),
+        )
+
+    def test_contact_price_list_is_used_without_company_price_list(self):
+        self.contact.price_list = self.wholesale.name
         self.contact.save()
-        self.assertEqual(self.resolve()["price"], 90)
+
+        result = self.resolve()
+
+        self.assertEqual(
+            (result["price"], result["price_list"], result["source"]),
+            (Decimal("80"), self.wholesale.name, "price_list"),
+        )
+
+    def test_default_price_list_is_used_without_customer_price_lists(self):
+        result = self.resolve()
+
+        self.assertEqual(
+            (result["price"], result["price_list"], result["source"]),
+            (Decimal("90"), self.retail.name, "price_list"),
+        )
 
     def test_personal_contact_price_list_and_inactive_list_are_rejected(self):
         self.contact.price_list = self.wholesale.name
@@ -118,12 +148,13 @@ class TestPricing(FrappeTestCase):
                 contact=self.contact.name,
             )
 
-    def test_missing_item_uses_product_price_and_variant_uses_exact_item_price(self):
-        self.company.price_list = self.wholesale.name
-        self.company.save()
-        self.assertEqual(self.resolve()["price"], 80)
-        self.assertEqual(self.resolve(self.variant)["price"], 175)
-        self.assertEqual(self.resolve(self.variant, price_list=self.retail.name)["price"], 150)
+    def test_missing_price_list_item_falls_back_to_product_price(self):
+        result = self.resolve(self.variant, price_list=self.wholesale.name)
+
+        self.assertEqual(
+            (result["price"], result["price_list"], result["source"]),
+            (Decimal("175"), self.wholesale.name, "product"),
+        )
 
     def test_templates_and_inactive_products_are_rejected(self):
         with self.assertRaises(frappe.ValidationError):
@@ -163,9 +194,18 @@ class TestPricing(FrappeTestCase):
                 },
             ]
         ).insert()
-        self.assertEqual((quote.items[0].discount_amount, quote.items[0].line_total), (20, 182))
-        self.assertEqual((quote.items[1].discount_percent, quote.items[1].line_total), (0, 76))
-        self.assertEqual((quote.subtotal, quote.total_discount, quote.grand_total), (303, 45, 258))
+        self.assertEqual(
+            (quote.items[0].discount_amount, quote.items[0].line_total),
+            (Decimal("20.20"), Decimal("181.80")),
+        )
+        self.assertEqual(
+            (quote.items[1].discount_percent, quote.items[1].line_total),
+            (0, Decimal("76.00")),
+        )
+        self.assertEqual(
+            (quote.subtotal, quote.total_discount, quote.grand_total),
+            (Decimal("303.00"), Decimal("45.20"), Decimal("257.80")),
+        )
 
     def test_rejects_invalid_discounts_and_rounds_consistently(self):
         invalid_items = (
@@ -190,7 +230,10 @@ class TestPricing(FrappeTestCase):
                 }
             ]
         ).insert()
-        self.assertEqual((quote.total_discount, quote.grand_total), (51, 50))
+        self.assertEqual(
+            (quote.total_discount, quote.grand_total),
+            (Decimal("50.50"), Decimal("50.50")),
+        )
 
     def test_non_draft_quote_preserves_totals_and_discount_snapshot(self):
         quote = self.quotation(
@@ -262,3 +305,41 @@ class TestPricing(FrappeTestCase):
             (Decimal(customer_price["price"]), customer_price["price_list"]),
             (Decimal("80"), self.wholesale.name),
         )
+
+    def test_sales_user_can_read_default_price_list_and_resolve_fallback_price(self):
+        user = frappe.get_doc(
+            {
+                "doctype": "User",
+                "email": f"pricing-sales-user-{self.tag}@example.invalid",
+                "first_name": "Pricing Sales User",
+                "enabled": 1,
+                "send_welcome_email": 0,
+                "roles": [{"role": "Sales User"}],
+            }
+        ).insert()
+        try:
+            frappe.set_user(user.name)
+            self.assertTrue(frappe.has_permission("DoubleT Price List", "read", self.retail.name))
+            priced = get_product_price(
+                self.variant.name,
+                "COMPANY",
+                company=self.company.name,
+                contact=self.contact.name,
+            )
+            self.assertEqual(
+                (Decimal(priced["price"]), priced["price_list"], priced["source"]),
+                (Decimal("150"), self.retail.name, "price_list"),
+            )
+            fallback = get_product_price(
+                self.variant.name,
+                "COMPANY",
+                company=self.company.name,
+                contact=self.contact.name,
+                price_list=self.wholesale.name,
+            )
+            self.assertEqual(
+                (Decimal(fallback["price"]), fallback["price_list"], fallback["source"]),
+                (Decimal("175"), self.wholesale.name, "product"),
+            )
+        finally:
+            frappe.set_user("Administrator")

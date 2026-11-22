@@ -105,7 +105,10 @@ class TestDoubleTQuotation(FrappeTestCase):
 		quote.status = "Sent"
 		quote.save()
 		quote.reload()
-		self.assertEqual((quote.subtotal, quote.total_discount, quote.grand_total), totals)
+		self.assertEqual(
+			tuple(Decimal(str(value)) for value in (quote.subtotal, quote.total_discount, quote.grand_total)),
+			totals,
+		)
 		self.assertIn("$34.98", quotation_html(quote.name))
 
 	def test_default_price_from_product(self):
@@ -165,11 +168,138 @@ class TestDoubleTQuotation(FrappeTestCase):
 		quote.save()
 		self.assertEqual((quote.items[0].product_name, quote.items[0].unit_price), (f"Snapshot Variant {self.tag}", 175))
 
+	def test_accepted_multi_item_snapshot_survives_product_and_price_list_changes(self):
+		second_product = self.make_product("Snapshot Second", price=29.95)
+		price_list = frappe.get_doc({
+			"doctype": "DoubleT Price List",
+			"price_list_name": f"Snapshot Price List {self.tag}",
+			"items": [
+				{"product": self.product.name, "price": 19.99},
+				{"product": second_product.name, "price": 8.50},
+			],
+		}).insert()
+		quote = self.quotation(
+			price_list=price_list.name,
+			items=[
+				{
+					"product": self.product.name,
+					"quantity": 2,
+					"discount_type": "Percentage",
+					"discount_percent": 10,
+				},
+				{
+					"product": second_product.name,
+					"quantity": 3,
+					"discount_type": "Amount",
+					"discount_amount": 2.55,
+				},
+			],
+		).insert()
+
+		def number(value):
+			return Decimal(str(value)).quantize(Decimal("0.01"))
+
+		def snapshot(document):
+			return {
+				"items": tuple(
+					(
+						row.product,
+						row.product_name,
+						row.sku,
+						number(row.quantity),
+						number(row.unit_price),
+						row.discount_type,
+						number(row.discount_percent),
+						number(row.discount_amount),
+						number(row.line_total),
+					)
+					for row in document.items
+				),
+				"subtotal": number(document.subtotal),
+				"total_discount": number(document.total_discount),
+				"grand_total": number(document.grand_total),
+			}
+
+		before = snapshot(quote)
+		self.assertEqual(
+			(before["subtotal"], before["total_discount"], before["grand_total"]),
+			(Decimal("65.48"), Decimal("6.55"), Decimal("58.93")),
+		)
+		self.assertEqual(
+			tuple((row[4], row[7], row[8]) for row in before["items"]),
+			(
+				(Decimal("19.99"), Decimal("4.00"), Decimal("35.98")),
+				(Decimal("8.50"), Decimal("2.55"), Decimal("22.95")),
+			),
+		)
+
+		quote.status = "Sent"
+		quote.save()
+		quote.status = "Accepted"
+		quote.save()
+
+		self.product.price = 999
+		self.product.save()
+		second_product.price = 888
+		second_product.save()
+		price_list.items[0].price = 199.99
+		price_list.items[1].price = 88.50
+		price_list.save()
+
+		quote.reload()
+		self.assertEqual(quote.status, "Accepted")
+		self.assertEqual(snapshot(quote), before)
+
+		for field, value in (
+			("product", second_product.name),
+			("product_name", "Tampered Product"),
+			("sku", "TAMPERED-SKU"),
+			("quantity", 99),
+			("unit_price", 0.01),
+			("discount_type", "Amount"),
+			("discount_percent", 50),
+			("discount_amount", 0.01),
+			("line_total", 0.01),
+		):
+			with self.subTest(field=field):
+				quote.reload()
+				setattr(quote.items[0], field, value)
+				with self.assertRaises(frappe.ValidationError):
+					quote.save()
+
+		quote.reload()
+		quote.price_list = None
+		with self.assertRaises(frappe.ValidationError):
+			quote.save()
+		quote.reload()
+		quote.status = "Rejected"
+		with self.assertRaises(frappe.ValidationError):
+			quote.save()
+
 	def test_personal_and_company_contact_validation(self):
 		self.quotation(customer_type="PERSONAL", company=None).insert()
 		other = frappe.get_doc({"doctype": "DoubleT Contact", "first_name": f"Other {self.tag}"}).insert()
 		with self.assertRaises(frappe.ValidationError):
 			self.quotation(contact=other.name).insert()
+
+	def test_unlinking_deal_allows_customer_change_without_repricing_saved_items(self):
+		stage = frappe.get_doc({"doctype": "DoubleT Deal Stage", "stage_name": f"Switch Stage {self.tag}", "stage_type": "OPEN", "sort_order": 1}).insert()
+		deal = frappe.get_doc({"doctype": "DoubleT Deal", "deal_title": f"Switch Deal {self.tag}", "deal_type": "COMPANY", "company": self.company.name, "contact": self.contact.name, "stage": stage.name}).insert()
+		quote = self.quotation(
+			deal=deal.name,
+			items=[{"product": self.product.name, "quantity": 1, "unit_price": 77}],
+		).insert()
+		other_company = frappe.get_doc({"doctype": "DoubleT Company", "company_name": f"Other Company {self.tag}"}).insert()
+		other_contact = frappe.get_doc({"doctype": "DoubleT Contact", "first_name": f"Other Contact {self.tag}", "company": other_company.name}).insert()
+
+		quote.deal = None
+		quote.company = other_company.name
+		quote.contact = other_contact.name
+		quote.save()
+		quote.reload()
+
+		self.assertEqual((quote.deal, quote.company, quote.contact), (None, other_company.name, other_contact.name))
+		self.assertEqual(quote.items[0].unit_price, 77)
 
 	def test_draft_delete_and_rejected_transition(self):
 		draft = self.quotation().insert()
@@ -180,6 +310,9 @@ class TestDoubleTQuotation(FrappeTestCase):
 		quote.status = "Rejected"
 		quote.save()
 		self.assertEqual(quote.status, "Rejected")
+		quote.status = "Accepted"
+		with self.assertRaises(frappe.ValidationError):
+			quote.save()
 
 	def test_invalid_values(self):
 		for field, value in (("quantity", 0), ("unit_price", -1), ("discount_percent", -1), ("discount_percent", 101)):
@@ -212,6 +345,10 @@ class TestDoubleTQuotation(FrappeTestCase):
 			quote.save()
 		quote.reload()
 		quote.items[0].quantity = 3
+		with self.assertRaises(frappe.ValidationError):
+			quote.save()
+		quote.reload()
+		quote.items[0].line_total = 1
 		with self.assertRaises(frappe.ValidationError):
 			quote.save()
 		quote.reload()
