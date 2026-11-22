@@ -97,75 +97,57 @@ export function useDoubleTDeals(options = {}) {
 
   fetchStages()
 
-  async function loadRelatedLabels(deals) {
-    const contactNames = [
-      ...new Set(
-        deals.map((d) => d.contact).filter(Boolean)
-      ),
-    ]
-    const companyNames = [
-      ...new Set(
-        deals.map((d) => d.company).filter(Boolean)
-      ),
-    ]
+  function watchRelatedLabels(field, doctype, labelFields, labels, getLabel) {
+    watch(
+      () => {
+        const names = (dealsResource.data || []).map((deal) => deal[field]).filter(Boolean)
+        return JSON.stringify([...new Set(names)].sort())
+      },
+      async (key, _, onCleanup) => {
+        let stale = false
+        onCleanup(() => { stale = true })
 
-    const nextContactLabels = {}
-    const nextCompanyLabels = {}
+        const names = JSON.parse(key)
+        if (!names.length) {
+          labels.value = {}
+          return
+        }
 
-    try {
-      const [contacts, companies] = await Promise.all([
-        contactNames.length
-          ? call('frappe.client.get_list', {
-              doctype: 'DoubleT Contact',
-              fields: ['name', 'first_name', 'last_name'],
-              filters: { name: ['in', contactNames] },
-              limit_page_length: Math.max(contactNames.length, 20),
-            })
-          : Promise.resolve([]),
-        companyNames.length
-          ? call('frappe.client.get_list', {
-              doctype: 'DoubleT Company',
-              fields: ['name', 'company_name'],
-              filters: { name: ['in', companyNames] },
-              limit_page_length: Math.max(companyNames.length, 20),
-            })
-          : Promise.resolve([]),
-      ])
-
-      ;(contacts || []).forEach((c) => {
-        nextContactLabels[c.name] =
-          [c.first_name, c.last_name].filter(Boolean).join(' ') || c.name
-      })
-
-      ;(companies || []).forEach((c) => {
-        nextCompanyLabels[c.name] = c.company_name || c.name
-      })
-    } catch (e) {
-      console.warn('Failed to load Deal related labels', e)
-    }
-
-    contactLabels.value = nextContactLabels
-    companyLabels.value = nextCompanyLabels
-
-    deals.forEach((deal) => {
-      deal.contact_label = deal.contact
-        ? nextContactLabels[deal.contact] || deal.contact
-        : ''
-      deal.company_label = deal.company
-        ? nextCompanyLabels[deal.company] || deal.company
-        : ''
-    })
+        try {
+          const records = await call('frappe.client.get_list', {
+            doctype,
+            fields: ['name', ...labelFields],
+            filters: { name: ['in', names] },
+            limit_page_length: Math.max(names.length, 20),
+          })
+          if (!stale) {
+            labels.value = Object.fromEntries(
+              (records || []).map((record) => [record.name, getLabel(record) || record.name]),
+            )
+          }
+        } catch (error) {
+          if (!stale) console.warn(`Failed to load Deal labels for ${doctype}`, error)
+        }
+      },
+      { immediate: true },
+    )
   }
 
-  watch(
-    () => dealsResource.data,
-    (deals) => {
-      loadRelatedLabels(Array.isArray(deals) ? deals : [])
-    },
-    {
-      immediate: true,
-      deep: true,
-    }
+  watchRelatedLabels(
+    'contact', 'DoubleT Contact', ['first_name', 'last_name'], contactLabels,
+    (contact) => [contact.first_name, contact.last_name].filter(Boolean).join(' '),
+  )
+  watchRelatedLabels(
+    'company', 'DoubleT Company', ['company_name'], companyLabels,
+    (company) => company.company_name,
+  )
+
+  const dealsWithLabels = computed(() =>
+    (dealsResource.data || []).map((deal) => ({
+      ...deal,
+      contact_label: contactLabels.value[deal.contact] || deal.contact || '',
+      company_label: companyLabels.value[deal.company] || deal.company || '',
+    })),
   )
 
   const columns = [
@@ -180,8 +162,7 @@ export function useDoubleTDeals(options = {}) {
   ]
 
   const rows = computed(() => {
-    if (!dealsResource.data) return []
-    return dealsResource.data.map((deal) => ({
+    return dealsWithLabels.value.map((deal) => ({
       name: deal.name,
       deal_title: deal.deal_title || deal.name,
       stage: {
@@ -215,6 +196,7 @@ export function useDoubleTDeals(options = {}) {
   return {
     stages,
     dealsResource,
+    dealsWithLabels,
     columns,
     rows,
     totalCount,

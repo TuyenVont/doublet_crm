@@ -65,6 +65,7 @@
             variant="ghost"
             :class="viewMode === 'list' ? 'bg-surface-gray-2' : ''"
             :tooltip="__('List View')"
+            :disabled="!!pendingMove"
             @click="setViewMode('list')"
           />
 
@@ -73,6 +74,7 @@
             variant="ghost"
             :class="viewMode === 'kanban' ? 'bg-surface-gray-2' : ''"
             :tooltip="__('Kanban View')"
+            :disabled="!!pendingMove"
             @click="setViewMode('kanban')"
           />
         </div>
@@ -82,10 +84,19 @@
           :tooltip="__('Refresh')"
           :icon="RefreshIcon"
           :loading="dealsResource.loading"
+          :disabled="!!pendingMove"
           @click="reload"
         />
       </div>
     </div>
+
+    <p
+      v-if="moveError"
+      role="alert"
+      class="border-b border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700"
+    >
+      {{ moveError }}
+    </p>
 
     <!-- Main -->
     <div class="relative flex-1 overflow-hidden">
@@ -198,7 +209,7 @@
         :label="__('Mark as Lost')"
         variant="solid"
         :loading="savingMove"
-        :disabled="!lostReason.trim()"
+        :disabled="savingMove || !lostReason.trim()"
         class="!bg-red-600 !text-white hover:!bg-red-700 disabled:!bg-red-300"
         @click="confirmLost"
       />
@@ -279,6 +290,7 @@
         :label="__('Mark as Won')"
         variant="solid"
         :loading="savingMove"
+        :disabled="savingMove"
         class="!bg-green-600 !text-white hover:!bg-green-700"
         @click="confirmWon"
       />
@@ -330,6 +342,7 @@ const router = useRouter()
 const {
   stages,
   dealsResource,
+  dealsWithLabels,
   columns,
   rows,
   reload,
@@ -369,6 +382,7 @@ const showWonModal = ref(false)
 
 const lostReason = ref('')
 const savingMove = ref(false)
+const moveError = ref('')
 
 /*
  * List / Kanban
@@ -453,8 +467,7 @@ const selectedStageLabel =
  * Raw Deals dành cho Kanban
  */
 const rawDeals = computed(() => {
-  let result =
-    dealsResource.data || []
+  let result = dealsWithLabels.value
 
   if (route.query.lifecycle) {
     const names = stages.value.filter((stage) => stage.stage_type === route.query.lifecycle).map((stage) => stage.name)
@@ -525,205 +538,76 @@ const filteredRows =
     )
   })
 
-/*
- * Drag Deal
- */
-async function handleDealMove(
-  move,
-) {
-  const targetStage =
-    stages.value.find(
-      (stage) =>
-        stage.name === move.to,
-    )
-
-  if (!targetStage) {
-    await reload()
+async function handleDealMove(move) {
+  const targetStage = stages.value.find((stage) => stage.name === move.to)
+  if (!targetStage || pendingMove.value) {
+    move.settle(false)
     return
   }
 
-  const stageType =
-    String(
-      targetStage.stage_type ||
-        '',
-    ).toUpperCase()
+  pendingMove.value = move
+  moveError.value = ''
+  lostReason.value = ''
+  const stageType = String(targetStage.stage_type || '').toUpperCase()
 
-  /*
-   * LOST
-   */
   if (stageType === 'LOST') {
-    pendingMove.value = move
-    lostReason.value = ''
     showLostModal.value = true
     return
   }
 
-  /*
-   * WON
-   */
   if (stageType === 'WON') {
-    pendingMove.value = move
     showWonModal.value = true
     return
   }
 
-  /*
-   * Normal Stage
-   */
-  await saveDealMove(
-    move,
-    'NORMAL',
-  )
+  await saveDealMove(move)
 }
 
-/*
- * Save Deal Stage
- */
-async function saveDealMove(
-  move,
-  terminalType = 'NORMAL',
-  reason = '',
-) {
-  if (!move) {
-    return
-  }
+async function saveDealMove(move, reason = null) {
+  if (!move || savingMove.value) return
 
   savingMove.value = true
-
+  let confirmed = false
   try {
-    const result = await call(
-      'doublet_crm.api.update_deal_stage',
-      {
-        deal_name: move.item,
-        stage: move.to,
+    const result = await call('doublet_crm.api.update_deal_stage', {
+      deal_name: move.item,
+      stage: move.to,
+      lost_reason: reason,
+    })
 
-        lost_reason:
-          terminalType === 'LOST'
-            ? reason.trim()
-            : null,
-      },
-    )
-
-    /*
-     * Update local resource.
-     * Không reload khi thành công
-     * để tránh Kanban bị giật.
-     */
-    const deal =
-      dealsResource.data?.find(
-        (item) =>
-          item.name === move.item,
-      )
-
+    const deal = dealsResource.data?.find((item) => item.name === move.item)
     if (deal) {
-      Object.assign(
-        deal,
-        result || {
-          stage: move.to,
-        },
-      )
-
-      /*
-       * Đảm bảo local Stage luôn đúng
-       * ngay cả khi backend không
-       * return stage.
-       */
-      deal.stage = move.to
-
-      if (
-        terminalType === 'LOST'
-      ) {
-        deal.lost_reason =
-          reason.trim()
-      }
-
-      if (
-        terminalType === 'NORMAL'
-      ) {
-        deal.lost_reason = null
-      }
+      Object.assign(deal, { stage: move.to, lost_reason: reason }, result)
     }
-
-    closeMoveDialogs()
+    confirmed = true
   } catch (error) {
-    console.error(
-      'Deal stage update failed:',
-      error,
-    )
-
-    /*
-     * API lỗi -> lấy lại dữ liệu DB
-     * để card quay về Stage cũ.
-     */
-    await reload()
-
-    closeMoveDialogs()
-
-    const message =
-      error?.message ||
-      'Không thể cập nhật Deal Stage.'
-
-    window.alert(message)
+    moveError.value = error?.message || __('Could not update the deal stage.')
   } finally {
+    finishDealMove(confirmed)
     savingMove.value = false
   }
 }
 
-/*
- * Confirm LOST
- */
 async function confirmLost() {
-  if (
-    !lostReason.value.trim()
-  ) {
-    return
-  }
-
-  await saveDealMove(
-    pendingMove.value,
-    'LOST',
-    lostReason.value,
-  )
+  const reason = lostReason.value.trim()
+  if (reason) await saveDealMove(pendingMove.value, reason)
 }
 
-/*
- * Confirm WON
- */
 async function confirmWon() {
-  await saveDealMove(
-    pendingMove.value,
-    'WON',
-  )
+  await saveDealMove(pendingMove.value)
 }
 
-/*
- * Cancel WON / LOST
- *
- * Card đã bị draggable đưa
- * sang column mới ở UI,
- * nhưng database chưa thay đổi.
- *
- * Reload để đưa card về Stage cũ.
- */
-async function cancelPendingMove() {
-  showLostModal.value = false
-  showWonModal.value = false
-
-  pendingMove.value = null
-  lostReason.value = ''
-
-  await reload()
+function cancelPendingMove() {
+  if (!savingMove.value) finishDealMove(false)
 }
 
-/*
- * Close Modal
- */
-function closeMoveDialogs() {
+function finishDealMove(confirmed) {
+  const move = pendingMove.value
+  pendingMove.value = null
   showLostModal.value = false
   showWonModal.value = false
-
-  pendingMove.value = null
   lostReason.value = ''
+  move?.settle(confirmed)
 }
 
 /*
