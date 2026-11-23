@@ -347,7 +347,7 @@ const {
   rows,
   reload,
   loadMore,
-} = useDoubleTDeals({ lifecycle: route.query.lifecycle })
+} = useDoubleTDeals({ lifecycle: route.query.lifecycle, stage: route.query.stage })
 
 const VIEW_STORAGE_KEY =
   'doublet-deals-view-mode'
@@ -373,7 +373,7 @@ const initialView =
 const viewMode = ref(initialView)
 
 const searchQuery = ref('')
-const selectedStage = ref('')
+const selectedStage = ref(String(route.query.stage || ''))
 
 const pendingMove = ref(null)
 
@@ -459,6 +459,7 @@ const selectedStageLabel =
     return (
       stage?.stage_name ||
       stage?.name ||
+      selectedStage.value ||
       __('All Stages')
     )
   })

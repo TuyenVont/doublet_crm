@@ -51,6 +51,8 @@
 
         <SalesPerformanceReport v-if="report?.key === 'sales-performance'" />
 
+        <PipelineAnalyticsReport v-else-if="report?.key === 'pipeline-analytics'" />
+
         <section
           v-else-if="report"
           class="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed border-outline-gray-3 bg-surface-gray-1 px-5 py-12 text-center"
@@ -84,7 +86,7 @@
               {{ __(section.description) }}
             </p>
             <p class="mt-4 text-xs font-medium text-ink-gray-5">
-              {{ __('Analytics not yet implemented') }}
+              {{ isLiveReport(section.key) ? __('Live analytics') : __('Analytics not yet implemented') }}
             </p>
           </RouterLink>
         </section>
@@ -98,6 +100,7 @@ import { computed } from 'vue'
 
 import Icon from '@/components/Icon.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
+import PipelineAnalyticsReport from '@/components/Reports/PipelineAnalyticsReport.vue'
 import SalesPerformanceReport from '@/components/Reports/SalesPerformanceReport.vue'
 import { getReportSection, REPORT_SECTIONS, REPORTS_HOME_ROUTE } from '@/utils/reports'
 
@@ -106,4 +109,9 @@ const props = defineProps({
 })
 
 const report = computed(() => getReportSection(props.reportKey))
+const liveReportKeys = new Set(['sales-performance', 'pipeline-analytics'])
+
+function isLiveReport(key) {
+  return liveReportKeys.has(key)
+}
 </script>

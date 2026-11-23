@@ -4,12 +4,14 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate
+from frappe.utils import add_days, flt, getdate
 
 
 BOOKED_ORDER_STATUSES = ("Confirmed", "Completed")
 MAX_REPORT_RANGE_DAYS = 366
 RECENT_ORDER_LIMIT = 10
+RECENT_DEAL_LIMIT = 20
+DEAL_LIFECYCLES = ("OPEN", "WON", "LOST")
 
 
 def _validated_range(start_date, end_date):
@@ -122,6 +124,69 @@ def _summarize(rows, deals):
 	}
 
 
+def _deal_lifecycle(deal, stage=None):
+	stage_type = (stage.stage_type if stage else "") or ""
+	stage_type = stage_type.upper()
+	if stage_type in DEAL_LIFECYCLES:
+		return stage_type
+	if deal.won_on:
+		return "WON"
+	if deal.lost_on:
+		return "LOST"
+	return "OPEN"
+
+
+def _summarize_pipeline(deals, stages):
+	by_stage = {}
+	lifecycle = {
+		key: {"deal_count": 0, "deal_value": 0.0}
+		for key in DEAL_LIFECYCLES
+	}
+	total_value = 0.0
+
+	for deal in deals:
+		stage = stages.get(deal.stage)
+		stage_key = deal.stage or "__unassigned__"
+		stage_type = _deal_lifecycle(deal, stage)
+		amount = flt(deal.amount, 2)
+		total_value += amount
+		state = lifecycle[stage_type]
+		state["deal_count"] += 1
+		state["deal_value"] += amount
+
+		group = by_stage.setdefault(
+			stage_key,
+			{
+				"name": deal.stage,
+				"label": stage.stage_name if stage else (deal.stage or _("Unassigned Stage")),
+				"stage_type": stage_type,
+				"color": stage.color if stage else None,
+				"sort_order": stage.sort_order if stage else 999999,
+				"deal_count": 0,
+				"deal_value": 0.0,
+			},
+		)
+		group["deal_count"] += 1
+		group["deal_value"] += amount
+
+	for values in lifecycle.values():
+		values["deal_value"] = flt(values["deal_value"], 2)
+
+	return {
+		"deal_count": len(deals),
+		"total_deal_value": flt(total_value, 2),
+		"open_pipeline_value": lifecycle["OPEN"]["deal_value"],
+		"lifecycle": lifecycle,
+		"by_stage": [
+			{**row, "deal_value": flt(row["deal_value"], 2)}
+			for row in sorted(
+				by_stage.values(),
+				key=lambda row: (row["sort_order"], row["label"], row["stage_type"]),
+			)
+		],
+	}
+
+
 @frappe.whitelist()
 def get_sales_performance(start_date, end_date, salesperson=None):
 	"""Return booked sales analytics from readable Confirmed/Completed Orders."""
@@ -175,5 +240,84 @@ def get_sales_performance(start_date, end_date, salesperson=None):
 				"deal_restricted": bool(order.deal and order.deal not in deals),
 			}
 			for order in recent[:RECENT_ORDER_LIMIT]
+		],
+	}
+
+
+@frappe.whitelist()
+def get_pipeline_analytics(start_date, end_date, salesperson=None):
+	"""Return permission-scoped Deal pipeline analytics by current stage."""
+	frappe.has_permission("DoubleT Deal", "read", throw=True)
+	start, end = _validated_range(start_date, end_date)
+	salesperson = _validated_salesperson(salesperson, can_read_deals=True)
+
+	deals = frappe.get_list(
+		"DoubleT Deal",
+		filters=[
+			["creation", ">=", f"{start} 00:00:00"],
+			["creation", "<", f"{add_days(end, 1)} 00:00:00"],
+		],
+		fields=[
+			"name",
+			"deal_title",
+			"amount",
+			"deal_owner",
+			"stage",
+			"creation",
+			"expected_close_date",
+			"won_on",
+			"lost_on",
+		],
+		order_by="creation desc, name desc",
+		limit_page_length=0,
+	)
+	owners = sorted({deal.deal_owner for deal in deals if deal.deal_owner})
+	if salesperson:
+		deals = [deal for deal in deals if deal.deal_owner == salesperson]
+
+	can_read_stages = bool(frappe.has_permission("DoubleT Deal Stage", "read"))
+	stages = {}
+	stage_names = sorted({deal.stage for deal in deals if deal.stage})
+	if can_read_stages and stage_names:
+		stage_rows = frappe.get_list(
+			"DoubleT Deal Stage",
+			filters={"name": ["in", stage_names]},
+			fields=["name", "stage_name", "stage_type", "color", "sort_order"],
+			order_by="sort_order asc, name asc",
+			limit_page_length=0,
+		)
+		stages = {stage.name: stage for stage in stage_rows}
+
+	summary = _summarize_pipeline(deals, stages)
+	return {
+		"filters": {
+			"start_date": str(start),
+			"end_date": str(end),
+			"salesperson": salesperson,
+			"date_field": "creation",
+		},
+		"permissions": {"deals": True, "stages": can_read_stages},
+		"currency": "USD",
+		"business_definition": _(
+			"Open pipeline value is the sum of Deal Amount for Open stages. Won and Lost values are "
+			"recorded Deal amounts, not realized or paid revenue. Date filters use Deal creation date."
+		),
+		"salespeople": [{"value": owner, "label": owner} for owner in owners],
+		**summary,
+		"recent_deals": [
+			{
+				"name": deal.name,
+				"deal_title": deal.deal_title,
+				"amount": flt(deal.amount, 2),
+				"deal_owner": deal.deal_owner,
+				"stage": deal.stage,
+				"stage_label": (
+					stages[deal.stage].stage_name if deal.stage in stages else (deal.stage or _("Unassigned Stage"))
+				),
+				"stage_type": _deal_lifecycle(deal, stages.get(deal.stage)),
+				"creation": deal.creation,
+				"expected_close_date": deal.expected_close_date,
+			}
+			for deal in deals[:RECENT_DEAL_LIMIT]
 		],
 	}

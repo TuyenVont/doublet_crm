@@ -29,6 +29,11 @@ export function useDoubleTDeals(options = {}) {
   })
 
   async function fetchStages() {
+    if (options.stage) {
+      dealsResource.params.filters = {
+        stage: options.stage,
+      }
+    }
     try {
       const res = await call('frappe.client.get_list', {
         doctype: 'DoubleT Deal Stage',
@@ -48,7 +53,7 @@ export function useDoubleTDeals(options = {}) {
       })
       stages.value = res || []
 
-      if (options.lifecycle) {
+      if (!options.stage && options.lifecycle) {
         const stageNames = stages.value
           .filter((stage) => stage.stage_type === options.lifecycle)
           .map((stage) => stage.name)
