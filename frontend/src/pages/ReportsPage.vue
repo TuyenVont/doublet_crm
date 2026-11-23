@@ -49,8 +49,10 @@
           </RouterLink>
         </nav>
 
+        <SalesPerformanceReport v-if="report?.key === 'sales-performance'" />
+
         <section
-          v-if="report"
+          v-else-if="report"
           class="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed border-outline-gray-3 bg-surface-gray-1 px-5 py-12 text-center"
           aria-labelledby="report-placeholder-title"
         >
@@ -96,6 +98,7 @@ import { computed } from 'vue'
 
 import Icon from '@/components/Icon.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
+import SalesPerformanceReport from '@/components/Reports/SalesPerformanceReport.vue'
 import { getReportSection, REPORT_SECTIONS, REPORTS_HOME_ROUTE } from '@/utils/reports'
 
 const props = defineProps({
