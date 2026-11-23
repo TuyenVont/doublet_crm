@@ -19,6 +19,8 @@ const OrderForm = () => import('@/pages/OrderForm.vue')
 const CompanyDetailView = () => import('@/pages/CompanyDetailView.vue')
 import PlaceholderView from '@/pages/PlaceholderView.vue'
 const Dashboard = () => import('@/pages/Dashboard.vue')
+const ReportsLayout = () => import('@/pages/ReportsLayout.vue')
+const ReportsPage = () => import('@/pages/ReportsPage.vue')
 const ZaloInbox = () => import('@/pages/ZaloInbox.vue')
 import CallLogs from '@/pages/CallLogs.vue'
 const ContactCenterCalls = () => import('@/pages/ContactCenterCalls.vue')
@@ -49,6 +51,44 @@ const routes = [
       title: 'Dashboard',
       description: 'DoubleT CRM Analytics & Overview',
     },
+  },
+  {
+    path: '/reports',
+    name: 'ReportsLayout',
+    component: ReportsLayout,
+    children: [
+      { path: '', name: 'Reports', component: ReportsPage },
+      {
+        path: 'sales-performance',
+        name: 'SalesPerformanceReport',
+        component: ReportsPage,
+        props: { reportKey: 'sales-performance' },
+      },
+      {
+        path: 'pipeline-analytics',
+        name: 'PipelineAnalyticsReport',
+        component: ReportsPage,
+        props: { reportKey: 'pipeline-analytics' },
+      },
+      {
+        path: 'quotation-order',
+        name: 'QuotationOrderReport',
+        component: ReportsPage,
+        props: { reportKey: 'quotation-order' },
+      },
+      {
+        path: 'customer-journey',
+        name: 'CustomerJourneyReport',
+        component: ReportsPage,
+        props: { reportKey: 'customer-journey' },
+      },
+      {
+        path: 'activity-contact-center',
+        name: 'ActivityContactCenterReport',
+        component: ReportsPage,
+        props: { reportKey: 'activity-contact-center' },
+      },
+    ],
   },
   {
     path: '/leads',
