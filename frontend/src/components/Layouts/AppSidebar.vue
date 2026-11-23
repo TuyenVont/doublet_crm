@@ -116,6 +116,7 @@ import TaskIcon from '@/components/Icons/TaskIcon.vue'
 import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import CollapseSidebar from '@/components/Icons/CollapseSidebar.vue'
 import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
+import { REPORTS_HOME_ROUTE } from '@/utils/reports'
 import { Badge } from 'frappe-ui'
 
 const route = useRoute()
@@ -133,6 +134,7 @@ function toggleCollapse() {
 
 const links = [
   { label: 'Dashboard', icon: DashboardIcon, to: 'Dashboard' },
+  { label: 'Reports', icon: 'bar-chart-2', to: REPORTS_HOME_ROUTE },
   { label: 'Leads', icon: LeadsIcon, to: 'Leads' },
   { label: 'Deals', icon: DealsIcon, to: 'Deals' },
   { label: 'Contacts', icon: ContactsIcon, to: 'Contacts' },

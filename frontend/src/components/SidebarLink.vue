@@ -93,10 +93,17 @@ function handleClick() {
 }
 
 const isActive = computed(() => {
+  if (!props.to) return false
+
   if (route.query.view) {
     return route.query.view == props.to?.query?.view
   }
 
-  return route.matched.some((record) => record.name === props.to)
+  const target = typeof props.to === 'object' ? props.to : { name: props.to }
+  const targetRouteNames = new Set(
+    router.resolve(target).matched.map((record) => record.name).filter(Boolean),
+  )
+
+  return route.matched.some((record) => targetRouteNames.has(record.name))
 })
 </script>
