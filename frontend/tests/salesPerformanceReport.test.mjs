@@ -4,6 +4,7 @@ import test from 'node:test'
 
 import {
   isPermissionError,
+  previousReportPeriod,
   reportDateError,
   reportDatePreset,
 } from '../src/utils/reportFilters.js'
@@ -35,6 +36,22 @@ test('report presets use inclusive calendar-day ranges', () => {
     startDate: '2026-11-01',
     endDate: '2026-11-23',
   })
+  assert.deepEqual(reportDatePreset('this-quarter', today), {
+    startDate: '2026-10-01',
+    endDate: '2026-11-23',
+  })
+  assert.deepEqual(reportDatePreset('previous-month', today), {
+    startDate: '2026-10-01',
+    endDate: '2026-10-31',
+  })
+  assert.deepEqual(reportDatePreset('previous-quarter', today), {
+    startDate: '2026-07-01',
+    endDate: '2026-09-30',
+  })
+  assert.deepEqual(previousReportPeriod('2026-11-01', '2026-11-30'), {
+    startDate: '2026-10-02',
+    endDate: '2026-10-31',
+  })
 })
 
 test('report date validation rejects missing and reversed dates', () => {
@@ -56,13 +73,20 @@ test('Sales Performance uses the focused API and existing detail routes', () => 
   assert.match(salesReportSource, /doublet_crm\.reports\.get_sales_performance/)
   assert.match(salesReportSource, /name: 'OrderDetail'/)
   assert.match(salesReportSource, /name: 'DealDetail'/)
-  assert.match(salesReportSource, /Booked sales/)
-  assert.match(salesReportSource, /Confirmed \/ Completed orders/)
+  assert.match(salesReportSource, /Booked Sales \(Order Date\)/)
+  assert.match(salesReportSource, /Won Deal Value \(Won On\)/)
+  assert.match(salesReportSource, /Win Rate: Won \/ \(Won \+ Lost\)/)
+  assert.match(salesReportSource, /Closed Deal drill-down/)
+  assert.match(salesReportSource, /compare_previous/)
+  assert.match(salesReportSource, /Deal outcome metrics and Deal links are unavailable/)
+  assert.match(salesReportSource, /dealMetric\(data\.won_deal_value, money\)/)
 })
 
 test('common report filters expose dates, presets, Deal Owner, apply and reset', () => {
-  for (const text of ['Start Date', 'End Date', '7 days', '30 days', 'This month', 'Salesperson (Deal Owner)', 'Apply', 'Reset']) {
+  for (const text of ['Start Date', 'End Date', '7 days', '30 days', 'This month', 'Previous month', 'This quarter', 'Previous quarter', 'Salesperson (Deal Owner)', 'Apply', 'Reset']) {
     assert.match(filtersSource, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
   assert.match(filtersSource, /Deal ownership is unavailable with your permissions/)
+  assert.match(filtersSource, /Compare with immediately preceding equal-length period/)
+  assert.match(filtersSource, /teamUnsupportedReason/)
 })

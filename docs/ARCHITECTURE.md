@@ -1,7 +1,26 @@
-
 # DoubleT CRM — Architecture map
 
-## Evidence and freshness
+## Current baseline — 2026-11-24
+
+- GitHub main and local deploy/main-20261123 were verified at `015251f` (PR #31); `git rev-list --left-right --count HEAD...origin/main` returned 0 0. Yarn production build passed with chunk-size warnings only. Two generated files differ locally: `frontend/components.d.ts` and `doublet_crm/public/frontend/assets/index-PX20vWx6.js.map`. Current migration and browser regression are not confirmed.
+- PR #29 (`4d835a9`) introduced the Reports Hub; PR #30 (`f1249fd`, feature commit `e807c7c`) synchronized deployment assets; PR #31 (`015251f`, feature commits `51c565c`, `0dd1ae4`) added live Sales and Pipeline analytics. Product multi-category/variants commit `c025247` is reachable from main. Contact Center Calls merge `218cdef` is earlier in main.
+- Historical sections below are retained for context, not current acceptance claims. Verify exact Order and Contact Center routes, schemas and APIs against Graphify and current source before extending them.
+
+## Reports architecture
+
+| Area | Current source contract |
+|---|---|
+| Reports Hub | `frontend/src/pages/ReportsPage.vue`, `frontend/src/utils/reports.js`, router; five sections under `/reports`. Sales Performance and Pipeline Analytics are live components; Quotation & Order, Customer Journey, Activity & Contact Center are placeholders. |
+| Backend | `doublet_crm/reports.py`: `get_sales_performance(...,compare_previous=0)` reads permission-scoped Confirmed/Completed Orders by `order_date`, Won Deals by `won_on` and Lost Deals by `lost_on`; it returns close outcomes, employee breakdown and matching drill-down rows. `get_pipeline_analytics(...)` keeps current-stage analytics by `creation`, adds Lost Reason by `lost_on`, overdue by `expected_close_date`, and a documented 30-day `modified` stale definition. |
+| Filters | `frontend/src/components/Reports/ReportsFilters.vue`, `frontend/src/utils/reportFilters.js`: custom start/end, Deal Owner, Apply/Reset, 7/30-day, current/previous month and quarter presets, plus an immediately preceding equal-length comparison. Team is explicitly unsupported because the Deal schema has no team field. |
+| Tests | `doublet_crm/test_reports.py`, `frontend/tests/pipelineAnalytics.test.mjs`, `frontend/tests/salesPerformanceReport.test.mjs`; test source exists, current execution not verified. |
+| Dashboard | `doublet_crm/dashboard.py:get_overview()` is independent and has no date/employee parameters; preserve existing Dashboard during REP-01 regression. |
+
+Order links to Deal (verified in reports.py); confirm Quotation/Order linking fields and statuses from current schema before implementing Customer Journey. Do not infer paid revenue from booked orders or Deal amounts.
+
+Sales and Pipeline drill-down tables are built from the same `frappe.get_list` result sets as their aggregates and link only to existing `OrderDetail`/`DealDetail` routes. The backend checks parent DocType read permission before querying and relies on Frappe's normal list and field permissions; it does not use `ignore_permissions` or raw SQL. Prior comparison is the immediately preceding period with the same inclusive number of calendar days, while every metric retains its own event-date field.
+
+## Evidence and freshness (historical)
 
 - The original architecture map was verified against GitHub `main` at `26feef6`, the merge of PR #20 on 2026-11-12. The subsequent source review at `44bc805` confirmed the Dashboard route and the merge of PR #21 for quotation email delivery.
 - On 2026-11-16, the local `doublet.localhost` build showed the standalone Zalo OA Inbox with two mock inbound messages, one mock reply, and a link that opened the matching Lead. See [FEATURE_STATUS.md](FEATURE_STATUS.md) for the recorded results.

@@ -1,5 +1,26 @@
 DoubleT CRM — Feature status
-Updated 2026-11-17. Source baseline is GitHub main at 26feef6. WSL/Docker can differ. Results below identify current-worktree evidence separately from historical observations.
+Updated 2026-11-24. Current verified Git baseline: main/local `015251f`. Historical evidence below retains its original dates and scope; it does not establish current acceptance.
+
+## Current Reports / deployment evidence
+
+| ID | Status | Evidence and next check |
+|---|---|---|
+| REP-01 | PASS — ADMIN REGRESSION; ROLE BROWSER PENDING | Administrator browser still shows 19 Leads, 17 Open Deals, 2 Won Deals and 7 Draft Quotations. Dashboard source was unchanged. Sales Manager/Sales User browser and forced empty/error states remain pending. |
+| REP-02 | IMPLEMENTED; AUTOMATED/API/BROWSER PASS; ISOLATED SEED PENDING | Retains Booked Sales/Order Count/AOV and adds Won/Lost, Won Deal Value, Win Rate, valid close duration, owner breakdown and exact record drill-down with explicit date fields and denominators. |
+| REP-04 | PARTIAL | Five routes, two live reports, three placeholders on main. |
+| REP-05 | IMPLEMENTED; PASS | Custom/7/30/month/quarter ranges, previous month/quarter, Deal Owner, reset and immediately preceding equal-length comparison update the whole report without navigation. Team is documented unsupported by the actual Deal schema. |
+| REP-06 | NOT IMPLEMENTED | Customer Journey placeholder; implement linked funnel with deduplication. |
+| REP-07 | IMPLEMENTED; AUTOMATED/API/BROWSER PASS; ISOLATED SEED PENDING | Keeps current stage by Creation; adds Lost Reason by Lost On, missing reason, count/value shares, overdue by Expected Close Date, and explicit 30-day modified stale definition with exact record rows. |
+| REP-11 | PARTIAL PASS — ACTIVE PASS 1 | Sales/Pipeline provide accessible labels, hover titles, record links, loading/empty/error/retry source and local table scrolling. Desktop and collapsed-shell 375 px pass; later report groups and role-browser/error injection remain pending. |
+| EXT-13 | IMPLEMENTED; PASS | Won Deal Value is summed from permission-scoped Deal Amount by `won_on`, explicitly not paid revenue. |
+| EXT-32 | IMPLEMENTED; PASS | Lost Reason counts/value/count-share/value-share use `lost_on`, include missing reasons and disclose two-decimal rounding. |
+
+- PASS (observed 2026-11-24): branch baseline and origin/main parity 0/0; backend Reports 11/11; frontend Reports 9/9; production build 2,474 modules in 50.91s with chunk warning only; read-only APIs pass Administrator/Sales Manager/Sales User and deny Guest; desktop plus collapsed-shell 375 px browser checks pass.
+- SOURCE PRESENT: Product multi-category/variants `c025247`, Contact Center Calls merge `218cdef`, Reports PRs #29–31. No new feature acceptance inferred.
+- NOT TESTED: persisted seeded acceptance on an authorized isolated site; Sales Manager/Sales User/restricted non-Guest interactive browser sessions; forced browser empty/error/retry. Migration is not applicable because this pass changes no schema/patch/fixture.
+
+## Historical feature evidence — through 2026-11-17
+
 Area	Status	Evidence and next check
 Lead → Contact / Company → Deal	SOURCE PRESENT	Conversion logic and tests exist. Verify personal and company flows, record links, role permissions and duplicate conversion handling on the target site.
 Deal pipeline	SOURCE PRESENT	Stage updates and Won/Lost rules are in source. Verify with demo roles and compare the visible pipeline with Dashboard totals.
@@ -24,7 +45,7 @@ Dashboard	IMPLEMENTED; DATA/API PASS; VISUAL CHECK PENDING	On `doublet.localhost
 | Quotation threaded Reply | AUTOMATED PASS; LIVE/BROWSER PENDING | The focused suite verifies Received-only Reply, `in_reply_to`, immutable original-sender recipient, same-quotation isolation and read-only send denial. The built frontend blocks duplicate submission and retains a failed draft. A real reply and resulting mail-client thread are NOT TESTED. |
 | Quotation CRM sender and Reply-To | CODE/AUTOMATED PASS; LIVE HEADER PENDING | The implementation selects Frappe's configured outgoing Email Account for From and its enabled incoming inbox for Reply-To. Existing queue `k1v4krnns6` still records the historical bad `admin@example.com` headers; no new real message was sent, so corrected stored/raw headers remain NOT TESTED. |
 | Live Zalo OA integration | PENDING OA ACCESS | Verify live webhook ingestion and outbound delivery after OA access is available. |
-| WooCommerce integration | EXTERNAL VERIFICATION PENDING | Track implementation and target-site evidence separately from Zalo OA. |FUTURE OR EXTERNAL VERIFICATION	Call Log ingestion is present. End-to-end telephony and external integrations need separate evidence. Contact Center work is deferred while Dashboard is the active task.
+| WooCommerce integration | EXTERNAL VERIFICATION PENDING | Track implementation and target-site evidence separately from Zalo OA. |FUTURE OR EXTERNAL VERIFICATION	Call Log ingestion is present. End-to-end telephony and external integrations need separate evidence. This was the historical scope; Contact Center Calls is now merged, current runtime verification remains separate.
 Deployment	CURRENT WORKTREE BUILD PASS; CLEAN RELEASE PENDING	On 2026-11-17, the current WSL worktree built successfully for 2,461 modules and generated HTML references `index-DItmvQ-r.js` and `index-CdVcU4hb.css`. Vite reported only the existing large-chunk warning. A clean-checkout release remains pending.
 
 

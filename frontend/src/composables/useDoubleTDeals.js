@@ -14,6 +14,7 @@ import {
   timeAgo,
   formatCurrency,
 } from '@/utils'
+import { buildDealListFilters } from '@/utils/dealFilters'
 
 export function useDoubleTDeals(options = {}) {
   const stages = ref([])
@@ -29,11 +30,7 @@ export function useDoubleTDeals(options = {}) {
   })
 
   async function fetchStages() {
-    if (options.stage) {
-      dealsResource.params.filters = {
-        stage: options.stage,
-      }
-    }
+    dealsResource.params.filters = buildDealListFilters(options)
     try {
       const res = await call('frappe.client.get_list', {
         doctype: 'DoubleT Deal Stage',
@@ -58,6 +55,7 @@ export function useDoubleTDeals(options = {}) {
           .filter((stage) => stage.stage_type === options.lifecycle)
           .map((stage) => stage.name)
         dealsResource.params.filters = {
+          ...buildDealListFilters(options),
           stage: ['in', stageNames],
         }
       }

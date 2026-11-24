@@ -347,7 +347,13 @@ const {
   rows,
   reload,
   loadMore,
-} = useDoubleTDeals({ lifecycle: route.query.lifecycle, stage: route.query.stage })
+} = useDoubleTDeals({
+  lifecycle: route.query.lifecycle,
+  stage: route.query.stage,
+  creationStart: route.query.creation_start,
+  creationEnd: route.query.creation_end,
+  dealOwner: route.query.deal_owner,
+})
 
 const VIEW_STORAGE_KEY =
   'doublet-deals-view-mode'

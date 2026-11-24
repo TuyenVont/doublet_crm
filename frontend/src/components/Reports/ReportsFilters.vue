@@ -22,20 +22,20 @@
         />
       </label>
       <label class="block">
-        <span class="mb-1.5 block text-sm font-medium text-ink-gray-7">{{ __('Salesperson (Deal Owner)') }}</span>
+        <span class="mb-1.5 block text-sm font-medium text-ink-gray-7">{{ __(personLabel) }}</span>
         <select
           :value="salesperson"
           class="h-9 w-full rounded border border-outline-gray-2 bg-surface-white px-3 text-sm text-ink-gray-9"
           :disabled="loading || !salespersonSupported"
           @change="$emit('update:salesperson', $event.target.value)"
         >
-          <option value="">{{ __('All salespeople') }}</option>
+          <option value="">{{ __(allPeopleLabel) }}</option>
           <option v-for="option in salespersonOptions" :key="option.value" :value="option.value">
             {{ option.label }}
           </option>
         </select>
         <span v-if="!salespersonSupported" class="mt-1 block text-xs text-ink-gray-5">
-          {{ __('Deal ownership is unavailable with your permissions.') }}
+          {{ __(personUnsupportedText) }}
         </span>
       </label>
       <div class="flex flex-wrap gap-2">
@@ -57,6 +57,21 @@
         {{ __(preset.label) }}
       </button>
     </div>
+    <div v-if="showCompare || teamUnsupportedReason" class="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-outline-gray-1 pt-3">
+      <label v-if="showCompare" class="inline-flex items-center gap-2 text-sm text-ink-gray-7">
+        <input
+          :checked="comparePrevious"
+          type="checkbox"
+          class="size-4 rounded border-outline-gray-3"
+          :disabled="loading"
+          @change="$emit('update:comparePrevious', $event.target.checked)"
+        />
+        {{ __('Compare with immediately preceding equal-length period') }}
+      </label>
+      <span v-if="teamUnsupportedReason" class="text-xs text-ink-gray-5" role="status">
+        {{ teamUnsupportedReason }}
+      </span>
+    </div>
     <p v-if="validationError" class="mt-2 text-sm text-ink-red-3">{{ __(validationError) }}</p>
   </section>
 </template>
@@ -72,12 +87,19 @@ const props = defineProps({
   salesperson: { type: String, default: '' },
   salespersonOptions: { type: Array, default: () => [] },
   salespersonSupported: { type: Boolean, default: true },
+  personLabel: { type: String, default: 'Salesperson (Deal Owner)' },
+  allPeopleLabel: { type: String, default: 'All salespeople' },
+  personUnsupportedText: { type: String, default: 'Deal ownership is unavailable with your permissions.' },
+  showCompare: { type: Boolean, default: true },
+  comparePrevious: { type: Boolean, default: false },
+  teamUnsupportedReason: { type: String, default: '' },
   loading: { type: Boolean, default: false },
 })
 const emit = defineEmits([
   'update:startDate',
   'update:endDate',
   'update:salesperson',
+  'update:comparePrevious',
   'apply',
   'reset',
 ])
@@ -86,6 +108,9 @@ const presets = [
   { value: '7-days', label: '7 days' },
   { value: '30-days', label: '30 days' },
   { value: 'this-month', label: 'This month' },
+  { value: 'previous-month', label: 'Previous month' },
+  { value: 'this-quarter', label: 'This quarter' },
+  { value: 'previous-quarter', label: 'Previous quarter' },
 ]
 
 const validationError = computed(() => reportDateError(props.startDate, props.endDate))

@@ -10,12 +10,33 @@ export function reportDatePreset(preset, today = new Date()) {
   let start
   if (preset === 'this-month') {
     start = new Date(end.getFullYear(), end.getMonth(), 1)
+  } else if (preset === 'this-quarter') {
+    start = new Date(end.getFullYear(), Math.floor(end.getMonth() / 3) * 3, 1)
+  } else if (preset === 'previous-month') {
+    start = new Date(end.getFullYear(), end.getMonth() - 1, 1)
+    end.setDate(0)
+  } else if (preset === 'previous-quarter') {
+    const quarterStartMonth = Math.floor(end.getMonth() / 3) * 3
+    start = new Date(end.getFullYear(), quarterStartMonth - 3, 1)
+    end.setTime(new Date(end.getFullYear(), quarterStartMonth, 0).getTime())
   } else {
     const days = preset === '7-days' ? 7 : 30
     start = new Date(end)
     start.setDate(end.getDate() - (days - 1))
   }
   return { startDate: formatInputDate(start), endDate: formatInputDate(end) }
+}
+
+export function previousReportPeriod(startDate, endDate) {
+  if (reportDateError(startDate, endDate)) return null
+  const start = new Date(`${startDate}T00:00:00Z`)
+  const end = new Date(`${endDate}T00:00:00Z`)
+  const days = Math.round((end - start) / 86400000) + 1
+  const previousEnd = new Date(start)
+  previousEnd.setUTCDate(previousEnd.getUTCDate() - 1)
+  const previousStart = new Date(previousEnd)
+  previousStart.setUTCDate(previousStart.getUTCDate() - days + 1)
+  return { startDate: formatInputDate(previousStart), endDate: formatInputDate(previousEnd) }
 }
 
 export function reportDateError(startDate, endDate) {

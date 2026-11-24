@@ -1,1 +1,0 @@
-{"version":3,"file":"ReportsLayout-vobeSBsF.js","sources":["../../../../frontend/src/pages/ReportsLayout.vue"],"sourcesContent":["<template>\n  <RouterView />\n</template>\n"],"names":["_createBlock","_component_RouterView"],"mappings":"2HACEA,EAAcC,CAAA"}
