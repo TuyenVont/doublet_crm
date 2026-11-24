@@ -53,6 +53,12 @@
 
         <PipelineAnalyticsReport v-else-if="report?.key === 'pipeline-analytics'" />
 
+        <CustomerJourneyReport v-else-if="report?.key === 'customer-journey'" />
+
+        <QuotationOrderReport v-else-if="report?.key === 'quotation-order'" />
+
+        <ActivityContactCenterReport v-else-if="report?.key === 'activity-contact-center'" />
+
         <section
           v-else-if="report"
           class="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed border-outline-gray-3 bg-surface-gray-1 px-5 py-12 text-center"
@@ -102,6 +108,9 @@ import Icon from '@/components/Icon.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import PipelineAnalyticsReport from '@/components/Reports/PipelineAnalyticsReport.vue'
 import SalesPerformanceReport from '@/components/Reports/SalesPerformanceReport.vue'
+import CustomerJourneyReport from '@/components/Reports/CustomerJourneyReport.vue'
+import QuotationOrderReport from '@/components/Reports/QuotationOrderReport.vue'
+import ActivityContactCenterReport from '@/components/Reports/ActivityContactCenterReport.vue'
 import { getReportSection, REPORT_SECTIONS, REPORTS_HOME_ROUTE } from '@/utils/reports'
 
 const props = defineProps({
@@ -109,7 +118,7 @@ const props = defineProps({
 })
 
 const report = computed(() => getReportSection(props.reportKey))
-const liveReportKeys = new Set(['sales-performance', 'pipeline-analytics'])
+const liveReportKeys = new Set(['sales-performance', 'pipeline-analytics', 'customer-journey', 'quotation-order', 'activity-contact-center'])
 
 function isLiveReport(key) {
   return liveReportKeys.has(key)

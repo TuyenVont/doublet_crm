@@ -10,6 +10,8 @@
 - Local WSL bench executable is **not** the runnable Frappe environment. When execution is authorized, use `docker exec` with the Frappe container. Verify paths in the active environment before running commands.
 
 ## Context, read on demand
+- Start with Git status and Graphify (root and frontend when relevant), then inspect the actual source. If the graph is missing or stale, report that and continue.
+- Read only the active task and relevant sections; do not load historical evidence wholesale.
 1. `docs/CURRENT_TASK.md`: active objective, acceptance criteria, scope and stop conditions.
 2. `docs/ARCHITECTURE.md`: routes, doctypes and important coupling points.
 3. `docs/FEATURE_STATUS.md`: verified progress vs unverified assumptions.
@@ -27,6 +29,13 @@ Do **not** reread every file on every turn. Read the relevant sections; inspect 
 8. Do not expose API keys, site config secrets, personal data or credentials in chat, commits or logs.
 9. Mark tests as PASS only when actually executed and observed. Use `NOT TESTED` when blocked.
 10. Do not auto-commit or push unless the user asks. Suggest an isolated commit after approval.
+
+## Branch and review workflow
+- Use a feature branch/worktree based on verified origin/main; never edit the deploy branch for feature work. Preserve its two generated local changes and existing stash.
+- Keep successive Reports fixes on the same branch; batch commits and push only when requested for review; reuse a draft PR where applicable.
+- Implement and run focused tests in the same pass. Use an isolated test site for database-mutating tests, with explicit approval. Do not mutate the running demo site without approval.
+- Record commit, site, roles, commands, PASS/FAIL/NOT TESTED and browser evidence separately. Never infer acceptance from build or test-file existence.
+- Read the actual diff before review. Use current repo package manager/lockfile (Yarn was used successfully on 24 Nov). Keep deploy HTML/assets matched; do not commit incidental build outputs unless release policy requires them.
 
 ## Workflow / stop rule
 - Inspect `CURRENT_TASK.md`, current `git status`, and just the relevant code.
@@ -65,3 +74,7 @@ Rules:
 - For forms and dialogs, follow existing conventions for labels, required fields, validation and save actions. Give wide content such as quotation items and email composition enough room. Keep the primary action visible and confine horizontal scrolling to the table when needed.
 - Match the existing UI language and naming conventions. Keep visual changes within the current task's scope and preserve existing navigation, permissions and workflows.
 - Verify changed screens in the browser at desktop and narrow widths. Check the primary action, filters or tabs as applicable, and any fields or columns affected by layout changes. In the handoff, name the reference screen and reused components, and record checks that could not be run as `NOT TESTED`.
+## Reports and Dashboard
+- Reports is independent of Dashboard. Keep existing Dashboard KPI contract and navigation intact for the current task.
+- Use permission-scoped aggregation, including field-level restrictions and linked-record drill-down. Distinguish Deal creation, won_on, lost_on and order_date; never equate Won Deal Value or Booked Sales with paid revenue.
+- Reuse ReportsFilters.vue and existing chart/UI patterns. No placeholder or mock metric may count as accepted.

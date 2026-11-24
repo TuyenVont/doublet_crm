@@ -1,173 +1,52 @@
-# CURRENT TASK — Quotation Emails and threaded replies
+# CURRENT TASK — Reports & Analytics completion
 
-Status — COMPLETION PASS IMPLEMENTED in the current WSL worktree. Automated/API/build verification passes; browser and live-mail verification remain for Tuyền. Preserve the existing Order, Call Log, Zalo OA and generated-asset changes.
+Updated 2026-11-24. Status: ACTIVE PASS 1 IMPLEMENTED AND VERIFIED WITH AUTOMATED, READ-ONLY API AND BROWSER EVIDENCE; isolated seeded-site acceptance remains pending.
+Planning baseline: `4d835a9` (23 Nov). Verified main/local baseline: `015251f` (PR #31). Fetch and verify before editing. Active branch to create/reuse: `feat/reports-completion`. Keep deploy/main-20261123 and its generated changes intact.
 
-## Completion pass — recipient, layout and automatic delivery
+## Weekly objective (23–30 Nov)
+Deliver five Reports groups with real permission-scoped system data, filters, charts and links to underlying records; preserve Dashboard's existing KPIs. Checklist: REP-01, REP-02, REP-04, REP-05, REP-06, REP-07, REP-11, EXT-13, EXT-32. REP-03 and REP-08 are related dependencies for five-group coverage, not additional accepted items by default.
 
-1. Resolve the initial PDF recipient from the readable Quotation Contact, then Company email; expose readable Contacts from the same Company for name/email search while preserving manual entry and clearing state between quotations.
-2. Use the available page width, keep product-table overflow local, widen the Send and Reply composers, and distinguish Outgoing/Received direction from Queued/Sent/Failed/Unknown delivery state.
-3. Build mail with the configured CRM outgoing account as From and its receiving inbox as Reply-To. Enqueue the newly committed Email Queue immediately with a deduplicated background job instead of waiting for the scheduler's next `all` tick.
-4. Poll queued mail for a bounded interval, prefer Communication delivery state when Queue records have been cleaned up, and retain manual Refresh.
-5. Only allow Reply to a Received Communication. Warn and require explicit confirmation when sending a PDF after the site's `valid_until` date; Reply remains available.
+## Active pass only — Sales Performance & Pipeline Analytics
+Model: GPT-5.6 or GPT-6 if available; High reasoning.
 
-## Objective
+Read root and frontend Graphify first, then AGENTS.md and relevant architecture/status sections. Inspect reports.py, test_reports.py, SalesPerformanceReport.vue, PipelineAnalyticsReport.vue, ReportsFilters.vue, reportFilters.js, Deal/Stage/Order schemas and actual list routes. Check git status, worktrees, and current runtime. Report stale/missing graph and proceed with source. Preserve existing functionality.
 
-Add an Emails tab to saved `DoubleT Quotation` records so Sales can read inbound and outbound Frappe `Communication` history, see real Email Queue delivery status and attachments, and reply in the same email thread without leaving DoubleT CRM.
+### Scope
+- REP-02 / EXT-13: retain Booked Sales, Order Count and Average Order Value; add Won/Lost counts, Won Deal Value by won_on, win rate Won/(Won+Lost), average close duration for valid Won records, employee breakdown and drill-down. Won/Lost use their own event dates; explicitly label all denominators and units. Do not equate booked orders or Deal value with paid revenue.
+- REP-07 / EXT-32: retain current-stage analytics by creation; add Lost Reason counts, value and percentages by lost_on, including missing reasons; flag open deals overdue against expected_close_date, and stale deals only with an explicit supported definition. No invented stage history.
+- REP-05: reuse shared filters; date ranges, month/quarter presets, employee, team only if supported by real schema, prior-period comparison with clear definition, reset and synchronized KPI/chart/table. Handle empty and invalid ranges. No page reload needed. Scope filters by each metric's date field.
+- REP-11 (partial): accessible charts, tooltips, exact drill-down, loading/empty/error/retry and responsive behavior. No new dependency without necessity. English labels, USD cents, respect actual currency schema.
+- Backend authorization for records and fields; no permission bypass, mock metrics, core modifications or unrelated changes to Order/Quotation/Contact Center. Dashboard remains unchanged except an explicitly justified regression fix.
 
-## Implementation scope
+### Acceptance (run in same pass)
+1. Seeded cases with creation in prior month and won_on/lost_on in selected month yield exact counts/amounts, win rate and duration; existing booked-order results stay correct.
+2. Date, employee and comparison filters update all related output, handle zero denominators and invalid ranges; team support is implemented or explicitly documented as blocked.
+3. Lost Reason shares reconcile to total (rounding explained), overdue Open deals are correct, and drill-down results match aggregate scope.
+4. Admin/Manager/Sales User and restricted users see only authorized records and fields; direct APIs and drill-down cannot leak restricted data.
+5. Focused backend/frontend tests, Yarn build and applicable migration checks; browser desktop/375px and Dashboard regression recorded separately. Use isolated authorized test data/site; if unavailable, report NOT TESTED rather than PASS.
 
-1. Reuse the existing email presentation/editor patterns where compatible, but expose quotation-specific, permission-checked DoubleT APIs.
-2. Load Communications linked to the quotation, including inbound mail such as `CRM-INBOUND-01`; show sender, recipients, subject, timestamp, content, attachments, loading, empty and error states.
-3. Send quotation PDFs through the existing Email Queue while creating exactly one outbound Communication linked to the quotation. Show Queued, Sent or Failed from the actual queue state. Preserve the existing quotation lifecycle and manual `Mark as Sent` behavior.
-4. Reply to a selected Communication with recipients prefilled, Frappe threading metadata preserved and the outbound Communication linked to the same quotation. Prevent duplicate submission and retain the draft after errors.
-5. Require quotation read permission for history, quotation write permission for send/reply, verify that the replied-to Communication belongs to the quotation, and preserve normal File permissions.
-6. Keep Deal email, automatic Contact/Lead association and a global Inbox outside this task.
+## Later passes — do not self-assign
+2. Customer Journey and Quotation & Order: trace saved Lead→Deal→Quotation→Order links, distinct entity counts, explicit cohort/denominator, no duplicate inflation; quote/order status, value and conversion, real drill-down. REP-06/04, related REP-08.
+3. Activity & Contact Center Reports: permission-scoped Calls, Tasks, Communication and mock/live distinction; coordinate with Thư; reporting only, no changes to transport/Contact Center business workflows. REP-04, related REP-03.
+4. Regression and acceptance: all five reports, filters, drill-down, permissions, responsive/empty/error, old Dashboard KPI and links. REP-01/04/05/11. No REP-14 redesign, export or AI insights in this scope.
 
-## Acceptance checks
+## Handoff and stop
+Implement and test active pass only. Record files changed, metric formulas, commit/worktree, site/role, commands/results, browser evidence and blockers. Update Graphify and relevant docs. Keep same branch across passes. Do not commit/push/merge unless asked; reuse draft PR when review is requested. Do not mark checklist Done without actual acceptance evidence.
 
-| Case | Expected result |
-|---|---|
-| Existing inbound | Opening `QUO-00005` → Emails shows `CRM-INBOUND-01` immediately from its saved Communication link. |
-| PDF delivery | One Send action creates one outbound Communication and one queued email with the quotation PDF; the tab reports Queued / Sent / Failed from Email Queue. |
-| Threaded reply | Reply prefills the original counterparty, uses Frappe reply/thread headers, links the outbound Communication to the quotation and resists double clicks. A failed attempt keeps the draft. |
-| Permissions | Users without quotation read access cannot fetch history or attachments; users without quotation write access cannot send or reply; a Communication from another record cannot be used as the reply source. |
-| Regression | PDF export, quotation status transitions and manual `Mark as Sent` retain their current behavior. Production build and focused backend tests pass. |
+## Active Pass 1 verification — 2026-11-24
 
-## Verification record — 2026-11-17
+- Checkout: `feat/reports-completion` at uncommitted `015251f` baseline, verified `0/0` against fetched `origin/main`. The pre-existing documentation, `frontend/components.d.ts`, and source-map changes were preserved. No commit, push or merge was performed.
+- PASS — Sales formulas and date scopes: Booked Sales/Order Count/AOV remain Confirmed/Completed Orders by `order_date`; Won/Lost use `won_on`/`lost_on`; Win Rate is `Won / (Won + Lost)`; Won Deal Value uses Deal Amount; close duration is valid `won_on - creation` in days with an explicit denominator. Unit cases include creation in a prior month with events in the selected month, invalid duration exclusion and zero denominators.
+- PASS — Pipeline scopes: current-stage metrics remain by Deal `creation`; Lost Reason is by `lost_on`, includes `No reason provided`, count/value shares and two-decimal rounding disclosure; overdue Open Deals use `expected_close_date` in range before the as-of date; stale is explicitly Open and not modified for 30 days as of End Date. Aggregate rows and embedded record drill-down use the same permission-scoped result sets.
+- PASS — Shared filters: custom range, 7/30 days, current/previous month, current/previous quarter, Deal Owner, reset, and optional immediately preceding equal-length comparison. All related output reloads without page navigation. Invalid/missing ranges disable Apply and backend validation remains authoritative. Team is explicitly unsupported because `DoubleT Deal` has no team field.
+- PASS — focused backend tests: `bench --site doublet.localhost run-tests --app doublet_crm --module doublet_crm.test_reports` → 11/11. Frontend focused tests → 9/9. `python3 -m compileall`, `git diff --check`, and Yarn production build passed; build transformed 2,474 modules in 50.91 seconds with only the existing chunk-size warning.
+- PASS — read-only runtime API on `doublet.localhost`: Administrator, `salesmanager@gmail.com` (Sales Manager), and `salesuser@gmail.com` (Sales User) could call both endpoints; Guest received `PermissionError` from both. Administrator data reconciled to one $480 booked Order for 1–24 Nov; Pipeline returned 2 created Deals/$121, one overdue Open Deal/$5, six stale Open Deals/$10,103,257, and equal-length prior-period comparison. No permission bypass or raw SQL is used.
+- PASS — browser Administrator desktop: Sales and Pipeline loaded live KPI/chart/table data, exact record links, Team limitation, comparison period and retry/empty-capable UI. Enabling comparison then Apply updated the report in-place to the 30-day prior period (26 Sep–25 Oct). Dashboard regression remained 19 Total Leads, 17 Open Deals, 2 Won Deals and 7 Draft Quotations.
+- PASS WITH EXISTING SHELL CONTROL — 375 px: after using the app's existing Collapse control, both reports fit the 375 px document with no document/body horizontal overflow; wide charts/tables scroll locally. With the global sidebar left expanded, the pre-existing shell leaves only a narrow report viewport; no shell or Dashboard behavior was changed in this pass.
+- PASS — Graphify was initially missing in this checkout. `graphify update .` created/refreshed root (9,680 nodes/20,860 edges) and frontend (3,141 nodes/5,602 edges) graphs; focused queries locate both report components, shared filters and backend comparison helpers.
+- NOT APPLICABLE — migration: no DocType, patch, fixture or schema file changed.
+- NOT TESTED — database-seeded exact acceptance on a separate isolated site, because no authorized isolated test site/data-write permission was available. Pure/helper tests cover the specified seeded arithmetic, but this is not presented as persisted-site evidence.
+- NOT TESTED — interactive browser sessions for Sales Manager, Sales User and a restricted non-Guest user; their read-only direct API behavior is recorded separately above. Empty/error/retry source and automated coverage exist, but forced browser network/error-state interaction was not performed.
 
-- PASS — `get_quotation_emails("QUO-00005")` returned the Received Communication with subject `Re: Quotation QUO-00005` and content containing `CRM-INBOUND-01`.
-- PASS — `get_quotation_email_context("QUO-00005")` resolved Contact `Đỗ Hoa <dohoa@gmail.com>`, listed that Contact under the linked Company, and reported `valid_until=2026-11-15` as expired on the site date.
-- PASS — focused Quotation Email suite: 7/7. Coverage includes Contact/Company/no-email recipient resolution and same-company search, linked inbound history, private attachment filtering, Guest/read-only denial, one Communication and one queue job per send call, scheduler-compatible queue locking, PDF attachment, Communication-first/Unknown status, expired confirmation, Received-only threaded Reply and cross-quotation rejection.
-- PASS — production build completed for 2,461 modules with only the existing large-chunk warning. Python compile and `git diff --check` pass.
-- PASS — queue diagnosis for `k1v4krnns6`: it changed from Not Sent to Sent after about four minutes; scheduler and worker were online. The wait was the scheduler's `all` interval, not an observed SMTP failure. The completion pass now enqueues that queue's `send` method after commit.
-- PARTIAL — the existing Quotation regression suite passed 18/19. The remaining test compares Decimal totals before reload with float totals after reload; no quotation email file participates in that conversion.
-- NOT TESTED — authenticated browser opening `QUO-00005` → Emails, visual content/attachment behavior, responsive layout and refresh.
-- NOT TESTED — real PDF delivery through the completion-pass path, resulting automatic Queued → Sent/Failed transition, corrected live From/Reply-To headers, and a real reply grouped in the recipient mailbox thread.
-
----
-
-# Previous task — Zalo OA Inbox and reply experience
-
-Status — Task 24C implemented in the current WSL worktree. Backend regression, production build and API acceptance on `doublet.localhost` pass; interactive browser checks remain pending.
-
-## Task 24C objective
-
-Upgrade the standalone Inbox with global search, OA and reply-state filters, latest-message previews and stable activity ordering. Add a permission-aware Customer details panel and improve the shared composer used by Inbox and the four record tabs.
-
-## Task 24C implementation verification — 2026-11-16
-
-- PASS — Inbox filtering and pagination are server-side across the full permission-filtered conversation set. Six backend tests cover search outside page one, OA filtering, stable latest activity, Needs reply/Replied transitions, future-dated inbound handling, deep links and restricted users.
-- PASS — `doublet.localhost` has two acceptance conversations across `mock-oa-01` and `mock-oa-02`. Searching `task24c-user-02` and filtering `mock-oa-02 / Needs reply` returned the expected conversation.
-- PASS — saving a mock reply changed the `mock-oa-02` conversation to Replied, updated its preview and made the reply its latest activity. Customer details returned the readable Lead with source and status.
-- PASS — production build completed with only the existing large-chunk warning.
-- NOT TESTED — interactive browser behavior for the responsive Customer details panel, filter controls, Enter/Shift+Enter and Vietnamese IME in Inbox and all four record tabs. Restricted-user API behavior passes automated coverage; restricted-user browser behavior is not tested.
-
-## Task 24B baseline — record chat
-
-Status — Implemented in the current WSL worktree; automated backend and production-build checks pass. Browser verification of the four record tabs remains pending. Mock inbound and Lead linking passed the reported Postman cases on `doublet.localhost`. The standalone Inbox was observed in the browser with two inbound messages, a mock reply and navigation to the linked Lead.
-
-## Objective
-
-Add a `Zalo OA` tab to Lead, Deal, Contact and Company details. Users can select a linked conversation, read its history and save a mock reply from the record detail page.
-
-## Implementation scope
-
-1. Read root and frontend Graphify before inspecting source. Verify the WSL branch, local changes, routes and APIs against the running checkout.
-2. Add the tab to the existing detail navigation. Adapt the Company detail layout to expose the same chat functionality.
-3. Reuse Inbox message history and reply behavior. Show sender context, timestamps, message direction, mock labels and older messages. Keep an optional deep link to the selected conversation in Inbox.
-4. Resolve records through `Conversation.lead`, `Deal.source_lead`, and the Lead conversion fields `converted_deal`, `converted_contact` and `converted_company`, as appropriate to the record being viewed.
-5. Enforce backend permissions and verify record-to-conversation membership on record-scoped requests. Handle empty, loading, error and restricted states. Clear stale results when changing records or conversations.
-6. Preserve the standalone Inbox and existing detail workflows. Live OA webhook and live outbound delivery remain pending OA access.
-
-## Acceptance checks
-
-| Case | Expected result |
-|---|---|
-| Lead with Zalo history | The Zalo OA tab on `Zalo user mock-user-01` shows its two inbound messages and the saved mock reply. |
-| Reply from the record | Saving a mock reply in the tab adds one outbound message to the same thread. The message remains after refresh and appears in Inbox. |
-| Deal, Contact and Company | Related records show the conversation reached through their saved Lead relationships. A record without a linked conversation shows an empty state. |
-| Access and record isolation | A user lacking access cannot read or reply. Changing the record or conversation ID never returns another record's history through the record-scoped API. |
-| Inbox navigation | Open in Inbox selects the correct conversation, including conversations outside the first list page. |
-| Regression | Existing tabs work, the tab is reachable at narrow widths, and existing Postman responses retain their behavior. |
-
-Record the tested commit, site and role with PASS / FAIL / NOT TESTED. Record build results and browser results independently.
-
-## Implementation verification — 2026-11-16
-
-- PASS — `npm run build`; Vite completed with only the existing large-chunk warning.
-- PASS — `test_zalo_inbox`: 4 tests, including Lead/Deal/Contact/Company relationship resolution, record/conversation isolation, mock reply persistence, whitelist validation and restricted-role behavior.
-- PASS — `doublet.localhost` record-scoped APIs returned the `mock-user-01` conversation with two mock inbound messages and one saved mock reply. Direct conversation lookup for Inbox deep-linking also passed.
-- PASS — replaying `mock-message-01` and `mock-message-02` returned `duplicate: true` with the existing conversation, messages and Lead.
-- NOT TESTED — interactive Lead/Deal/Contact/Company tabs, narrow viewport, reply submission from the browser and refresh into Inbox. The site Lead currently has no converted Deal/Contact/Company, so those browser paths need linked acceptance data.
-Status — Ready for implementation. Dashboard implementation and target-site API/data regression were reported complete. Remaining Dashboard checks are recorded below.
-
-Working checkout — The reported WSL checkout was fix/regression-task-notes-product at base commit 09bb5163, mounted into crm-frappe-1 for site doublet.localhost. Verify the current branch, commit, working tree and running build before editing. Preserve in-progress changes to Dashboard and Call Log.
-Objective
-Make Quotation creation predictable from either the Deal page or the Quotations list. Use English labels and USD with cents throughout the pricing flow. Make the Price List and Product dialogs easy to use, then verify the complete path from Lead to sending and recording a Quotation.
-Implementation scope
-1. Read Graphify first. Open the reports in graphify-out/ and frontend/graphify-out/ where available. Trace the Lead conversion, Deal customer links, Quotation picker and pricing/PDF paths, then verify the relevant fields, routes, permissions and changes against the current source. Continue with source if the graph is missing or stale. Read [ARCHITECTURE.md](ARCHITECTURE.md) and [FEATURE_STATUS.md](FEATURE_STATUS.md).
-2. Filter Deals before selection. When creating from Quotations, filter Deals by the selected Customer Type. For Personal, narrow to the selected Contact. For Company, narrow to the selected Company and, when a Contact is selected, require a matching Contact. Restrict results to readable Deals with usable customer information. Keep Deal = None available and show No matching deals when appropriate. Preserve the chosen customer and clear any incompatible selection when the context changes. When creating from an existing Deal, prefill and lock its customer fields. Keep backend validation that the Quotation customer matches the Deal.
-3. Use English and USD with cents. Use consistent English labels and en-US USD formatting across Product, Price List, Deal amount where shown in the flow, Quotation preview and saved view, and exported PDF. Align input precision, stored amounts, backend calculation and PDF rendering to two decimal places for monetary amounts. Preserve the numeric values and recorded totals of historical Quotations. Treat previously entered values that were intended as VND as a data review item.
-4. Widen New/Edit Price List. Target approximately 900 px on desktop and fit the viewport with side margins on smaller screens. Give Product / Variant the widest column and keep Price (USD) and the remove control visible on desktop without horizontal scrolling. Stack the fields on narrow screens.
-5. Fix the Product Categories dropdown. Give the menu an opaque background and correct stacking inside the dialog. Keep it usable near the bottom of the viewport and in a scrolling dialog. Preserve multi-selection, removal of secondary categories and automatic inclusion of the primary category.
-Acceptance checks
-Case	Expected result
-Customer-first Quotation	Personal and Company show only matching Deals. Two customers of the same type do not see each other's Deals in the picker. Switching customer clears stale selections. A customer with zero matching Deals can create a standalone Quotation.
-Deal-first Quotation	The correct Deal, Customer Type and Contact/Company are prefilled and the customer fields are locked. Backend validation still rejects a mismatched link. Check with the intended sales role.
-USD and discounts	Product and Price List amounts display in USD. Preview, saved Quotation and PDF agree for two units at $19.99 with a $5.00 discount ($34.98) and with a 10% discount ($35.98 with the line discount rounded to cents). Reopen a historical Quotation to verify its saved totals.
-Price List and Categories UI	Test New and Edit on desktop and a narrow viewport. Check a long Product/Variant name and multiple price rows. In Product, select multiple categories, remove a secondary category and verify the primary category remains selected.
-Lead to delivery	Create a sample Lead with a source → convert to Contact/Company and Deal → create a Quotation from that Deal → select products and Price List → verify discounts and totals → save → export and check the PDF → send through the agreed channel → record the status.
-Delivery evidence	Verify delivery separately from the status update. The current workflow exports the PDF and lets the user mark it Sent after sending it externally. Use an agreed test recipient if a live send is part of the test. Record delivery as pending when the channel or recipient is unavailable. An in-CRM email feature requires a separate scope decision.
-
-
-Use Anti's existing regression evidence where available. Retest confirmed issues on the current build. Record site, checkout, roles, browser or test command, and PASS / FAIL / NOT TESTED for each case. Distinguish build and API results from interactive browser results.
-Previous task — Dashboard MVP
-Reported on 2026-11-13 on doublet.localhost, with base commit 09bb5163.
-- PASS — Administrator and Sales User API/data checks, Lead source totals, Deal Open → Won counts and filters, Draft → Sent → Accepted follow-up and expired Sent exclusion. Restricted-access behavior, build, matching HTML/assets, Python compile, diff check and Graphify refresh were also reported as passing. Test data was rolled back.
-- 5/7 in the Dashboard test module — Two timeline Version assertions still fail. Confirm against the base checkout before calling them pre-existing.
-- NOT TESTED — Authenticated browser clicks on the Open, Won and Draft cards and follow-up rows, empty/retry states and narrow viewport rendering. Carry these checks into the next browser pass.
-
-Implementation and verification — 2026-11-13
-
-Checkout and site
-
-- Working tree: `fix/regression-task-notes-product`, based on commit `09bb51630b626e31671c2676fe9070d890b56ffe`; the implementation is not committed.
-- Runtime target: `doublet.localhost` in `crm-frappe-1`. Existing Dashboard, Call Log and asset changes were preserved.
-- Graphify: PASS — read the current root and frontend reports before editing, traced Lead conversion → Deal customer links → Quotation pricing/PDF and refreshed both graphs after the source changes. The refreshed graphs contain 3,135 root nodes and 2,621 frontend nodes.
-
-Implemented
-
-- Customer-first Quotation now loads readable Deal customer fields and filters the picker by Customer Type, Contact and Company. `None` remains available, `No matching deals` is shown for a resolved empty context, and a stale Deal is cleared when customer context changes. Deal-first creation still prefills and locks customer fields; backend customer/Deal matching remains authoritative.
-- Quotation now exposes Percentage and Amount discounts. Preview arithmetic uses integer cents with half-up rounding. Product, Price List, Deal amounts, saved Quotation metadata and PDF use English/en-US USD with two decimal places.
-- The lifecycle snapshot normalizes numeric types before comparison, so existing non-Draft Quotations do not become editable or fail status transitions merely because metadata precision changed. Existing recorded non-Draft totals continue to be copied from the prior document.
-- Price List uses a `4xl` (approximately 896 px) dialog, viewport-constrained scrolling, a wide Product/Variant field, visible USD price/remove controls on desktop and stacked rows on narrow screens.
-- Product Categories uses an opaque menu, portal collision handling and viewport-constrained scrolling while retaining primary-category inclusion and secondary-category removal behavior.
-- `Mark as Sent` now requires confirmation that the PDF was already delivered through the agreed external channel and explicitly says the action does not send anything.
-
-Acceptance results
-
-| Case | Administrator / System Manager | Sales User | Evidence |
-|---|---|---|---|
-| Customer-first Deal filtering | PASS (logic/build) / CHƯA TEST (browser) | PASS (permission-backed list design) / CHƯA TEST (browser) | Pure JS check passes Personal, Company, Company+Contact and cross-customer exclusion. Frappe `get_list` remains permission-filtered. Interactive picker and stale-clear behavior need browser verification. |
-| Deal-first and mismatch rejection | PASS (backend) / CHƯA TEST (browser) | PASS (backend) / CHƯA TEST (browser) | Quotation module passed the existing Deal/customer mismatch and Sales User readable-Deal creation cases. Prefill/locked fields compiled into the production bundle. |
-| `$19.99 × 2`, `$5.00` discount | PASS (preview logic and saved backend) | CHƯA TEST (browser) | JS result: subtotal `$39.98`, discount `$5.00`, total `$34.98`. Backend module passed this saved-value case before the later PDF assertion was added. |
-| `$19.99 × 2`, `10%` discount | PASS (preview logic and saved backend) | CHƯA TEST (browser) | JS/backend result: subtotal `$39.98`, rounded discount `$4.00`, total `$35.98`. |
-| Historical non-Draft totals | PASS (source and lifecycle regression) / CHƯA TEST (existing site record) | CHƯA TEST | Numeric snapshot normalization fixed a real float/Decimal lifecycle mismatch found by the first test run. Reopening a chosen historical record in browser is still pending. |
-| PDF | PASS (template/build) / CHƯA TEST (new HTML assertion and downloaded PDF) | CHƯA TEST | English USD template and two-decimal renderer are implemented. The newly added HTML/PDF-total regression was added after Docker execution permission became unavailable, so it must be rerun; downloaded binary has not been visually checked. |
-| Price List and Product Categories UI | PASS (production build) / CHƯA TEST (visual) | CHƯA TEST | Desktop, narrow viewport, long names, multiple rows, menu placement and category interaction require browser verification. |
-| Lead → Deal → Quotation → delivery | CHƯA TEST end-to-end | CHƯA TEST end-to-end | No agreed channel or recipient was available. External delivery and only then `Mark as Sent` must be tested together. |
-
-Commands and results
-
-- PASS — `bench --site doublet.localhost migrate`.
-- PASS — focused Quotation backend suite, 18/18, after fixing numeric snapshot normalization. Command: `bench --site doublet.localhost run-tests --app doublet_crm --module doublet_crm.doublet_crm.doctype.doublet_quotation.test_doublet_quotation`.
-- CHƯA TEST — rerun of the now 19-test suite. The final PDF/historical assertion was added after the 18/18 run, and further Docker execution permission was unavailable.
-- PASS — direct JS assertions for Deal filtering and both discount examples.
-- PASS — Python compile, `git diff --check`, two production Vite builds, generated HTML asset references and existence of the referenced JS/CSS. Vite only reported its existing large-chunk warning.
-- CHƯA TEST — authenticated browser cases. No browser was available in this execution, so no browser case is reported as PASS.
-
-Files changed for this task
-
-- Frontend source: `frontend/src/pages/QuotationForm.vue`, `frontend/src/utils/quotation.js`, `frontend/src/utils/index.js`, `frontend/src/components/Modals/PriceListModal.vue`, `frontend/src/components/Modals/ProductModal.vue`, `frontend/src/components/Modals/DoubleTConvertToDealModal.vue`, `frontend/src/components/DoubleTDealKanban.vue`, `frontend/src/components/Deal/DoubleTDealInfoPanel.vue`, and `frontend/src/components/Deal/DoubleTDealDataPanel.vue`.
-- Backend, metadata and tests: `doublet_crm/doublet_crm/doctype/doublet_deal/doublet_deal.json`, Product/Price List/Quotation DocType JSON files, `doublet_quotation.py`, `quotation_pdf.py`, `test_doublet_quotation.py`, and `doublet_crm/templates/quotation_pdf.html`.
-- Build/analysis output: `doublet_crm/public/frontend/`, `doublet_crm/www/doublet_crm.html`, `graphify-out/`, and `frontend/graphify-out/`.
+## Baseline verification
+PASS: 0/0 commit divergence and Yarn build (72.02s, chunk warning only). NOT TESTED: migration confirmation, focused current Reports tests and interactive browser acceptance. Earlier Quotation/Zalo/Task verification is historical; see FEATURE_STATUS.md and ARCHITECTURE.md.

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
+import { buildDealListFilters } from '../src/utils/dealFilters.js'
+
 const reportsPageSource = readFileSync(
   new URL('../src/pages/ReportsPage.vue', import.meta.url),
   'utf8',
@@ -36,16 +38,37 @@ test('Pipeline Analytics reuses common filters and the focused API', () => {
   assert.match(pipelineSource, /doublet_crm\.reports\.get_pipeline_analytics/)
   assert.match(pipelineSource, /v-model:start-date/)
   assert.match(pipelineSource, /v-model:salesperson/)
-  assert.match(pipelineSource, /Open pipeline value/)
+  assert.match(pipelineSource, /Open Pipeline Value/)
   assert.match(pipelineSource, /data\.business_definition/)
+  assert.match(pipelineSource, /Lost Reasons/)
+  assert.match(pipelineSource, /Overdue Open Deal drill-down/)
+  assert.match(pipelineSource, /Stale Open Deal drill-down/)
+  assert.match(pipelineSource, /compare_previous/)
 })
 
 test('stage chart and Deal rows use existing SPA routes', () => {
-  assert.match(pipelineSource, /name: 'Deals', query: \{ stage: stage\.name \}/)
+  assert.match(pipelineSource, /creation_start: data\.value\.filters\.start_date/)
+  assert.match(pipelineSource, /creation_end: data\.value\.filters\.end_date/)
+  assert.match(pipelineSource, /deal_owner: data\.value\.filters\.salesperson/)
   assert.match(pipelineSource, /name: 'DealDetail'/)
-  assert.match(dealsViewSource, /stage: route\.query\.stage/)
+  assert.match(dealsViewSource, /creationStart: route\.query\.creation_start/)
+  assert.match(dealsViewSource, /creationEnd: route\.query\.creation_end/)
+  assert.match(dealsViewSource, /dealOwner: route\.query\.deal_owner/)
   assert.match(dealsViewSource, /selectedStage = ref\(String\(route\.query\.stage \|\| ''\)\)/)
-  assert.match(dealsComposableSource, /dealsResource\.params\.filters = \{\s*stage: options\.stage/)
+  assert.match(dealsComposableSource, /buildDealListFilters\(options\)/)
+})
+
+test('Deal list resource supports the exact Pipeline aggregate filter tuple', () => {
+  assert.deepEqual(buildDealListFilters({
+    stage: 'Qualified',
+    dealOwner: 'owner@example.com',
+    creationStart: '2026-11-01',
+    creationEnd: '2026-11-30',
+  }), {
+    stage: 'Qualified',
+    deal_owner: 'owner@example.com',
+    creation: ['between', ['2026-11-01 00:00:00', '2026-11-30 23:59:59.999999']],
+  })
 })
 
 test('pipeline backend remains permission scoped and uses real Deal fields', () => {
@@ -53,11 +76,14 @@ test('pipeline backend remains permission scoped and uses real Deal fields', () 
   assert.notEqual(start, -1)
   const pipelineApi = backendSource.slice(start)
   assert.match(pipelineApi, /frappe\.has_permission\("DoubleT Deal", "read", throw=True\)/)
-  assert.match(pipelineApi, /frappe\.get_list\(\s*"DoubleT Deal"/)
-  assert.match(pipelineApi, /\["creation", ">="/)
-  assert.match(pipelineApi, /"deal_owner"/)
-  assert.match(pipelineApi, /"won_on"/)
-  assert.match(pipelineApi, /"lost_on"/)
-  assert.match(pipelineApi, /not realized or paid revenue/)
+  assert.match(backendSource, /frappe\.get_list\(\s*"DoubleT Deal"/)
+  assert.match(backendSource, /\["creation", ">="/)
+  assert.match(backendSource, /"deal_owner"/)
+  assert.match(backendSource, /"won_on"/)
+  assert.match(backendSource, /"lost_on"/)
+  assert.match(pipelineApi, /_summarize_lost_reasons/)
+  assert.match(pipelineApi, /STALE_DEAL_DAYS/)
+  assert.match(pipelineApi, /not paid revenue/)
+  assert.match(pipelineApi, /not historical stage snapshots/)
   assert.doesNotMatch(pipelineApi, /ignore_permissions|frappe\.db\.sql/)
 })
