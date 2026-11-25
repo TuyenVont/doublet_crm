@@ -50,7 +50,7 @@
               <button
                 v-if="item.quotation"
                 type="button"
-                class="text-xs font-medium text-ink-blue-3 hover:underline"
+                class="text-xs font-medium text-[#1D4ED8] hover:underline"
                 @click="openQuotation(item.quotation)"
               >
                 {{ item.quotation }} ↗

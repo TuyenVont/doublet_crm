@@ -6,6 +6,8 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, get_datetime, getdate, now_datetime, nowdate
 
+from doublet_crm.stage_aging import stage_aging_for_deals, summarize_stage_aging
+
 BOOKED_ORDER_STATUSES = ("Confirmed", "Completed")
 MAX_REPORT_RANGE_DAYS = 366
 RECENT_ORDER_LIMIT = 10
@@ -293,10 +295,17 @@ def get_sales_performance(start_date, end_date, salesperson=None, compare_previo
 			"deal_label": deals[order.deal].deal_title if order.deal in deals else None,
 			"deal_restricted": bool(order.deal and order.deal not in deals),
 		} for order in recent[:RECENT_ORDER_LIMIT]],
+		"order_drilldown": [{
+			"name": order.name, "order_date": order.order_date, "status": order.status,
+			"total": flt(order.total, 2), "deal": order.deal if order.deal in deals else None,
+			"deal_label": deals[order.deal].deal_title if order.deal in deals else None,
+			"deal_restricted": bool(order.deal and order.deal not in deals),
+		} for order in recent],
 	}
 
 
 DEAL_REPORT_FIELDS = ["name", "deal_title", "amount", "deal_owner", "stage", "creation", "modified", "expected_close_date", "won_on", "lost_on", "lost_reason"]
+PROBABILITY_FIELD_NAMES = ("probability", "win_probability", "conversion_probability", "stage_probability")
 
 
 def _get_deals(filters, order_by):
@@ -360,6 +369,150 @@ def _risk_row(deal, stages):
 	}
 
 
+def _probability_field(doctype):
+	"""Return a readable numeric probability field already present in the installed schema."""
+	from frappe.model import get_permitted_fields
+
+	permitted = set(get_permitted_fields(doctype, permission_type="read"))
+	fields = {field.fieldname: field for field in frappe.get_meta(doctype).fields}
+	candidates = list(PROBABILITY_FIELD_NAMES)
+	candidates.extend(sorted(
+		fieldname for fieldname, field in fields.items()
+		if "probability" in f"{fieldname} {field.label or ''}".lower() and fieldname not in candidates
+	))
+	for fieldname in candidates:
+		field = fields.get(fieldname)
+		if field and fieldname in permitted and field.fieldtype in ("Percent", "Float", "Int"):
+			return fieldname
+	return None
+
+
+def _forecast_deal_row(deal, stages, probability=None, probability_source=None):
+	amount = flt(deal.amount, 2)
+	return {
+		"name": deal.name, "deal_title": deal.deal_title, "deal_owner": deal.deal_owner,
+		"stage": deal.stage,
+		"stage_label": stages[deal.stage].stage_name if deal.stage in stages else (deal.stage or _("Unassigned Stage")),
+		"amount": amount, "expected_close_date": deal.expected_close_date,
+		"probability": probability, "probability_source": probability_source,
+		"weighted_value": flt(amount * probability / 100, 2) if probability is not None else None,
+	}
+
+
+def _summarize_forecast(deals, stages, start, end, as_of, deal_probability_field=None, stage_probability_field=None):
+	"""Group each readable Open Deal exactly once and disclose incomplete forecast evidence."""
+	monthly = defaultdict(lambda: {"deal_count": 0, "unweighted_value": 0.0, "weighted_value": 0.0, "weighted_deal_count": 0, "deals": []})
+	missing_close, overdue, outside = [], [], []
+	open_rows = []
+	for deal in deals:
+		stage = stages.get(deal.stage)
+		if _deal_lifecycle(deal, stage) != "OPEN":
+			continue
+		probability = getattr(deal, deal_probability_field, None) if deal_probability_field else None
+		probability_source = f"DoubleT Deal.{deal_probability_field}" if probability is not None and deal_probability_field else None
+		if probability is None and stage_probability_field and stage:
+			probability = getattr(stage, stage_probability_field, None)
+			probability_source = f"DoubleT Deal Stage.{stage_probability_field}" if probability is not None else None
+		try:
+			probability = flt(probability, 2) if probability not in (None, "") else None
+		except (TypeError, ValueError):
+			probability = None
+		if probability is not None and not 0 <= probability <= 100:
+			probability, probability_source = None, None
+		item = _forecast_deal_row(deal, stages, probability, probability_source)
+		open_rows.append(item)
+		if not deal.expected_close_date:
+			missing_close.append(item)
+			continue
+		close_date = getdate(deal.expected_close_date)
+		if close_date < as_of:
+			overdue.append(item)
+			continue
+		if close_date < start or close_date > end:
+			outside.append(item)
+			continue
+		month = str(close_date)[:7]
+		bucket = monthly[month]
+		bucket["deal_count"] += 1
+		bucket["unweighted_value"] += item["amount"]
+		bucket["deals"].append(item)
+		if probability is not None:
+			bucket["weighted_deal_count"] += 1
+			bucket["weighted_value"] += item["weighted_value"]
+	configured = bool(deal_probability_field or stage_probability_field)
+	months = []
+	for month, values in sorted(monthly.items()):
+		values["unweighted_value"] = flt(values["unweighted_value"], 2)
+		values["weighted_value"] = flt(values["weighted_value"], 2) if configured else None
+		values["missing_probability_count"] = values["deal_count"] - values["weighted_deal_count"]
+		months.append({"month": month, **values})
+	forecast_deals = [item for month in months for item in month["deals"]]
+	missing_probability = [item for item in forecast_deals if item["probability"] is None]
+	return {
+		"available": True, "as_of_date": str(as_of),
+		"definition": _("Forecast uses readable Open Deal Amount by Expected Close Date. It is forecast revenue, not actual booked sales."),
+		"probability_fields": {"deal": deal_probability_field, "stage": stage_probability_field},
+		"weighted_available": configured,
+		"weighted_reason": None if configured else _("Weighted forecast is unavailable because no readable numeric probability field exists on Deal or Deal Stage."),
+		"open_deal_count": len(open_rows), "total_unweighted_pipeline_value": flt(sum(row["amount"] for row in open_rows), 2),
+		"forecast_deal_count": len(forecast_deals), "unweighted_forecast_value": flt(sum(row["amount"] for row in forecast_deals), 2),
+		"weighted_forecast_value": flt(sum(row["weighted_value"] or 0 for row in forecast_deals), 2) if configured else None,
+		"missing_probability_count": len(missing_probability) if configured else len(forecast_deals),
+		"missing_probability_value": flt(sum(row["amount"] for row in missing_probability), 2),
+		"missing_close_date_count": len(missing_close), "missing_close_date_value": flt(sum(row["amount"] for row in missing_close), 2),
+		"overdue_count": len(overdue), "overdue_value": flt(sum(row["amount"] for row in overdue), 2),
+		"outside_period_count": len(outside), "outside_period_value": flt(sum(row["amount"] for row in outside), 2),
+		"months": months, "deals": forecast_deals, "missing_close_date_deals": missing_close,
+		"overdue_deals": overdue, "outside_period_deals": outside,
+	}
+
+
+def _sales_forecast(start, end, salesperson, can_read_stages):
+	from frappe.model import get_permitted_fields
+
+	required_fields = {"name", "deal_title", "amount", "deal_owner", "stage", "creation", "expected_close_date", "won_on", "lost_on"}
+	permitted_fields = set(get_permitted_fields("DoubleT Deal", permission_type="read")) | {"name"}
+	restricted_fields = sorted(required_fields - permitted_fields)
+	if restricted_fields:
+		return {
+			"available": False,
+			"reason": _("Sales forecast is unavailable because required Deal fields are restricted: {0}.").format(", ".join(restricted_fields)),
+			"weighted_available": False, "months": [], "deals": [], "missing_close_date_deals": [],
+			"overdue_deals": [], "outside_period_deals": [], "owners": [],
+		}
+	deal_probability_field = _probability_field("DoubleT Deal")
+	stage_probability_field = _probability_field("DoubleT Deal Stage") if can_read_stages else None
+	fields = DEAL_REPORT_FIELDS + ([deal_probability_field] if deal_probability_field and deal_probability_field not in DEAL_REPORT_FIELDS else [])
+	deals = frappe.get_list(
+		"DoubleT Deal", filters=[["creation", "<", f"{add_days(end, 1)} 00:00:00"]], fields=fields,
+		order_by="expected_close_date asc, name asc", limit_page_length=0,
+	)
+	if salesperson:
+		deals = [deal for deal in deals if deal.deal_owner == salesperson]
+	stage_names = sorted({deal.stage for deal in deals if deal.stage})
+	stages = {}
+	if can_read_stages and stage_names:
+		stage_fields = ["name", "stage_name", "stage_type", "color", "sort_order"]
+		if stage_probability_field not in (None, *stage_fields):
+			stage_fields.append(stage_probability_field)
+		stages = {stage.name: stage for stage in frappe.get_list(
+			"DoubleT Deal Stage", filters={"name": ["in", stage_names]}, fields=stage_fields,
+			order_by="sort_order asc, name asc", limit_page_length=0,
+		)}
+	result = _summarize_forecast(deals, stages, start, end, min(end, getdate(nowdate())), deal_probability_field, stage_probability_field)
+	result["owners"] = sorted({deal.deal_owner for deal in deals if deal.deal_owner})
+	return result
+
+
+def _pipeline_stage_aging(end, salesperson, can_read_stages):
+	deals = _get_deals([["creation", "<", f"{add_days(end, 1)} 00:00:00"]], "creation asc, name asc")
+	if salesperson:
+		deals = [deal for deal in deals if deal.deal_owner == salesperson]
+	stages = _stages_for((deals,), can_read_stages)
+	open_deals = [deal for deal in deals if _deal_lifecycle(deal, stages.get(deal.stage)) == "OPEN"]
+	return summarize_stage_aging(stage_aging_for_deals(open_deals, stages, min(end, getdate(nowdate()))))
+
+
 @frappe.whitelist()
 def get_pipeline_analytics(start_date, end_date, salesperson=None, compare_previous=0):
 	"""Return current-stage, Lost Reason and open-Deal risk analytics."""
@@ -368,7 +521,9 @@ def get_pipeline_analytics(start_date, end_date, salesperson=None, compare_previ
 	salesperson = _validated_salesperson(salesperson, can_read_deals=True)
 	can_read_stages = bool(frappe.has_permission("DoubleT Deal Stage", "read"))
 	period = _pipeline_period(start, end, salesperson, can_read_stages)
-	owners = sorted(period["owners"])
+	forecast = _sales_forecast(start, end, salesperson, can_read_stages)
+	stage_aging = _pipeline_stage_aging(end, salesperson, can_read_stages)
+	owners = sorted(period["owners"] | set(forecast.get("owners") or []))
 	if salesperson and salesperson not in owners:
 		owners.append(salesperson)
 	owners.sort()
@@ -403,6 +558,8 @@ def get_pipeline_analytics(start_date, end_date, salesperson=None, compare_previ
 		),
 		"rounding_definition": _("Reason percentages are rounded to two decimals; displayed shares can differ from 100% by rounding."),
 		"salespeople": [{"value": owner, "label": owner} for owner in owners], **period["summary"],
+		"forecast": forecast,
+		"stage_aging": stage_aging,
 		"lost_reason_count": len(period["lost"]), "lost_reason_value": flt(sum(flt(deal.amount, 2) for deal in period["lost"]), 2),
 		"lost_reasons": _summarize_lost_reasons(period["lost"]),
 		"overdue_open_count": len(period["overdue"]), "overdue_open_value": flt(sum(flt(deal.amount, 2) for deal in period["overdue"]), 2),
@@ -410,6 +567,7 @@ def get_pipeline_analytics(start_date, end_date, salesperson=None, compare_previ
 		"stale_open_count": len(period["stale"]), "stale_open_value": flt(sum(flt(deal.amount, 2) for deal in period["stale"]), 2),
 		"stale_days": STALE_DEAL_DAYS, "stale_cutoff": str(period["stale_cutoff"]),
 		"stale_deals": [_risk_row(deal, stages) for deal in period["stale"]], "as_of_date": str(period["as_of"]),
+		"created_deals": [_risk_row(deal, stages) for deal in period["created"]],
 		"comparison": comparison,
 		"recent_deals": [{**_risk_row(deal, stages), "stage_type": _deal_lifecycle(deal, stages.get(deal.stage))} for deal in period["created"][:RECENT_DEAL_LIMIT]],
 	}
@@ -425,7 +583,7 @@ def _journey_leads(start, end):
 	"""Leads with creation in range."""
 	return frappe.get_list(
 		"DoubleT Lead", filters=[["creation", ">=", f"{start} 00:00:00"], ["creation", "<", f"{add_days(end, 1)} 00:00:00"]],
-		fields=["name", "lead_name", "lead_owner", "creation", "converted_deal"],
+		fields=["name", "lead_name", "lead_owner", "source", "creation", "converted_deal"],
 		order_by="creation desc, name desc", limit_page_length=0,
 	)
 
@@ -531,9 +689,22 @@ def _journey_row(lead, deals=None, quotations=None, orders=None, permissions=Non
 	if permissions["orders"] and booked_orders:
 		stage = "Order"
 	primary = deals[0] if deals else None
+	deal_rows = [{
+		"name": deal.name, "label": deal.deal_title or deal.name,
+		"won": bool(deal.won_on), "amount": flt(deal.amount, 2),
+	} for deal in deals] if permissions["deals"] else None
+	quotation_rows = [{
+		"name": quotation.name, "deal": quotation.deal, "status": quotation.status,
+		"grand_total": flt(quotation.grand_total, 2),
+	} for quotation in quotations] if permissions["quotations"] else None
+	order_rows = [{
+		"name": order.name, "deal": order.deal, "quotation": getattr(order, "quotation", None),
+		"status": order.status, "total": flt(order.total, 2),
+		"link_type": "Quotation" if getattr(order, "quotation", None) else "Direct Deal",
+	} for order in orders] if permissions["orders"] else None
 	return {
 		"name": lead.name, "lead_name": lead.lead_name or lead.name, "lead_owner": lead.lead_owner,
-		"creation": lead.creation, "stage": stage,
+		"source": lead.source, "creation": lead.creation, "stage": stage,
 		"has_deal": bool(deals) if permissions["deals"] else None,
 		"deal": primary.name if primary else None, "deal_title": primary.deal_title if primary else None,
 		"deal_count": len(deals) if permissions["deals"] else None,
@@ -542,6 +713,8 @@ def _journey_row(lead, deals=None, quotations=None, orders=None, permissions=Non
 		"quotation_value": flt(sum(flt(q.grand_total, 2) for q in quotations), 2) if permissions["quotations"] else None,
 		"order_count": len(booked_orders) if permissions["orders"] else None,
 		"order_value": flt(sum(flt(order.total, 2) for order in booked_orders), 2) if permissions["orders"] else None,
+		"won_deal_count": sum(bool(deal.won_on) for deal in deals) if permissions["deals"] else None,
+		"deals": deal_rows, "quotations": quotation_rows, "orders": order_rows,
 	}
 
 
@@ -561,13 +734,15 @@ def _summarize_journey(leads, deals_for_leads, quotations, orders_by_quotation, 
 		quotation_reached = sum(bool(quotes) for _lead, _deals, quotes, _orders in rows) if permissions["quotations"] else None
 		order_reached = sum(any(order.status in BOOKED_ORDER_STATUSES for order in orders) for _lead, _deals, _quotes, orders in rows) if permissions["orders"] else None
 		unique_deals = {deal.name: deal for _lead, deals, _quotes, _orders in rows for deal in deals}
+		won_leads = sum(any(deal.won_on for deal in deals) for _lead, deals, _quotes, _orders in rows) if permissions["deals"] else None
 		unique_quotes = {quote.name: quote for _lead, _deals, quotes, _orders in rows for quote in quotes}
 		unique_orders = {order.name: order for _lead, _deals, _quotes, orders in rows for order in orders if order.status in BOOKED_ORDER_STATUSES}
 		deal_value = flt(sum(flt(deal.amount, 2) for deal in unique_deals.values()), 2) if permissions["deals"] else None
 		quotation_value = flt(sum(flt(quote.grand_total, 2) for quote in unique_quotes.values()), 2) if permissions["quotations"] else None
 		order_value = flt(sum(flt(order.total, 2) for order in unique_orders.values()), 2) if permissions["orders"] else None
 		return {
-			"lead_count": lead_count, "deal_count": deal_reached, "quotation_count": quotation_reached, "order_count": order_reached,
+			"lead_count": lead_count, "deal_count": deal_reached, "won_lead_count": won_leads,
+			"quotation_count": quotation_reached, "order_count": order_reached,
 			"lead_value": deal_value, "deal_value": deal_value, "quotation_value": quotation_value, "order_value": order_value,
 			"entity_totals": {
 				"leads": lead_count, "deals": len(unique_deals) if permissions["deals"] else None,
@@ -578,6 +753,7 @@ def _summarize_journey(leads, deals_for_leads, quotations, orders_by_quotation, 
 
 	summary = metrics(contexts)
 	summary["lead_to_deal_rate"] = flt(summary["deal_count"] * 100 / summary["lead_count"], 2) if summary["deal_count"] is not None and summary["lead_count"] else (0.0 if summary["deal_count"] is not None else None)
+	summary["lead_to_won_rate"] = flt(summary["won_lead_count"] * 100 / summary["lead_count"], 2) if summary["won_lead_count"] is not None and summary["lead_count"] else (0.0 if summary["won_lead_count"] is not None else None)
 	summary["deal_to_order_rate"] = flt(summary["order_count"] * 100 / summary["deal_count"], 2) if summary["order_count"] is not None and summary["deal_count"] else (0.0 if summary["order_count"] is not None and summary["deal_count"] == 0 else None)
 	summary["funnel"] = [
 		{"stage": "Lead", "count": summary["lead_count"], "value": summary["lead_value"]},
@@ -588,14 +764,14 @@ def _summarize_journey(leads, deals_for_leads, quotations, orders_by_quotation, 
 	summary["by_owner"] = []
 	for key, rows in owner_groups.items():
 		values = metrics(rows)
-		summary["by_owner"].append({"owner": None if key == "__unassigned__" else key, "label": _("Unassigned") if key == "__unassigned__" else key, **{name: values[name] for name in ("lead_count", "deal_count", "quotation_count", "order_count", "lead_value", "deal_value", "quotation_value", "order_value")}})
+		summary["by_owner"].append({"owner": None if key == "__unassigned__" else key, "label": _("Unassigned") if key == "__unassigned__" else key, **{name: values[name] for name in ("lead_count", "deal_count", "won_lead_count", "quotation_count", "order_count", "lead_value", "deal_value", "quotation_value", "order_value")}})
 	summary["by_owner"].sort(key=lambda row: (-row["lead_count"], row["label"]))
 	return summary, contexts
 
 
 def _journey_comparison(current, previous):
 	"""Build period-over-period comparison for journey metrics."""
-	keys = ("lead_count", "deal_count", "quotation_count", "order_count", "lead_value", "deal_value", "quotation_value", "order_value", "lead_to_deal_rate", "deal_to_order_rate")
+	keys = ("lead_count", "deal_count", "won_lead_count", "quotation_count", "order_count", "lead_value", "deal_value", "quotation_value", "order_value", "lead_to_deal_rate", "lead_to_won_rate", "deal_to_order_rate")
 	return {key: {
 		"current": current.get(key),
 		"previous": previous.get(key),
@@ -603,11 +779,15 @@ def _journey_comparison(current, previous):
 	} for key in keys}
 
 
-def _journey_period(start, end, salesperson, permissions):
+def _journey_period(start, end, salesperson, permissions, source=None):
 	"""Lead-creation cohort, consistently owned and filtered by Lead Owner."""
 	cohort_leads = _journey_leads(start, end)
 	available_owners = {lead.lead_owner for lead in cohort_leads if lead.lead_owner}
-	leads = [lead for lead in cohort_leads if not salesperson or lead.lead_owner == salesperson]
+	available_sources = {lead.source for lead in cohort_leads if lead.source}
+	leads = [
+		lead for lead in cohort_leads
+		if (not salesperson or lead.lead_owner == salesperson) and (not source or lead.source == source)
+	]
 	deals_for_leads = _journey_deals_from_leads(leads) if leads and permissions["deals"] else {}
 	deal_names = sorted({deal.name for deals in deals_for_leads.values() for deal in deals})
 	quotations = _journey_quotations_for_deals(deal_names) if deal_names and permissions["quotations"] else {}
@@ -622,19 +802,23 @@ def _journey_period(start, end, salesperson, permissions):
 		"quotations": quotations,
 		"orders_by_deal": orders_by_deal,
 		"available_owners": available_owners,
+		"available_sources": available_sources,
 		"summary": summary,
 		"journey_rows": journey_rows,
 	}
 
 
 @frappe.whitelist()
-def get_customer_journey(start_date, end_date, salesperson=None, compare_previous=0):
+def get_customer_journey(start_date, end_date, salesperson=None, source=None, compare_previous=0):
 	"""Return Lead→Deal→Quotation→Order funnel with unique counts and conversion rates."""
 	frappe.has_permission("DoubleT Lead", "read", throw=True)
 	start, end = _validated_range(start_date, end_date)
 	salesperson = (salesperson or "").strip() or None
+	source = (source or "").strip() or None
 	if salesperson and (len(salesperson) > 140 or not frappe.get_list("DoubleT Lead", filters={"lead_owner": salesperson}, pluck="name", limit_page_length=1)):
 		frappe.throw(_("Salesperson must be a Lead Owner on a Lead you can access."), frappe.ValidationError)
+	if source and (len(source) > 140 or not frappe.get_list("DoubleT Lead", filters={"source": source}, pluck="name", limit_page_length=1)):
+		frappe.throw(_("Source must be present on a Lead you can access."), frappe.ValidationError)
 	source_permissions = {
 		"leads": True,
 		"deals": bool(frappe.has_permission("DoubleT Deal", "read")),
@@ -647,7 +831,7 @@ def get_customer_journey(start_date, end_date, salesperson=None, compare_previou
 		"quotations": source_permissions["deals"] and source_permissions["quotations"],
 		"orders": source_permissions["deals"] and source_permissions["orders"],
 	}
-	period = _journey_period(start, end, salesperson, permissions)
+	period = _journey_period(start, end, salesperson, permissions, source)
 	owners = sorted(period["available_owners"])
 	if salesperson and salesperson not in owners:
 		owners.append(salesperson)
@@ -655,14 +839,14 @@ def get_customer_journey(start_date, end_date, salesperson=None, compare_previou
 	comparison = None
 	if cint(compare_previous):
 		previous_start, previous_end = _previous_period(start, end)
-		previous = _journey_period(previous_start, previous_end, salesperson, permissions)
+		previous = _journey_period(previous_start, previous_end, salesperson, permissions, source)
 		comparison = {
 			"definition": _("Immediately preceding period with the same inclusive number of calendar days."),
 			"start_date": str(previous_start), "end_date": str(previous_end),
 			"metrics": _journey_comparison(period["summary"], previous["summary"]),
 		}
 	return {
-		"filters": {"start_date": str(start), "end_date": str(end), "salesperson": salesperson},
+		"filters": {"start_date": str(start), "end_date": str(end), "salesperson": salesperson, "source": source},
 		"permissions": permissions,
 		"source_permissions": source_permissions,
 		"capabilities": {"team_filter": {"supported": False, "reason": _("Team filtering is unavailable because DoubleT Deal has no team field.")}},
@@ -670,10 +854,11 @@ def get_customer_journey(start_date, end_date, salesperson=None, compare_previou
 		"business_definition": _(
 			"Cohort is readable Leads created in the selected period and ownership always means Lead Owner. "
 			"Each funnel stage counts unique cohort Leads reaching it; entity totals are shown separately. "
-			"Lead-to-Deal and Deal-to-Order rates use unique cohort Leads as their denominators. "
+			"Lead-to-Deal and Lead-to-Won rates use all unique cohort Leads as their denominator; Won is the current linked Deal outcome, not a historical cohort event. "
 			"Deals resolve source_lead and converted_deal; Orders resolve exact Quotation and Deal links without duplication. Order stage includes Confirmed/Completed Orders."
 		),
 		"salespeople": [{"value": owner, "label": owner} for owner in owners],
+		"sources": [{"value": value, "label": value} for value in sorted(period.get("available_sources", set()))],
 		**period["summary"],
 		"journey_rows": period["journey_rows"],
 		"comparison": comparison,
@@ -808,8 +993,14 @@ def _summarize_orders(orders, deals):
 
 def _summarize_conversion(quotations, conversion_orders):
 	"""Quotation-date cohort converted only by exact booked Order.quotation links."""
-	booked_quotation_names = {order.quotation for order in conversion_orders if order.quotation and order.status in BOOKED_ORDER_STATUSES}
+	booked_orders_by_quotation = defaultdict(list)
+	for order in conversion_orders:
+		if order.quotation and order.status in BOOKED_ORDER_STATUSES:
+			booked_orders_by_quotation[order.quotation].append(order)
+	booked_quotation_names = set(booked_orders_by_quotation)
 	converted = [quotation for quotation in quotations if quotation.name in booked_quotation_names]
+	accepted = [quotation for quotation in quotations if quotation.status == "Accepted"]
+	accepted_converted = [quotation for quotation in accepted if quotation.name in booked_quotation_names]
 	quotations_with_orders = len(converted)
 	quotation_value_converted = sum(flt(quotation.grand_total, 2) for quotation in converted)
 	quotation_count = len(quotations)
@@ -818,6 +1009,20 @@ def _summarize_conversion(quotations, conversion_orders):
 		"quotations_with_orders": quotations_with_orders,
 		"quotation_value_converted": flt(quotation_value_converted, 2),
 		"quotation_to_order_rate": conversion_rate,
+		"accepted_quotation_count": len(accepted),
+		"accepted_quotations_with_orders": len(accepted_converted),
+		"accepted_to_booked_order_rate": flt(len(accepted_converted) * 100 / len(accepted), 2) if accepted else 0.0,
+		"accepted_conversion_drilldown": [{
+			"name": quotation.name,
+			"status": quotation.status,
+			"quotation_date": quotation.quotation_date,
+			"grand_total": flt(quotation.grand_total, 2),
+			"converted": quotation.name in booked_quotation_names,
+			"orders": [{
+				"name": order.name, "status": order.status, "order_date": order.order_date,
+				"total": flt(order.total, 2),
+			} for order in booked_orders_by_quotation.get(quotation.name, [])],
+		} for quotation in accepted],
 	}
 
 
@@ -852,6 +1057,7 @@ def _qo_comparison(current, previous):
 		"quotation_count", "quotation_value", "accepted_count", "acceptance_rate",
 		"order_count", "booked_sales", "booked_order_count",
 		"quotations_with_orders", "quotation_to_order_rate", "quotation_value_converted",
+		"accepted_quotation_count", "accepted_quotations_with_orders", "accepted_to_booked_order_rate",
 	)
 	return {key: {
 		"current": current.get(key),
@@ -911,6 +1117,7 @@ def get_quotation_order(start_date, end_date, salesperson=None, compare_previous
 			"Quotation metrics use Quotation Date. Order metrics use Order Date. "
 			"Booked Sales includes only Confirmed/Completed orders. "
 			"Quotation-to-Order cohort is Quotations dated in the selected range; conversion requires an exact Confirmed/Completed Order.quotation link, regardless of Order Date. "
+			"Accepted-to-Booked conversion uses unique Quotations whose current status is Accepted as the denominator and deduplicates exact linked booked Orders; it is current status, not a historical acceptance event. "
 			"Deal Owner filtering excludes standalone records because they have no owner-bearing Deal."
 		),
 		"salespeople": [{"value": owner, "label": owner} for owner in owners],
@@ -972,12 +1179,15 @@ def _activity_trend(start, end, sources):
 
 
 @frappe.whitelist()
-def get_activity_contact_center(start_date, end_date, employee=None):
+def get_activity_contact_center(start_date, end_date, employee=None, channel=None):
 	"""Return permission-scoped activity metrics and the exact records behind them."""
 	start, end = _validated_range(start_date, end_date)
 	employee = (employee or "").strip() or None
+	channel = (channel or "").strip().title() or None
 	if employee and len(employee) > 140:
 		frappe.throw(_("Employee is invalid."), frappe.ValidationError)
+	if channel not in (None, "Call", "Task", "Email", "Zalo"):
+		frappe.throw(_("Channel must be Call, Task, Email or Zalo."), frappe.ValidationError)
 
 	permissions = {
 		"calls": _activity_source_permission("DoubleT Call Log"),
@@ -986,34 +1196,38 @@ def get_activity_contact_center(start_date, end_date, employee=None):
 		"zalo_conversations": _activity_source_permission("DoubleT Conversation"),
 		"zalo_messages": _activity_source_permission("DoubleT Message"),
 	}
+	enabled = {
+		"calls": channel in (None, "Call"), "tasks": channel in (None, "Task"),
+		"email": channel in (None, "Email"), "zalo": channel in (None, "Zalo"),
+	}
 
 	call_rows = _activity_rows(
 		"DoubleT Call Log", "start_time",
 		["name", "agent", "assigned_to", "call_type", "duration", "status", "start_time", "from_number", "to_number"],
 		start, end, "start_time desc, name desc",
-	) if permissions["calls"] else []
+	) if permissions["calls"] and enabled["calls"] else []
 	task_rows = _activity_rows(
 		"DoubleT Task", "creation",
 		["name", "title", "status", "priority", "due_date", "assigned_to", "reference_doctype", "reference_docname", "creation"],
 		start, end, "creation desc, name desc",
-	) if permissions["tasks"] else []
+	) if permissions["tasks"] and enabled["tasks"] else []
 	email_rows = _activity_rows(
 		"Communication", "creation",
 		["name", "subject", "sender", "recipients", "sent_or_received", "reference_doctype", "reference_name", "creation"],
 		start, end, "creation desc, name desc",
 		[["communication_medium", "=", "Email"], ["communication_type", "=", "Communication"], ["sent_or_received", "in", ["Sent", "Received"]], ["reference_doctype", "in", CRM_EMAIL_REFERENCE_DOCTYPES]],
-	) if permissions["email"] else []
+	) if permissions["email"] and enabled["email"] else []
 
 	conversation_rows = _activity_rows(
 		"DoubleT Conversation", "creation",
 		["name", "source", "oa_id", "external_user_id", "lead", "creation"],
 		start, end, "creation desc, name desc",
-	) if permissions["zalo_conversations"] else []
+	) if permissions["zalo_conversations"] and enabled["zalo"] else []
 	message_rows = _activity_rows(
 		"DoubleT Message", "sent_at",
 		["name", "conversation", "source", "direction", "content", "sent_at", "is_simulated"],
 		start, end, "sent_at desc, name desc",
-	) if permissions["zalo_messages"] else []
+	) if permissions["zalo_messages"] and enabled["zalo"] else []
 
 	employee_values = {row.agent for row in call_rows if row.agent} | {row.assigned_to for row in task_rows if row.assigned_to}
 	if employee:
@@ -1038,46 +1252,48 @@ def get_activity_contact_center(start_date, end_date, employee=None):
 
 	sources = {
 		"calls": {
-			"available": permissions["calls"], "date_field": "start_time", "employee_filter_supported": True,
-			"total": len(call_rows) if permissions["calls"] else None,
-			"missed": sum(row.status == "Missed" for row in call_rows) if permissions["calls"] else None,
-			"duration_seconds": sum(cint(row.duration) for row in call_rows) if permissions["calls"] else None,
+			"available": permissions["calls"] and enabled["calls"], "permitted": permissions["calls"], "selected": enabled["calls"], "date_field": "start_time", "employee_filter_supported": True,
+			"total": len(call_rows) if permissions["calls"] and enabled["calls"] else None,
+			"missed": sum(row.status == "Missed" for row in call_rows) if permissions["calls"] and enabled["calls"] else None,
+			"duration_seconds": sum(cint(row.duration) for row in call_rows) if permissions["calls"] and enabled["calls"] else None,
 			"rows": call_rows,
 		},
 		"tasks": {
-			"available": permissions["tasks"], "date_field": "creation", "employee_filter_supported": True,
+			"available": permissions["tasks"] and enabled["tasks"], "permitted": permissions["tasks"], "selected": enabled["tasks"], "date_field": "creation", "employee_filter_supported": True,
 			"overdue_definition": _("Pending tasks created in the selected range whose Due Date is before the report run time."),
-			"total": len(task_rows) if permissions["tasks"] else None,
-			"completed": sum(row.status == "Done" for row in task_rows) if permissions["tasks"] else None,
-			"pending": len(pending_tasks) if permissions["tasks"] else None,
-			"overdue": len(overdue_tasks) if permissions["tasks"] else None,
+			"total": len(task_rows) if permissions["tasks"] and enabled["tasks"] else None,
+			"completed": sum(row.status == "Done" for row in task_rows) if permissions["tasks"] and enabled["tasks"] else None,
+			"pending": len(pending_tasks) if permissions["tasks"] and enabled["tasks"] else None,
+			"overdue": len(overdue_tasks) if permissions["tasks"] and enabled["tasks"] else None,
 			"rows": task_rows,
 		},
 		"email": {
-			"available": permissions["email"], "date_field": "creation", "employee_filter_supported": False,
+			"available": permissions["email"] and enabled["email"], "permitted": permissions["email"], "selected": enabled["email"], "date_field": "creation", "employee_filter_supported": False,
 			"unsupported_filter_reason": _("Employee filter is not applied: Communication has no verified employee field."),
-			"incoming": sum(row.sent_or_received == "Received" for row in email_rows) if permissions["email"] else None,
-			"outgoing": sum(row.sent_or_received == "Sent" for row in email_rows) if permissions["email"] else None,
+			"incoming": sum(row.sent_or_received == "Received" for row in email_rows) if permissions["email"] and enabled["email"] else None,
+			"outgoing": sum(row.sent_or_received == "Sent" for row in email_rows) if permissions["email"] and enabled["email"] else None,
 			"rows": email_rows,
 		},
 		"zalo": {
-			"available": permissions["zalo_conversations"] or permissions["zalo_messages"],
+			"available": enabled["zalo"] and (permissions["zalo_conversations"] or permissions["zalo_messages"]),
+			"permitted": permissions["zalo_conversations"] or permissions["zalo_messages"], "selected": enabled["zalo"],
 			"conversations_available": permissions["zalo_conversations"], "messages_available": permissions["zalo_messages"],
 			"conversation_date_field": "creation", "message_date_field": "sent_at", "employee_filter_supported": False,
 			"unsupported_filter_reason": _("Employee filter is not applied: Zalo conversations and messages have no employee field."),
 			"conversations": conversation_rows,
-			"conversation_count": len(conversation_rows) if permissions["zalo_conversations"] else None,
+			"conversation_count": len(conversation_rows) if permissions["zalo_conversations"] and enabled["zalo"] else None,
 			"messages": message_rows,
-			"message_count": len(message_rows) if permissions["zalo_messages"] else None,
-			"simulated_message_count": sum(cint(row.is_simulated) for row in message_rows) if permissions["zalo_messages"] else None,
-			"real_message_count": sum(not cint(row.is_simulated) for row in message_rows) if permissions["zalo_messages"] else None,
+			"message_count": len(message_rows) if permissions["zalo_messages"] and enabled["zalo"] else None,
+			"simulated_message_count": sum(cint(row.is_simulated) for row in message_rows) if permissions["zalo_messages"] and enabled["zalo"] else None,
+			"real_message_count": sum(not cint(row.is_simulated) for row in message_rows) if permissions["zalo_messages"] and enabled["zalo"] else None,
 		},
 	}
 	return {
-		"filters": {"start_date": str(start), "end_date": str(end), "employee": employee},
+		"filters": {"start_date": str(start), "end_date": str(end), "employee": employee, "channel": channel},
 		"permissions": permissions,
+		"channel_options": [{"value": value, "label": value} for value in ("Call", "Task", "Email", "Zalo")],
 		"employees": [{"value": value, "label": value} for value in employees],
-		"source_definitions": _("Calls use Start Time; Tasks and Email use Creation; Zalo conversations use Creation and messages use Sent At."),
+		"source_definitions": _("Calls use Start Time; Tasks and Email use Creation; Zalo conversations use Creation and messages use Sent At. Employee applies only to Call Agent and Task Assignee; Email and Zalo have no verified employee attribution."),
 		"as_of": str(as_of),
 		"sources": sources,
 		"trend": _activity_trend(start, end, sources),

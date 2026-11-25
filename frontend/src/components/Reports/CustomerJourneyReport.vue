@@ -5,8 +5,20 @@
       v-model:salesperson="filters.salesperson" v-model:compare-previous="filters.comparePrevious"
       :salesperson-options="salespeople" :salesperson-supported="salespersonSupported"
       :team-unsupported-reason="teamUnsupportedReason" :loading="loading"
-      @apply="loadReport" @reset="resetFilters"
+      report-key="customer-journey"
+      :export-filters="appliedFilters || {}" :export-enabled="Boolean(appliedFilters)"
+      @apply="loadReport" @reset="resetFilters" @restore="restoreFilters"
     />
+
+    <section class="rounded-xl border border-outline-gray-2 bg-surface-white p-4">
+      <label class="block max-w-sm">
+        <span class="mb-1.5 block text-sm font-medium text-ink-gray-7">{{ __('Lead Source') }}</span>
+        <select v-model="filters.source" class="h-9 w-full rounded border border-outline-gray-2 bg-surface-white px-3 text-sm" :disabled="loading">
+          <option value="">{{ __('All sources') }}</option>
+          <option v-for="item in sources" :key="item.value" :value="item.value">{{ item.label }}</option>
+        </select>
+      </label>
+    </section>
 
     <div v-if="permissionDenied" class="rounded-xl border border-outline-gray-2 bg-surface-gray-1 p-6 text-center" role="alert">
       <h2 class="font-semibold text-ink-gray-9">{{ __('Permission required') }}</h2>
@@ -27,6 +39,8 @@
       <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" :aria-label="__('Journey funnel summary')">
         <MetricCard label="Leads (Created)" :value="integer(data.lead_count)" :change="comparisonChange('lead_count')" />
         <MetricCard label="Leads reaching Deal" :value="metric(data.deal_count)" :change="comparisonChange('deal_count')" />
+        <MetricCard label="Leads with Won Deal" :value="metric(data.won_lead_count)" :change="comparisonChange('won_lead_count')" />
+        <MetricCard label="Lead to Won Rate" :value="percentage(data.lead_to_won_rate)" :change="comparisonChange('lead_to_won_rate', 'points')" />
         <MetricCard label="Leads reaching Quotation" :value="metric(data.quotation_count)" :change="comparisonChange('quotation_count')" />
         <MetricCard label="Leads reaching Booked Order" :value="metric(data.order_count)" :change="comparisonChange('order_count')" />
         <MetricCard label="Lead to Deal Rate" :value="percentage(data.lead_to_deal_rate)" :change="comparisonChange('lead_to_deal_rate', 'points')" />
@@ -66,20 +80,20 @@
         </section>
 
         <ReportTable v-if="data.by_owner.length" title="Performance by Lead Owner" description="Unique cohort Leads reaching each stage, grouped only by Lead Owner.">
-          <template #head><tr><Th>Lead Owner</Th><Th right>Leads</Th><Th right>Deals</Th><Th right>Quotations</Th><Th right>Orders</Th><Th right>Cohort Deal Value</Th><Th right>Order Value</Th></tr></template>
+          <template #head><tr><Th>Lead Owner</Th><Th right>Leads</Th><Th right>Deals</Th><Th right>Won Leads</Th><Th right>Quotations</Th><Th right>Orders</Th><Th right>Cohort Deal Value</Th><Th right>Order Value</Th></tr></template>
           <tr v-for="row in data.by_owner" :key="row.label" class="border-t border-outline-gray-1">
             <Td>{{ row.label }}</Td><Td right>{{ metric(row.lead_count) }}</Td><Td right>{{ metric(row.deal_count) }}</Td>
-            <Td right>{{ metric(row.quotation_count) }}</Td><Td right>{{ metric(row.order_count) }}</Td><Td right>{{ moneyMetric(row.deal_value) }}</Td><Td right>{{ moneyMetric(row.order_value) }}</Td>
+            <Td right>{{ metric(row.won_lead_count) }}</Td><Td right>{{ metric(row.quotation_count) }}</Td><Td right>{{ metric(row.order_count) }}</Td><Td right>{{ moneyMetric(row.deal_value) }}</Td><Td right>{{ moneyMetric(row.order_value) }}</Td>
           </tr>
         </ReportTable>
 
         <ReportTable v-if="data.journey_rows.length" title="Lead journey drill-down" :description="__('All {0} readable cohort Leads behind the funnel.'.replace('{0}', String(data.journey_rows.length)))">
-          <template #head><tr><Th>Lead</Th><Th>Stage</Th><Th>Deal</Th><Th>Quotations</Th><Th right>Deal Value</Th><Th right>Order Value</Th></tr></template>
+          <template #head><tr><Th>Lead</Th><Th>Source</Th><Th>Stage</Th><Th>Related records</Th><Th right>Deal Value</Th><Th right>Order Value</Th></tr></template>
           <tr v-for="row in data.journey_rows" :key="row.name" class="border-t border-outline-gray-1">
-            <Td><RouterLink :to="{ name: 'LeadDetail', params: { leadId: row.name } }" class="font-medium text-ink-blue-3 hover:underline">{{ row.lead_name || row.name }}</RouterLink></Td>
-            <Td><span :class="stageClass(row.stage)">{{ row.stage }}</span></Td>
-            <Td><RouterLink v-if="row.deal" :to="{ name: 'DealDetail', params: { dealId: row.deal } }" class="text-ink-blue-3 hover:underline">{{ row.deal_title || row.deal }}</RouterLink><span v-else class="text-ink-gray-5">—</span></Td>
-            <Td>{{ metric(row.quotation_count) }}</Td><Td right>{{ moneyMetric(row.deal_amount) }}</Td><Td right>{{ moneyMetric(row.order_value) }}</Td>
+            <Td><RouterLink :to="{ name: 'LeadDetail', params: { leadId: row.name } }" class="font-medium text-[#1D4ED8] hover:underline">{{ row.lead_name || row.name }}</RouterLink></Td>
+            <Td>{{ row.source || '—' }}</Td><Td><span :class="stageClass(row.stage)">{{ row.stage }}</span></Td>
+            <Td><div class="flex min-w-64 flex-wrap gap-2"><RouterLink v-for="item in row.deals || []" :key="`d-${item.name}`" :to="{ name: 'DealDetail', params: { dealId: item.name } }" class="text-[#1D4ED8] hover:underline">{{ item.label }}</RouterLink><RouterLink v-for="item in row.quotations || []" :key="`q-${item.name}`" :to="{ name: 'QuotationDetail', params: { quotationId: item.name } }" class="text-[#1D4ED8] hover:underline">{{ item.name }}</RouterLink><RouterLink v-for="item in row.orders || []" :key="`o-${item.name}`" :to="{ name: 'OrderDetail', params: { orderId: item.name } }" class="text-[#1D4ED8] hover:underline">{{ item.name }} ({{ item.link_type }})</RouterLink><span v-if="!(row.deals?.length || row.quotations?.length || row.orders?.length)" class="text-ink-gray-5">—</span></div></Td>
+            <Td right>{{ moneyMetric(row.deal_amount) }}</Td><Td right>{{ moneyMetric(row.order_value) }}</Td>
           </tr>
         </ReportTable>
       </template>
@@ -105,11 +119,13 @@ const MetricCard = defineComponent({ props: { label: String, value: String, note
 const ReportTable = defineComponent({ props: { title: String, description: String }, setup: (props, { slots }) => () => h('section', { class: 'overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white' }, [h('div', { class: 'p-4 sm:p-5' }, [h('h2', { class: 'font-semibold text-ink-gray-9' }, props.title), h('p', { class: 'mt-1 text-sm text-ink-gray-5' }, props.description)]), h('div', { class: 'overflow-x-auto' }, [h('table', { class: 'min-w-full text-left text-sm' }, [h('thead', { class: 'border-y border-outline-gray-2 bg-surface-gray-1 text-ink-gray-5' }, slots.head?.()), h('tbody', { class: 'text-ink-gray-7' }, slots.default?.())])])]) })
 
 const initialRange = reportDatePreset('30-days')
-const filters = reactive({ ...initialRange, salesperson: '', comparePrevious: false })
+const filters = reactive({ ...initialRange, salesperson: '', source: '', comparePrevious: false })
 const data = ref(null), loading = ref(false), errorMessage = ref(''), permissionDenied = ref(false)
+const appliedFilters = ref(null)
 const salespeople = computed(() => data.value?.salespeople || [])
+const sources = computed(() => data.value?.sources || [])
 const salespersonSupported = computed(() => data.value?.permissions?.leads !== false)
-const teamUnsupportedReason = computed(() => data.value?.capabilities?.team_filter?.reason || '')
+const teamUnsupportedReason = computed(() => data.value?.capabilities?.team_filter?.reason || 'Team filtering is unavailable because DoubleT Deal has no team field.')
 const hasResults = computed(() => Boolean(data.value?.lead_count))
 const maxFunnelCount = computed(() => Math.max(...(data.value?.funnel || []).map(r => Number(r.count) || 0), 1))
 const integer = value => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(value) || 0)
@@ -125,7 +141,7 @@ const stageClass = (stage) => {
     'Lead': 'text-ink-gray-5',
     'Deal': 'text-ink-yellow-6',
     'Quotation': 'text-ink-blue-4',
-    'Quotation Sent': 'text-ink-blue-3',
+    'Quotation Sent': 'text-[#1D4ED8]',
     'Quotation Accepted': 'text-ink-green-5',
     'Order': 'text-ink-green-6 font-medium',
   }
@@ -139,10 +155,14 @@ function comparisonChange(metric, format = 'number') {
 }
 async function loadReport() {
   loading.value = true; errorMessage.value = ''; permissionDenied.value = false
-  try { data.value = await call('doublet_crm.reports.get_customer_journey', { start_date: filters.startDate, end_date: filters.endDate, salesperson: filters.salesperson || null, compare_previous: filters.comparePrevious ? 1 : 0 }) }
+  try { const request = { start_date: filters.startDate, end_date: filters.endDate, salesperson: filters.salesperson || null, source: filters.source || null, compare_previous: filters.comparePrevious ? 1 : 0 }; data.value = await call('doublet_crm.reports.get_customer_journey', request); appliedFilters.value = request }
   catch (error) { data.value = null; permissionDenied.value = isPermissionError(error); if (!permissionDenied.value) errorMessage.value = message(error) }
   finally { loading.value = false }
 }
-function resetFilters() { Object.assign(filters, reportDatePreset('30-days'), { salesperson: '', comparePrevious: false }); loadReport() }
+function resetFilters() { Object.assign(filters, reportDatePreset('30-days'), { salesperson: '', source: '', comparePrevious: false }); loadReport() }
+function restoreFilters(saved) {
+  Object.assign(filters, { startDate: saved.start_date || filters.startDate, endDate: saved.end_date || filters.endDate, salesperson: saved.salesperson || '', source: saved.source || '', comparePrevious: Boolean(Number(saved.compare_previous || 0)) })
+  loadReport()
+}
 onMounted(loadReport)
 </script>

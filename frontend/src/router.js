@@ -88,6 +88,12 @@ const routes = [
         component: ReportsPage,
         props: { reportKey: 'activity-contact-center' },
       },
+      {
+        path: 'smart-insights',
+        name: 'SmartInsightsReport',
+        component: ReportsPage,
+        props: { reportKey: 'smart-insights' },
+      },
     ],
   },
   {

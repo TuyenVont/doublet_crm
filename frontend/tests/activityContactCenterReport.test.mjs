@@ -21,3 +21,11 @@ test('Activity report keeps employee selection and unsupported source labels', (
   assert.match(source, /sources\.zalo\.unsupported_filter_reason/)
   assert.match(source, /filters\.employee \|\| null/)
 })
+
+test('Activity report exposes channel applicability without inventing Email or Zalo ownership', () => {
+  assert.match(source, /All channels/)
+  assert.match(source, /filters\.channel/)
+  assert.match(source, /Call Agent and Task Assignee only/)
+  assert.match(source, /Email and Zalo attribution is unavailable/)
+  assert.match(source, /sources\.calls\.selected/)
+})

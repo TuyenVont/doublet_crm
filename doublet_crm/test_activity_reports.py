@@ -125,3 +125,20 @@ class TestActivityContactCenterReport(FrappeTestCase):
 		self.assertEqual(result["sources"]["calls"]["total"], 0)
 		self.assertEqual(result["sources"]["tasks"]["total"], 0)
 
+	@patch("doublet_crm.reports.now_datetime", return_value=datetime(2026, 11, 24, 12, 0, 0))
+	@patch("doublet_crm.reports.frappe.get_list")
+	@patch("doublet_crm.reports.frappe.has_permission", return_value=True)
+	def test_channel_filter_queries_only_the_selected_source(self, _permission, get_list, _now):
+		get_list.side_effect = lambda doctype, **_kwargs: self._source_rows(doctype)
+		result = get_activity_contact_center("2026-11-01", "2026-11-30", channel="Call")
+		activity_doctypes = {"DoubleT Call Log", "DoubleT Task", "Communication", "DoubleT Conversation", "DoubleT Message"}
+		self.assertEqual([call.args[0] for call in get_list.call_args_list if call.args[0] in activity_doctypes], ["DoubleT Call Log"])
+		self.assertEqual(result["filters"]["channel"], "Call")
+		self.assertTrue(result["sources"]["calls"]["selected"])
+		self.assertFalse(result["sources"]["tasks"]["selected"])
+		self.assertIsNone(result["sources"]["tasks"]["total"])
+
+	def test_invalid_channel_is_rejected(self):
+		with self.assertRaises(frappe.ValidationError):
+			get_activity_contact_center("2026-11-01", "2026-11-30", channel="SMS")
+

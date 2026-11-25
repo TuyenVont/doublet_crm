@@ -5,7 +5,9 @@
       v-model:salesperson="filters.salesperson" v-model:compare-previous="filters.comparePrevious"
       :salesperson-options="salespeople" :salesperson-supported="salespersonSupported"
       :team-unsupported-reason="teamUnsupportedReason" :loading="loading"
-      @apply="loadReport" @reset="resetFilters"
+      report-key="quotation-order"
+      :export-filters="appliedFilters || {}" :export-enabled="Boolean(appliedFilters)"
+      @apply="loadReport" @reset="resetFilters" @restore="restoreFilters"
     />
 
     <div v-if="permissionDenied" class="rounded-xl border border-outline-gray-2 bg-surface-gray-1 p-6 text-center" role="alert">
@@ -36,6 +38,12 @@
         <MetricCard label="Booked Orders" :value="metric(orderSummary?.booked_order_count)" :change="comparisonChange('booked_order_count')" />
         <MetricCard label="Booked Sales" :value="moneyMetric(orderSummary?.booked_sales)" :change="comparisonChange('booked_sales', 'money')" />
         <MetricCard label="Quotation→Order Rate" :value="percentage(conversion?.quotation_to_order_rate)" :change="comparisonChange('quotation_to_order_rate', 'points')" />
+      </section>
+
+      <section class="grid grid-cols-1 gap-3 sm:grid-cols-3" :aria-label="__('Accepted quotation conversion')">
+        <MetricCard label="Accepted denominator" :value="metric(conversion?.accepted_quotation_count)" :change="comparisonChange('accepted_quotation_count')" />
+        <MetricCard label="Accepted with Booked Order" :value="metric(conversion?.accepted_quotations_with_orders)" :change="comparisonChange('accepted_quotations_with_orders')" />
+        <MetricCard label="Accepted→Booked Rate" :value="percentage(conversion?.accepted_to_booked_order_rate)" :change="comparisonChange('accepted_to_booked_order_rate', 'points')" />
       </section>
 
       <div v-if="!hasResults" class="rounded-xl border border-dashed border-outline-gray-3 bg-surface-gray-1 px-5 py-12 text-center">
@@ -88,10 +96,10 @@
         <ReportTable v-if="data.quotation_drilldown && data.quotation_drilldown.length" title="Quotation drill-down" :description="__('All {0} readable Quotations behind the status aggregate.'.replace('{0}', String(data.quotation_drilldown.length)))">
           <template #head><tr><Th>Quotation</Th><Th>Status</Th><Th>Date</Th><Th>Deal</Th><Th right>Value</Th></tr></template>
           <tr v-for="row in data.quotation_drilldown" :key="row.name" class="border-t border-outline-gray-1">
-            <Td><RouterLink :to="{ name: 'QuotationDetail', params: { quotationId: row.name } }" class="font-medium text-ink-blue-3 hover:underline">{{ row.name }}</RouterLink></Td>
+            <Td><RouterLink :to="{ name: 'QuotationDetail', params: { quotationId: row.name } }" class="font-medium text-[#1D4ED8] hover:underline">{{ row.name }}</RouterLink></Td>
             <Td><span :class="statusClass(row.status, 'Quotation')">{{ row.status }}</span></Td>
             <Td>{{ displayDate(row.quotation_date) }}</Td>
-            <Td><RouterLink v-if="row.deal" :to="{ name: 'DealDetail', params: { dealId: row.deal } }" class="text-ink-blue-3 hover:underline">{{ row.deal_title || row.deal }}</RouterLink><span v-else class="text-ink-gray-5">{{ row.deal_restricted ? __('Unavailable') : '—' }}</span></Td>
+            <Td><RouterLink v-if="row.deal" :to="{ name: 'DealDetail', params: { dealId: row.deal } }" class="text-[#1D4ED8] hover:underline">{{ row.deal_title || row.deal }}</RouterLink><span v-else class="text-ink-gray-5">{{ row.deal_restricted ? __('Unavailable') : '—' }}</span></Td>
             <Td right>{{ money(row.grand_total) }}</Td>
           </tr>
         </ReportTable>
@@ -99,12 +107,22 @@
         <ReportTable v-if="data.order_drilldown && data.order_drilldown.length" title="Order drill-down" :description="__('All {0} readable Orders behind the status aggregate.'.replace('{0}', String(data.order_drilldown.length)))">
           <template #head><tr><Th>Order</Th><Th>Status</Th><Th>Date</Th><Th>Deal</Th><Th right>Total</Th><Th>Booked</Th></tr></template>
           <tr v-for="row in data.order_drilldown" :key="row.name" class="border-t border-outline-gray-1">
-            <Td><RouterLink :to="{ name: 'OrderDetail', params: { orderId: row.name } }" class="font-medium text-ink-blue-3 hover:underline">{{ row.name }}</RouterLink></Td>
+            <Td><RouterLink :to="{ name: 'OrderDetail', params: { orderId: row.name } }" class="font-medium text-[#1D4ED8] hover:underline">{{ row.name }}</RouterLink></Td>
             <Td><span :class="statusClass(row.status, 'Order')">{{ row.status }}</span></Td>
             <Td>{{ displayDate(row.order_date) }}</Td>
-            <Td><RouterLink v-if="row.deal" :to="{ name: 'DealDetail', params: { dealId: row.deal } }" class="text-ink-blue-3 hover:underline">{{ row.deal_title || row.deal }}</RouterLink><span v-else class="text-ink-gray-5">{{ row.deal_restricted ? __('Unavailable') : '—' }}</span></Td>
+            <Td><RouterLink v-if="row.deal" :to="{ name: 'DealDetail', params: { dealId: row.deal } }" class="text-[#1D4ED8] hover:underline">{{ row.deal_title || row.deal }}</RouterLink><span v-else class="text-ink-gray-5">{{ row.deal_restricted ? __('Unavailable') : '—' }}</span></Td>
             <Td right>{{ money(row.total) }}</Td>
             <Td>{{ row.is_booked ? __('Yes') : __('No') }}</Td>
+          </tr>
+        </ReportTable>
+
+        <ReportTable v-if="conversion?.accepted_conversion_drilldown?.length" title="Accepted Quotation → Booked Order drill-down" description="Current Accepted Quotations dated in the selected range; linked Confirmed/Completed Orders are deduplicated and may have any Order Date.">
+          <template #head><tr><Th>Quotation</Th><Th>Date</Th><Th>Converted</Th><Th>Booked Orders</Th><Th right>Quotation Value</Th></tr></template>
+          <tr v-for="row in conversion.accepted_conversion_drilldown" :key="row.name" class="border-t border-outline-gray-1">
+            <Td><RouterLink :to="{ name: 'QuotationDetail', params: { quotationId: row.name } }" class="font-medium text-[#1D4ED8] hover:underline">{{ row.name }}</RouterLink></Td>
+            <Td>{{ displayDate(row.quotation_date) }}</Td><Td>{{ row.converted ? __('Yes') : __('No') }}</Td>
+            <Td><span v-if="!row.orders.length">—</span><RouterLink v-for="order in row.orders" :key="order.name" :to="{ name: 'OrderDetail', params: { orderId: order.name } }" class="mr-2 text-[#1D4ED8] hover:underline">{{ order.name }}</RouterLink></Td>
+            <Td right>{{ money(row.grand_total) }}</Td>
           </tr>
         </ReportTable>
       </template>
@@ -132,12 +150,13 @@ const ReportTable = defineComponent({ props: { title: String, description: Strin
 const initialRange = reportDatePreset('30-days')
 const filters = reactive({ ...initialRange, salesperson: '', comparePrevious: false })
 const data = ref(null), loading = ref(false), errorMessage = ref(''), permissionDenied = ref(false)
+const appliedFilters = ref(null)
 const salespeople = computed(() => data.value?.salespeople || [])
 const salespersonSupported = computed(() => data.value?.permissions?.deals !== false)
 const quotationSummary = computed(() => data.value?.quotation_summary || null)
 const orderSummary = computed(() => data.value?.order_summary || null)
 const conversion = computed(() => data.value?.conversion || null)
-const teamUnsupportedReason = computed(() => data.value?.capabilities?.team_filter?.reason || '')
+const teamUnsupportedReason = computed(() => data.value?.capabilities?.team_filter?.reason || 'Team filtering is unavailable because DoubleT Deal has no team field.')
 const hasResults = computed(() => Boolean(quotationSummary.value?.quotation_count || orderSummary.value?.order_count))
 const integer = value => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(value) || 0)
 const decimal = value => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Number(value) || 0)
@@ -163,10 +182,17 @@ function comparisonChange(metric, format = 'number') {
 }
 async function loadReport() {
   loading.value = true; errorMessage.value = ''; permissionDenied.value = false
-  try { data.value = await call('doublet_crm.reports.get_quotation_order', { start_date: filters.startDate, end_date: filters.endDate, salesperson: filters.salesperson || null, compare_previous: filters.comparePrevious ? 1 : 0 }) }
+  try { const request = { start_date: filters.startDate, end_date: filters.endDate, salesperson: filters.salesperson || null, compare_previous: filters.comparePrevious ? 1 : 0 }; data.value = await call('doublet_crm.reports.get_quotation_order', request); appliedFilters.value = request }
   catch (error) { data.value = null; permissionDenied.value = isPermissionError(error); if (!permissionDenied.value) errorMessage.value = message(error) }
   finally { loading.value = false }
 }
 function resetFilters() { Object.assign(filters, reportDatePreset('30-days'), { salesperson: '', comparePrevious: false }); loadReport() }
+function restoreFilters(saved) {
+  Object.assign(filters, {
+    startDate: saved.start_date || filters.startDate, endDate: saved.end_date || filters.endDate,
+    salesperson: saved.salesperson || '', comparePrevious: Boolean(Number(saved.compare_previous || 0)),
+  })
+  loadReport()
+}
 onMounted(loadReport)
 </script>

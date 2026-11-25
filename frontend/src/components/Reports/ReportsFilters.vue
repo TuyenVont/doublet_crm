@@ -1,6 +1,6 @@
 <template>
   <section class="rounded-xl border border-outline-gray-2 bg-surface-white p-4" :aria-label="__('Report filters')">
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.2fr_auto] lg:items-end">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_11rem] lg:items-end">
       <label class="block">
         <span class="mb-1.5 block text-sm font-medium text-ink-gray-7">{{ __('Start Date') }}</span>
         <input
@@ -34,13 +34,13 @@
             {{ option.label }}
           </option>
         </select>
-        <span v-if="!salespersonSupported" class="mt-1 block text-xs text-ink-gray-5">
+        <span v-if="!salespersonSupported && personUnsupportedText" class="mt-1 block text-xs text-ink-gray-5">
           {{ __(personUnsupportedText) }}
         </span>
       </label>
-      <div class="flex flex-wrap gap-2">
-        <Button variant="solid" :label="__('Apply')" :loading="loading" :disabled="Boolean(validationError)" @click="$emit('apply')" />
-        <Button :label="__('Reset')" :disabled="loading" @click="$emit('reset')" />
+      <div class="flex flex-nowrap gap-2">
+        <Button class="w-24 shrink-0" variant="solid" :label="__('Apply')" :aria-busy="loading" :aria-disabled="loading || Boolean(validationError)" :disabled="Boolean(validationError)" @click="apply" />
+        <Button class="w-16 shrink-0" :label="__('Reset')" :aria-disabled="loading" @click="reset" />
       </div>
     </div>
 
@@ -73,12 +73,21 @@
       </span>
     </div>
     <p v-if="validationError" class="mt-2 text-sm text-ink-red-3">{{ __(validationError) }}</p>
+    <ReportActions
+      v-if="reportKey"
+      class="mt-3"
+      :report-key="reportKey"
+      :filters="exportFilters"
+      :enabled="exportEnabled"
+      @restore="$emit('restore', $event)"
+    />
   </section>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 
+import ReportActions from '@/components/Reports/ReportActions.vue'
 import { reportDateError, reportDatePreset } from '@/utils/reportFilters'
 
 const props = defineProps({
@@ -94,6 +103,9 @@ const props = defineProps({
   comparePrevious: { type: Boolean, default: false },
   teamUnsupportedReason: { type: String, default: '' },
   loading: { type: Boolean, default: false },
+  reportKey: { type: String, default: '' },
+  exportFilters: { type: Object, default: () => ({}) },
+  exportEnabled: { type: Boolean, default: false },
 })
 const emit = defineEmits([
   'update:startDate',
@@ -102,6 +114,7 @@ const emit = defineEmits([
   'update:comparePrevious',
   'apply',
   'reset',
+  'restore',
 ])
 
 const presets = [
@@ -119,5 +132,15 @@ function setPreset(preset) {
   const range = reportDatePreset(preset)
   emit('update:startDate', range.startDate)
   emit('update:endDate', range.endDate)
+}
+
+function apply() {
+  if (props.loading || validationError.value) return
+  emit('apply')
+}
+
+function reset() {
+  if (props.loading) return
+  emit('reset')
 }
 </script>

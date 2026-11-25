@@ -68,8 +68,8 @@ test('permission failures are distinguished from general request errors', () => 
 })
 
 test('Sales Performance uses the focused API and existing detail routes', () => {
-  assert.match(reportPageSource, /report\?\.key === 'sales-performance'/)
-  assert.match(reportPageSource, /<SalesPerformanceReport/)
+  assert.match(reportPageSource, /'sales-performance': SalesPerformanceReport/)
+  assert.match(reportPageSource, /import SalesPerformanceReport/)
   assert.match(salesReportSource, /doublet_crm\.reports\.get_sales_performance/)
   assert.match(salesReportSource, /name: 'OrderDetail'/)
   assert.match(salesReportSource, /name: 'DealDetail'/)
@@ -89,4 +89,11 @@ test('common report filters expose dates, presets, Deal Owner, apply and reset',
   assert.match(filtersSource, /Deal ownership is unavailable with your permissions/)
   assert.match(filtersSource, /Compare with immediately preceding equal-length period/)
   assert.match(filtersSource, /teamUnsupportedReason/)
+})
+
+test('shared Apply and Reset keep their visual state while blocking loading clicks', () => {
+  assert.match(filtersSource, /:disabled="Boolean\(validationError\)"/)
+  assert.doesNotMatch(filtersSource, /:disabled="loading \|\| Boolean\(validationError\)"/)
+  assert.match(filtersSource, /function apply\(\) \{[\s\S]*?if \(props\.loading \|\| validationError\.value\) return/)
+  assert.match(filtersSource, /function reset\(\) \{[\s\S]*?if \(props\.loading\) return/)
 })

@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-full min-w-0 flex-col bg-surface-white">
+  <div class="flex h-full min-w-0 flex-col overflow-hidden bg-surface-white">
     <LayoutHeader>
       <template #left-header>
         <div class="flex min-w-0 items-center gap-2">
@@ -19,8 +19,8 @@
       </template>
     </LayoutHeader>
 
-    <main class="min-h-0 flex-1 overflow-auto">
-      <div class="mx-auto w-full max-w-6xl space-y-5 p-4 sm:p-6">
+    <main class="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-scroll">
+      <div class="mx-auto w-full min-w-0 max-w-6xl space-y-5 p-4 sm:p-6">
         <header class="space-y-1">
           <h1 class="text-2xl font-semibold text-ink-gray-9">
             {{ report ? __(report.title) : __('Reports') }}
@@ -49,15 +49,11 @@
           </RouterLink>
         </nav>
 
-        <SalesPerformanceReport v-if="report?.key === 'sales-performance'" />
-
-        <PipelineAnalyticsReport v-else-if="report?.key === 'pipeline-analytics'" />
-
-        <CustomerJourneyReport v-else-if="report?.key === 'customer-journey'" />
-
-        <QuotationOrderReport v-else-if="report?.key === 'quotation-order'" />
-
-        <ActivityContactCenterReport v-else-if="report?.key === 'activity-contact-center'" />
+        <div v-if="activeReportComponent" class="min-h-[36rem] min-w-0">
+          <KeepAlive>
+            <component :is="activeReportComponent" :key="report.key" />
+          </KeepAlive>
+        </div>
 
         <section
           v-else-if="report"
@@ -111,6 +107,7 @@ import SalesPerformanceReport from '@/components/Reports/SalesPerformanceReport.
 import CustomerJourneyReport from '@/components/Reports/CustomerJourneyReport.vue'
 import QuotationOrderReport from '@/components/Reports/QuotationOrderReport.vue'
 import ActivityContactCenterReport from '@/components/Reports/ActivityContactCenterReport.vue'
+import SmartInsightsReport from '@/components/Reports/SmartInsightsReport.vue'
 import { getReportSection, REPORT_SECTIONS, REPORTS_HOME_ROUTE } from '@/utils/reports'
 
 const props = defineProps({
@@ -118,7 +115,16 @@ const props = defineProps({
 })
 
 const report = computed(() => getReportSection(props.reportKey))
-const liveReportKeys = new Set(['sales-performance', 'pipeline-analytics', 'customer-journey', 'quotation-order', 'activity-contact-center'])
+const reportComponents = {
+  'sales-performance': SalesPerformanceReport,
+  'pipeline-analytics': PipelineAnalyticsReport,
+  'customer-journey': CustomerJourneyReport,
+  'quotation-order': QuotationOrderReport,
+  'activity-contact-center': ActivityContactCenterReport,
+  'smart-insights': SmartInsightsReport,
+}
+const activeReportComponent = computed(() => reportComponents[report.value?.key] || null)
+const liveReportKeys = new Set(['sales-performance', 'pipeline-analytics', 'customer-journey', 'quotation-order', 'activity-contact-center', 'smart-insights'])
 
 function isLiveReport(key) {
   return liveReportKeys.has(key)

@@ -69,3 +69,13 @@ test('Customer Journey uses existing permission error detection', () => {
   assert.match(journeyReportSource, /isPermissionError/)
   assert.match(journeyReportSource, /permissionDenied/)
 })
+
+test('Customer Journey exposes source, Won cohort and complete linked record drill-down', () => {
+  assert.match(journeyReportSource, /Lead Source/)
+  assert.match(journeyReportSource, /Leads with Won Deal/)
+  assert.match(journeyReportSource, /Lead to Won Rate/)
+  assert.match(journeyReportSource, /row\.deals/)
+  assert.match(journeyReportSource, /row\.quotations/)
+  assert.match(journeyReportSource, /row\.orders/)
+  assert.match(journeyReportSource, /link_type/)
+})

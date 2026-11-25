@@ -8,12 +8,26 @@
       :salesperson-supported="employeeFilterSupported"
       person-label="Employee (Call Agent / Task Assignee)"
       all-people-label="All employees"
-      person-unsupported-text="Employee filtering is unavailable because neither Calls nor Tasks is readable."
+      :person-unsupported-text="data ? 'Employee filtering is unavailable because neither Calls nor Tasks is readable.' : ''"
       :show-compare="false"
       :loading="loading"
+      report-key="activity-contact-center"
+      :export-filters="appliedFilters || {}" :export-enabled="Boolean(appliedFilters)"
       @apply="loadReport"
       @reset="resetFilters"
+      @restore="restoreFilters"
     />
+
+    <section class="rounded-xl border border-outline-gray-2 bg-surface-white p-4">
+      <label class="block max-w-sm">
+        <span class="mb-1.5 block text-sm font-medium text-ink-gray-7">{{ __('Channel') }}</span>
+        <select v-model="filters.channel" class="h-9 w-full rounded border border-outline-gray-2 bg-surface-white px-3 text-sm" :disabled="loading">
+          <option value="">{{ __('All channels') }}</option>
+          <option v-for="item in channelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+        </select>
+        <span class="mt-1 block text-xs text-ink-gray-5">{{ __('Employee applies to Call Agent and Task Assignee only; Email and Zalo attribution is unavailable.') }}</span>
+      </label>
+    </section>
 
     <div v-if="errorMessage" class="rounded-xl border border-outline-gray-2 bg-surface-gray-1 p-6 text-center" role="alert">
       <h2 class="font-semibold text-ink-gray-9">{{ __('Unable to load activity analytics') }}</h2>
@@ -42,7 +56,7 @@
         </div>
       </section>
 
-      <SourceSection title="Call Logs" :available="sources.calls.available" date-note="Filtered by Start Time; employee means Call Agent.">
+      <SourceSection v-if="sources.calls.selected" title="Call Logs" :available="sources.calls.available" date-note="Filtered by Start Time; employee means Call Agent.">
         <div class="grid gap-3 sm:grid-cols-3">
           <MetricCard label="Total calls" :value="metric(sources.calls.total)" />
           <MetricCard label="Missed calls" :value="metric(sources.calls.missed)" />
@@ -50,14 +64,14 @@
         </div>
         <ReportTable v-if="sources.calls.rows.length" :headers="['Call', 'Agent', 'Type', 'Status', 'Start Time', 'Duration']">
           <tr v-for="item in sources.calls.rows" :key="item.name" class="border-t border-outline-gray-1">
-            <td class="px-4 py-3"><RouterLink class="font-medium text-ink-blue-3 hover:underline" :to="{ name: 'CallHistoryDetail', params: { callId: item.name } }">{{ item.name }}</RouterLink></td>
+            <td class="px-4 py-3"><RouterLink class="font-medium text-[#1D4ED8] hover:underline" :to="{ name: 'CallHistoryDetail', params: { callId: item.name } }">{{ item.name }}</RouterLink></td>
             <td class="px-4 py-3">{{ item.agent }}</td><td class="px-4 py-3">{{ item.call_type }}</td><td class="px-4 py-3">{{ item.status }}</td>
             <td class="px-4 py-3">{{ displayDateTime(item.start_time) }}</td><td class="px-4 py-3 text-right">{{ duration(item.duration) }}</td>
           </tr>
         </ReportTable>
       </SourceSection>
 
-      <SourceSection title="Tasks" :available="sources.tasks.available" date-note="Filtered by Creation; employee means Task Assignee.">
+      <SourceSection v-if="sources.tasks.selected" title="Tasks" :available="sources.tasks.available" date-note="Filtered by Creation; employee means Task Assignee.">
         <p class="mb-3 text-xs text-ink-gray-5">{{ sources.tasks.overdue_definition }}</p>
         <div class="grid gap-3 sm:grid-cols-4">
           <MetricCard label="Total tasks" :value="metric(sources.tasks.total)" />
@@ -67,14 +81,14 @@
         </div>
         <ReportTable v-if="sources.tasks.rows.length" :headers="['Task', 'Assignee', 'Status', 'Created', 'Due Date']">
           <tr v-for="item in sources.tasks.rows" :key="item.name" class="border-t border-outline-gray-1">
-            <td class="px-4 py-3"><RouterLink class="font-medium text-ink-blue-3 hover:underline" :to="{ name: 'Tasks', query: { task: item.name } }">{{ item.title || item.name }}</RouterLink></td>
+            <td class="px-4 py-3"><RouterLink class="font-medium text-[#1D4ED8] hover:underline" :to="{ name: 'Tasks', query: { task: item.name } }">{{ item.title || item.name }}</RouterLink></td>
             <td class="px-4 py-3">{{ item.assigned_to || __('Unassigned') }}</td><td class="px-4 py-3">{{ item.status }}</td>
             <td class="px-4 py-3">{{ displayDateTime(item.creation) }}</td><td class="px-4 py-3">{{ displayDateTime(item.due_date) || '—' }}</td>
           </tr>
         </ReportTable>
       </SourceSection>
 
-      <SourceSection title="Email" :available="sources.email.available" date-note="Filtered by Communication Creation.">
+      <SourceSection v-if="sources.email.selected" title="Email" :available="sources.email.available" date-note="Filtered by Communication Creation.">
         <UnsupportedEmployee v-if="filters.employee" :text="sources.email.unsupported_filter_reason" />
         <div class="grid gap-3 sm:grid-cols-2">
           <MetricCard label="Incoming" :value="metric(sources.email.incoming)" />
@@ -88,7 +102,7 @@
         </ReportTable>
       </SourceSection>
 
-      <SourceSection title="Zalo OA" :available="sources.zalo.available" date-note="Conversations use Creation; messages use Sent At.">
+      <SourceSection v-if="sources.zalo.selected" title="Zalo OA" :available="sources.zalo.available" date-note="Conversations use Creation; messages use Sent At.">
         <UnsupportedEmployee v-if="filters.employee" :text="sources.zalo.unsupported_filter_reason" />
         <div class="grid gap-3 sm:grid-cols-4">
           <MetricCard label="Conversations" :value="metric(sources.zalo.conversation_count)" />
@@ -102,7 +116,7 @@
         <ReportTable v-if="sources.zalo.messages.length" :headers="['Message', 'Direction', 'Type', 'Sent At']">
           <tr v-for="item in sources.zalo.messages" :key="item.name" class="border-t border-outline-gray-1">
             <td class="max-w-md truncate px-4 py-3">
-              <RouterLink v-if="item.conversation" class="font-medium text-ink-blue-3 hover:underline" :to="{ name: 'Inbox', query: { conversation: item.conversation } }">{{ item.content }}</RouterLink>
+              <RouterLink v-if="item.conversation" class="font-medium text-[#1D4ED8] hover:underline" :to="{ name: 'Inbox', query: { conversation: item.conversation } }">{{ item.content }}</RouterLink>
               <span v-else>{{ item.content }}</span>
             </td><td class="px-4 py-3">{{ item.direction }}</td>
             <td class="px-4 py-3"><span class="rounded bg-surface-gray-2 px-2 py-1 text-xs text-ink-gray-7">{{ item.is_simulated ? __('Mock / simulated') : __('Real') }}</span></td>
@@ -131,10 +145,12 @@ const ReportTable = defineComponent({ props: { headers: Array }, setup: (props, 
 const UnsupportedEmployee = defineComponent({ props: { text: String }, setup: props => () => h('p', { class: 'rounded-md bg-surface-gray-1 px-3 py-2 text-xs text-ink-gray-7', role: 'status' }, props.text) })
 
 const initialRange = reportDatePreset('30-days')
-const filters = reactive({ ...initialRange, employee: '' })
+const filters = reactive({ ...initialRange, employee: '', channel: '' })
 const data = ref(null), loading = ref(false), errorMessage = ref('')
+const appliedFilters = ref(null)
 const sources = computed(() => data.value.sources)
 const employees = computed(() => data.value?.employees || [])
+const channelOptions = computed(() => data.value?.channel_options || ['Call', 'Task', 'Email', 'Zalo'].map(value => ({ value, label: value })))
 const employeeFilterSupported = computed(() => Boolean(data.value?.permissions?.calls || data.value?.permissions?.tasks))
 const legend = [
   { key: 'calls', label: 'Calls', color: 'bg-blue-500' }, { key: 'tasks', label: 'Tasks', color: 'bg-green-500' },
@@ -151,10 +167,14 @@ const trendTitle = point => `${point.date}: ${legend.map(item => `${item.label} 
 
 async function loadReport() {
   loading.value = true; errorMessage.value = ''
-  try { data.value = await call('doublet_crm.reports.get_activity_contact_center', { start_date: filters.startDate, end_date: filters.endDate, employee: filters.employee || null }) }
+  try { const request = { start_date: filters.startDate, end_date: filters.endDate, employee: filters.employee || null, channel: filters.channel || null }; data.value = await call('doublet_crm.reports.get_activity_contact_center', request); appliedFilters.value = request }
   catch (error) { data.value = null; errorMessage.value = message(error) }
   finally { loading.value = false }
 }
-function resetFilters() { Object.assign(filters, reportDatePreset('30-days'), { employee: '' }); loadReport() }
+function resetFilters() { Object.assign(filters, reportDatePreset('30-days'), { employee: '', channel: '' }); loadReport() }
+function restoreFilters(saved) {
+  Object.assign(filters, { startDate: saved.start_date || filters.startDate, endDate: saved.end_date || filters.endDate, employee: saved.employee || '', channel: saved.channel || '' })
+  loadReport()
+}
 onMounted(loadReport)
 </script>

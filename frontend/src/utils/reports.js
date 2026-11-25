@@ -36,6 +36,13 @@ export const REPORT_SECTIONS = Object.freeze([
     description: 'Review CRM activity and contact center engagement.',
     icon: 'phone-call',
   },
+  {
+    key: 'smart-insights',
+    name: 'SmartInsightsReport',
+    title: 'Smart Insights',
+    description: 'Act on current alerts and transparent Deal health factors.',
+    icon: 'alert-triangle',
+  },
 ])
 
 export function getReportSection(key) {
