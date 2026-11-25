@@ -1,24 +1,37 @@
 # DoubleT CRM — Architecture map
 
-## Current baseline — 2026-11-24
+## Current baseline — 2026-11-25
 
-- GitHub main and local deploy/main-20261123 were verified at `015251f` (PR #31); `git rev-list --left-right --count HEAD...origin/main` returned 0 0. Yarn production build passed with chunk-size warnings only. Two generated files differ locally: `frontend/components.d.ts` and `doublet_crm/public/frontend/assets/index-PX20vWx6.js.map`. Current migration and browser regression are not confirmed.
-- PR #29 (`4d835a9`) introduced the Reports Hub; PR #30 (`f1249fd`, feature commit `e807c7c`) synchronized deployment assets; PR #31 (`015251f`, feature commits `51c565c`, `0dd1ae4`) added live Sales and Pipeline analytics. Product multi-category/variants commit `c025247` is reachable from main. Contact Center Calls merge `218cdef` is earlier in main.
-- Historical sections below are retained for context, not current acceptance claims. Verify exact Order and Contact Center routes, schemas and APIs against Graphify and current source before extending them.
+- GitHub `main` verified at `ed76ba1` (PR #32, feature `acf1d7a`, merged 24 Nov). The earlier planning baseline was `4d835a9` (PR #29); PR #30 synchronized deployment assets and PR #31 (`015251f`) added Sales and Pipeline analytics. Local WSL/deploy parity with `ed76ba1`, migration and current browser acceptance have not been independently verified in this review.
+- Historical local evidence at `015251f`: deploy/main-20261123 was 0/0 against origin/main, Yarn build passed with chunk-size warnings, and two generated files differed locally. Recheck actual status before editing; preserve local changes/stashes.
+- Product multi-category/variants `c025247` and Contact Center Calls merge `218cdef` are earlier in main. Historical sections below are context, not current acceptance.
+- Active worktree 25 Nov: `feat/reports-completion` is at `acf1d7a`, one merge commit behind `ed76ba1` but tree-identical to that verified main baseline. Uncommitted A–E implementation adds `smart_insights.py`, `report_tools.py`, a sixth Smart Insights report and a Dashboard summary. This is source/build evidence, not role/browser acceptance.
 
-## Reports architecture
+## Reports architecture — current source at ed76ba1
 
 | Area | Current source contract |
 |---|---|
-| Reports Hub | `frontend/src/pages/ReportsPage.vue`, `frontend/src/utils/reports.js`, router; five sections under `/reports`. Sales Performance and Pipeline Analytics are live components; Quotation & Order, Customer Journey, Activity & Contact Center are placeholders. |
-| Backend | `doublet_crm/reports.py`: `get_sales_performance(...,compare_previous=0)` reads permission-scoped Confirmed/Completed Orders by `order_date`, Won Deals by `won_on` and Lost Deals by `lost_on`; it returns close outcomes, employee breakdown and matching drill-down rows. `get_pipeline_analytics(...)` keeps current-stage analytics by `creation`, adds Lost Reason by `lost_on`, overdue by `expected_close_date`, and a documented 30-day `modified` stale definition. |
-| Filters | `frontend/src/components/Reports/ReportsFilters.vue`, `frontend/src/utils/reportFilters.js`: custom start/end, Deal Owner, Apply/Reset, 7/30-day, current/previous month and quarter presets, plus an immediately preceding equal-length comparison. Team is explicitly unsupported because the Deal schema has no team field. |
-| Tests | `doublet_crm/test_reports.py`, `frontend/tests/pipelineAnalytics.test.mjs`, `frontend/tests/salesPerformanceReport.test.mjs`; test source exists, current execution not verified. |
-| Dashboard | `doublet_crm/dashboard.py:get_overview()` is independent and has no date/employee parameters; preserve existing Dashboard during REP-01 regression. |
+| Reports Hub | `frontend/src/pages/ReportsPage.vue`, `frontend/src/utils/reports.js`, router; the active worktree has six live sections, adding Smart Insights to the five baseline reports. |
+| Sales | `doublet_crm/reports.py:get_sales_performance`: Confirmed/Completed Orders by `order_date`, Won by `won_on`, Lost by `lost_on`, owner breakdown and drill-down. Booked Sales is not paid revenue. |
+| Pipeline | `get_pipeline_analytics`: current stage of Deals created in period (not historical stage snapshots), Lost Reason by `lost_on`, overdue by `expected_close_date`, stale by a 30-day `modified` definition. |
+| Journey | `get_customer_journey`: Lead creation cohort with Lead Owner and Source filters; unique Lead→Deal and Lead-with-Won-Deal rates; permission-scoped, deduplicated Deal/Quotation/Order rows distinguish quotation-linked and direct-Deal Orders. Won is current linked outcome, not historical cohort state. |
+| Quotation & Order | `get_quotation_order`: preserves all-quotation conversion and adds current Accepted Quotation→Booked Order conversion. Denominator is unique currently Accepted quotations dated in range; exact Confirmed/Completed `Order.quotation` links form the deduplicated numerator irrespective of Order Date. |
+| Activity | `get_activity_contact_center`: permission-scoped Calls, Tasks, CRM Communication, Zalo Conversation/Message plus Call/Task/Email/Zalo filter. Employee applies only to Call Agent/Task Assignee; Email/Zalo attribution remains explicitly unavailable. |
+| Smart Insights / Health | `doublet_crm/smart_insights.py`: current as-of alerts for 7-day unchanged Open Deals, past expected close, Sent Quotation expiry within 3 days/expired, and overdue unfinished Tasks. Deterministic health normalizes documented 25-point factors over known evidence only; readable linked Call/Email timestamps take precedence over explicitly labelled CRM `modified` fallback. It is not Won probability. |
+| Export / preferences | `doublet_crm/report_tools.py` reruns allowlisted permission-scoped reports for UTF-8 BOM CSV, neutralizes spreadsheet formulas, and stores named per-user/report filters in Frappe `__UserSettings`; no customer rows are stored and no schema is added. |
+| Filters | `ReportsFilters.vue`, `ReportActions.vue`, `reportFilters.js`: dates/presets, supported owner/employee/source/channel filters, prior-period comparison where supported, CSV export, and personal saved filters. No Team field on Deal. |
+| Tests | `doublet_crm/test_reports.py`, `doublet_crm/test_activity_reports.py`, frontend report tests. See FEATURE_STATUS for observed vs reported execution. |
+| Dashboard | `doublet_crm/dashboard.py:get_overview()` preserves existing KPI contract and adds a compact permission-scoped Needs Attention payload from the shared Smart Insights engine; Dashboard UI provides alert links and View All to Smart Insights. |
 
-Order links to Deal (verified in reports.py); confirm Quotation/Order linking fields and statuses from current schema before implementing Customer Journey. Do not infer paid revenue from booked orders or Deal amounts.
+Report aggregates and drill-down must share the same permission-scoped population. Distinguish missing/unauthorized data from zero. Do not infer paid revenue, historical snapshots, or ownership when the schema does not support them.
 
-Sales and Pipeline drill-down tables are built from the same `frappe.get_list` result sets as their aggregates and link only to existing `OrderDetail`/`DealDetail` routes. The backend checks parent DocType read permission before querying and relies on Frappe's normal list and field permissions; it does not use `ignore_permissions` or raw SQL. Prior comparison is the immediately preceding period with the same inclusive number of calendar days, while every metric retains its own event-date field.
+## Active worktree architecture — implemented, acceptance pending
+
+- Existing report services/components were extended; Contact Center transport/workflows were not changed. Pipeline's existing 30-day stale metric remains separate from Smart Insights' labelled 7-day alert.
+- The shared permission-scoped Smart Insights service supplies Reports and Dashboard. Follow-up Task creation is an explicit authenticated endpoint, validates the current authorized alert/reference/assignee, and uses a Redis source lock plus active marker lookup to prevent concurrent duplicates.
+- Export and saved filters reuse the report/filter contract, validate allowlisted inputs on the backend, require read/export permissions, and isolate preferences by authenticated user. CSV is delivered; XLSX was not added because no existing dependency supports it without churn.
+- Deal schema currently has `expected_close_date`, `stage`, `won_on`, `lost_on`, and `lost_reason`, but no dedicated stage-entry timestamp or configured probability. Deal Stage has `stage_type` (OPEN/WON/LOST) and `sort_order`, not a probability. Stage history and weighted forecast need a separately scoped implementation; no invented historical backfill or weights. AI interpretation is deferred until verified metrics are available.
+- Task reference DoTypes are Lead, Deal, Contact and Company. A Quotation alert may link to its readable Deal for a follow-up task only when valid; never insert an unsupported reference type. See CURRENT_TASK for the active scope.
 
 ## Evidence and freshness (historical)
 
@@ -141,4 +154,3 @@ Task 24B uses the existing Lead, Deal, Contact and Company detail routes. The ch
 - The base DocType definitions grant Lead, Task and Note CRUD to `System Manager`. `Sales User` and `Sales Manager` have read access to Deal in the base schema. Verify effective permissions on the target site because role overrides and document sharing may apply.
 - Keep Zalo transport and provider-specific logic in the integration layer. The shared conversation and message data belongs to DoubleT CRM.
 - Quotation stages are `Draft`, `Sent`, `Accepted`, and `Rejected`. The form supports PDF export and email sending. `Mark as Sent` records the status manually for a quotation delivered through another channel.
-```

@@ -302,6 +302,23 @@ from doublet_crm.reports import (
 
 
 class TestCustomerJourneyReport(FrappeTestCase):
+	def test_source_cohort_and_won_rates_use_unique_leads(self):
+		leads = [
+			row(name="LD-1", lead_name="One", lead_owner="a@example.com", source="Referral", creation="2026-11-01"),
+			row(name="LD-2", lead_name="Two", lead_owner="a@example.com", source="Referral", creation="2026-11-02"),
+		]
+		deals = {"LD-1": [
+			row(name="D-1", deal_title="One", amount=100, won_on="2026-11-20"),
+			row(name="D-2", deal_title="Two", amount=200, won_on="2026-11-21"),
+		]}
+		result, contexts = _summarize_journey(leads, deals, {}, {}, {}, {"deals": True, "quotations": True, "orders": True})
+		self.assertEqual(result["deal_count"], 1)
+		self.assertEqual(result["won_lead_count"], 1)
+		self.assertEqual(result["lead_to_won_rate"], 50)
+		journey = _journey_row(*contexts[0], permissions={"deals": True, "quotations": True, "orders": True})
+		self.assertEqual(journey["source"], "Referral")
+		self.assertEqual({item["name"] for item in journey["deals"]}, {"D-1", "D-2"})
+
 	@patch("doublet_crm.reports._journey_deals_from_leads", return_value={})
 	@patch("doublet_crm.reports._journey_leads")
 	def test_salesperson_filter_consistently_uses_lead_owner(self, journey_leads, deals_from_leads):
@@ -606,6 +623,22 @@ class TestQuotationOrderReport(FrappeTestCase):
 		self.assertEqual(result["quotations_with_orders"], 1)
 		self.assertEqual(result["quotation_value_converted"], 100)
 		self.assertEqual(result["quotation_to_order_rate"], 33.33)
+		self.assertEqual(result["accepted_quotation_count"], 2)
+		self.assertEqual(result["accepted_quotations_with_orders"], 1)
+		self.assertEqual(result["accepted_to_booked_order_rate"], 50)
+		self.assertEqual(len(result["accepted_conversion_drilldown"][0]["orders"]), 1)
+
+	def test_accepted_conversion_deduplicates_orders_and_excludes_standalone(self):
+		quotations = [row(name="Q-1", status="Accepted", grand_total=100, quotation_date="2026-11-01")]
+		orders = [
+			row(name="O-1", quotation="Q-1", status="Confirmed", total=100, order_date="2026-12-01"),
+			row(name="O-2", quotation="Q-1", status="Completed", total=100, order_date="2026-12-02"),
+			row(name="O-3", quotation=None, status="Confirmed", total=100, order_date="2026-11-02"),
+		]
+		result = _summarize_conversion(quotations, orders)
+		self.assertEqual(result["accepted_quotations_with_orders"], 1)
+		self.assertEqual(result["accepted_to_booked_order_rate"], 100)
+		self.assertEqual({item["name"] for item in result["accepted_conversion_drilldown"][0]["orders"]}, {"O-1", "O-2"})
 
 	def test_quotation_order_period_filters_by_salesperson(self):
 		quotations = [

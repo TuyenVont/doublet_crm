@@ -34,6 +34,8 @@ test('Quotation & Order report uses correct API and detail routes', () => {
   assert.match(qoReportSource, /Acceptance Rate/)
   assert.match(qoReportSource, /Booked Sales/)
   assert.match(qoReportSource, /Quotation→Order Rate/)
+  assert.match(qoReportSource, /Accepted→Booked Rate/)
+  assert.match(qoReportSource, /accepted_conversion_drilldown/)
   assert.match(qoReportSource, /Booked includes Confirmed\/Completed/)
   assert.match(qoReportSource, /compare_previous/)
 })

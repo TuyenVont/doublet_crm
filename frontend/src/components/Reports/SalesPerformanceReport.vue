@@ -5,7 +5,9 @@
       v-model:salesperson="filters.salesperson" v-model:compare-previous="filters.comparePrevious"
       :salesperson-options="salespeople" :salesperson-supported="salespersonSupported"
       :team-unsupported-reason="teamUnsupportedReason" :loading="loading"
-      @apply="loadReport" @reset="resetFilters"
+      report-key="sales-performance"
+      :export-filters="appliedFilters || {}" :export-enabled="Boolean(appliedFilters)"
+      @apply="loadReport" @reset="resetFilters" @restore="restoreFilters"
     />
 
     <div v-if="permissionDenied" class="rounded-xl border border-outline-gray-2 bg-surface-gray-1 p-6 text-center" role="alert">
@@ -76,7 +78,7 @@
         <ReportTable v-if="data.won_deals.length || data.lost_deals.length" title="Closed Deal drill-down" description="Every readable Deal included in the Won/Lost aggregates.">
           <template #head><tr><Th>Deal</Th><Th>Outcome</Th><Th>Event Date</Th><Th>Deal Owner</Th><Th right>Deal Amount</Th><Th right>Close Duration</Th></tr></template>
           <tr v-for="deal in closedDeals" :key="`${deal.outcome}-${deal.name}`" class="border-t border-outline-gray-1">
-            <Td><RouterLink :to="{ name: 'DealDetail', params: { dealId: deal.name } }" class="font-medium text-ink-blue-3 hover:underline">{{ deal.deal_title || deal.name }}</RouterLink></Td>
+            <Td><RouterLink :to="{ name: 'DealDetail', params: { dealId: deal.name } }" class="font-medium text-[#1D4ED8] hover:underline">{{ deal.deal_title || deal.name }}</RouterLink></Td>
             <Td>{{ deal.outcome }}</Td><Td>{{ displayDateTime(deal.event_date) }}</Td><Td>{{ deal.deal_owner || __('Unassigned') }}</Td><Td right>{{ money(deal.amount) }}</Td>
             <Td right>{{ deal.close_duration_days == null ? '—' : `${decimal(deal.close_duration_days)} ${__('days')}` }}</Td>
           </tr>
@@ -85,9 +87,9 @@
         <ReportTable v-if="data.recent_orders.length" title="Recent booked orders" description="Latest 10 readable Orders in the applied Order Date range.">
           <template #head><tr><Th>Order</Th><Th>Order Date</Th><Th>Status</Th><Th>Deal</Th><Th right>Total</Th></tr></template>
           <tr v-for="order in data.recent_orders" :key="order.name" class="border-t border-outline-gray-1">
-            <Td><RouterLink :to="{ name: 'OrderDetail', params: { orderId: order.name } }" class="font-medium text-ink-blue-3 hover:underline">{{ order.name }}</RouterLink></Td>
+            <Td><RouterLink :to="{ name: 'OrderDetail', params: { orderId: order.name } }" class="font-medium text-[#1D4ED8] hover:underline">{{ order.name }}</RouterLink></Td>
             <Td>{{ displayDate(order.order_date) }}</Td><Td>{{ order.status }}</Td>
-            <Td><RouterLink v-if="order.deal" :to="{ name: 'DealDetail', params: { dealId: order.deal } }" class="text-ink-blue-3 hover:underline">{{ order.deal_label || order.deal }}</RouterLink><span v-else>{{ order.deal_restricted ? __('Unavailable') : __('No Deal') }}</span></Td>
+            <Td><RouterLink v-if="order.deal" :to="{ name: 'DealDetail', params: { dealId: order.deal } }" class="text-[#1D4ED8] hover:underline">{{ order.deal_label || order.deal }}</RouterLink><span v-else>{{ order.deal_restricted ? __('Unavailable') : __('No Deal') }}</span></Td>
             <Td right>{{ money(order.total) }}</Td>
           </tr>
         </ReportTable>
@@ -116,10 +118,11 @@ const ReportTable = defineComponent({ props: { title: String, description: Strin
 const initialRange = reportDatePreset('30-days')
 const filters = reactive({ ...initialRange, salesperson: '', comparePrevious: false })
 const data = ref(null), loading = ref(false), errorMessage = ref(''), permissionDenied = ref(false)
+const appliedFilters = ref(null)
 const salespeople = computed(() => data.value?.salespeople || [])
 const salespersonSupported = computed(() => data.value?.permissions?.deals !== false)
 const dealMetricsAvailable = computed(() => data.value?.permissions?.deals !== false)
-const teamUnsupportedReason = computed(() => data.value?.capabilities?.team_filter?.reason || '')
+const teamUnsupportedReason = computed(() => data.value?.capabilities?.team_filter?.reason || 'Team filtering is unavailable because DoubleT Deal has no team field.')
 const hasResults = computed(() => Boolean(data.value?.order_count || data.value?.closed_count))
 const closedDeals = computed(() => [...(data.value?.won_deals || []).map(row => ({ ...row, outcome: 'Won' })), ...(data.value?.lost_deals || []).map(row => ({ ...row, outcome: 'Lost' }))])
 const maxTrendValue = computed(() => Math.max(...(data.value?.trend || []).map(row => Number(row.booked_sales) || 0), 0))
@@ -140,10 +143,17 @@ function comparisonChange(metric, format = 'number') {
 }
 async function loadReport() {
   loading.value = true; errorMessage.value = ''; permissionDenied.value = false
-  try { data.value = await call('doublet_crm.reports.get_sales_performance', { start_date: filters.startDate, end_date: filters.endDate, salesperson: filters.salesperson || null, compare_previous: filters.comparePrevious ? 1 : 0 }) }
+  try { const request = { start_date: filters.startDate, end_date: filters.endDate, salesperson: filters.salesperson || null, compare_previous: filters.comparePrevious ? 1 : 0 }; data.value = await call('doublet_crm.reports.get_sales_performance', request); appliedFilters.value = request }
   catch (error) { data.value = null; permissionDenied.value = isPermissionError(error); if (!permissionDenied.value) errorMessage.value = message(error) }
   finally { loading.value = false }
 }
 function resetFilters() { Object.assign(filters, reportDatePreset('30-days'), { salesperson: '', comparePrevious: false }); loadReport() }
+function restoreFilters(saved) {
+  Object.assign(filters, {
+    startDate: saved.start_date || filters.startDate, endDate: saved.end_date || filters.endDate,
+    salesperson: saved.salesperson || '', comparePrevious: Boolean(Number(saved.compare_previous || 0)),
+  })
+  loadReport()
+}
 onMounted(loadReport)
 </script>

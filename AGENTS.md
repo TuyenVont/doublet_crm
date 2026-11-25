@@ -20,7 +20,7 @@ Do **not** reread every file on every turn. Read the relevant sections; inspect 
 
 ## Rules
 1. Start by checking `git status --short` and the current branch. **Never** reset, restore, checkout over, clean, force-push, or discard user changes.
-2. Work on **one bounded feature** per run. Summarize a short plan; then implement only files required by `CURRENT_TASK.md`.
+2. Work on **one bounded work package** per run (related checklist items may share a pass only when CURRENT_TASK explicitly groups them). Summarize a short plan; then implement only files required by `CURRENT_TASK.md`.
 3. Reuse existing components, resources, routes, APIs and patterns. **Search before creating** a new tab, component, endpoint or DocType.
 4. Minimize diff size. Preserve existing public UI workflows, field names, and tests. Avoid unrelated refactors, generated assets, lock files or dependency changes.
 5. Prefer `frappe.get_list` / `frappe.get_doc` with appropriate user permissions; do not bypass Frappe permission checks or expose task data between users. Validate dynamic-link doctype against the four allowed DoubleT entities.
@@ -31,8 +31,8 @@ Do **not** reread every file on every turn. Read the relevant sections; inspect 
 10. Do not auto-commit or push unless the user asks. Suggest an isolated commit after approval.
 
 ## Branch and review workflow
-- Use a feature branch/worktree based on verified origin/main; never edit the deploy branch for feature work. Preserve its two generated local changes and existing stash.
-- Keep successive Reports fixes on the same branch; batch commits and push only when requested for review; reuse a draft PR where applicable.
+- Use a feature branch/worktree based on verified origin/main; never edit the deploy branch for feature work. Preserve any existing generated local changes and stashes; verify actual status rather than assuming the historical count.
+- Keep successive fixes within the same active Reports work package on the same branch; do not reuse a merged PR as a draft; batch commits and push only when requested for review; reuse a draft PR where applicable.
 - Implement and run focused tests in the same pass. Use an isolated test site for database-mutating tests, with explicit approval. Do not mutate the running demo site without approval.
 - Record commit, site, roles, commands, PASS/FAIL/NOT TESTED and browser evidence separately. Never infer acceptance from build or test-file existence.
 - Read the actual diff before review. Use current repo package manager/lockfile (Yarn was used successfully on 24 Nov). Keep deploy HTML/assets matched; do not commit incidental build outputs unless release policy requires them.
@@ -63,7 +63,11 @@ Rules:
 - Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- Use existing Graphify queries before exploring source.
+Do not run graphify update or rebuild graphs.
+The user handles Graphify updates manually.
+If the graph is stale, inspect relevant source directly.
+- In focused review-repair passes, stop after source/tests/docs; leave every Graphify rebuild and post-update query to the user, even when code changed.
 - A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.
 ## Frontend consistency
 
@@ -73,8 +77,12 @@ Rules:
 - For record detail views, keep the record name and primary action in the header and place tabs below it. Use a side summary when users need record information alongside the active tab. On narrow screens, let that summary collapse or stack below the main content.
 - For forms and dialogs, follow existing conventions for labels, required fields, validation and save actions. Give wide content such as quotation items and email composition enough room. Keep the primary action visible and confine horizontal scrolling to the table when needed.
 - Match the existing UI language and naming conventions. Keep visual changes within the current task's scope and preserve existing navigation, permissions and workflows.
-- Verify changed screens in the browser at desktop and narrow widths. Check the primary action, filters or tabs as applicable, and any fields or columns affected by layout changes. In the handoff, name the reference screen and reused components, and record checks that could not be run as `NOT TESTED`.
+- Verify changed screens at desktop and narrow widths when authorized and available; in quota-saving mode, provide a short manual browser checklist instead of repeated agent browser runs. Record unperformed checks as NOT TESTED. Check the primary action, filters or tabs as applicable, and any fields or columns affected by layout changes. In the handoff, name the reference screen and reused components, and record checks that could not be run as `NOT TESTED`.
 ## Reports and Dashboard
-- Reports is independent of Dashboard. Keep existing Dashboard KPI contract and navigation intact for the current task.
+- Reports and Dashboard are separate views. Preserve existing Dashboard KPI contract and navigation; an explicitly scoped REP-14 pass may add a shared Smart Insights summary without redesigning existing KPIs.
 - Use permission-scoped aggregation, including field-level restrictions and linked-record drill-down. Distinguish Deal creation, won_on, lost_on and order_date; never equate Won Deal Value or Booked Sales with paid revenue.
 - Reuse ReportsFilters.vue and existing chart/UI patterns. No placeholder or mock metric may count as accepted.
+
+- Quota-saving mode: use focused Graphify queries and source reads, avoid repeated repo-wide scans, unnecessary subagents and long browser automation. Run relevant automated checks once per coherent change; rerun failing focused checks after fixes. Human browser acceptance is separate. Never claim a test was run if it was not.
+- Keep rule-based alerts, health scores, forecasts and AI explanations distinct. Never invent stage history, activity timestamps or probabilities. Use explicit business definitions, field/record permissions and source links; unknown or unauthorized data is not zero.
+- Export only the current user’s authorized filtered report; prevent spreadsheet formula injection. Keep personal saved filters isolated by authenticated user and report.

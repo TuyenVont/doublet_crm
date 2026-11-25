@@ -86,6 +86,22 @@
           </section>
         </div>
 
+        <section class="rounded-lg border p-4" aria-labelledby="needs-attention-title">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 id="needs-attention-title" class="font-semibold">{{ __('Needs Attention') }}</h2><p class="mt-1 text-xs text-ink-gray-5">{{ data.needs_attention?.semantics || __('Current permission-scoped alerts.') }}</p></div>
+            <Button :label="__('View All')" @click="router.push({ name: 'SmartInsightsReport' })" />
+          </div>
+          <p v-if="data.insights_error" class="mt-3 text-sm text-ink-gray-5" role="status">{{ __('Smart Insights is temporarily unavailable. Existing Dashboard metrics are still available.') }}</p>
+          <Restricted v-else-if="!data.permissions.insights" />
+          <EmptyState v-else-if="!data.needs_attention?.alerts?.length" class="mt-3" :title="__('No current alerts')" />
+          <div v-else class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <button v-for="alert in data.needs_attention.alerts" :key="`${alert.type}-${alert.source_id}`" class="rounded-lg border border-outline-gray-2 p-3 text-left hover:bg-surface-gray-1" @click="router.push(alert.route)">
+              <div class="flex items-center justify-between gap-2"><span class="truncate font-medium">{{ alert.source_label }}</span><span class="rounded bg-surface-gray-2 px-2 py-0.5 text-xs">{{ alert.severity }}</span></div>
+              <p class="mt-2 line-clamp-2 text-xs text-ink-gray-6">{{ alert.reason }}</p>
+            </button>
+          </div>
+        </section>
+
         <section class="rounded-lg border p-4">
           <h2 class="font-semibold">{{ __('Quotations to follow up') }}</h2>
           <p class="mb-3 text-xs text-ink-gray-5">

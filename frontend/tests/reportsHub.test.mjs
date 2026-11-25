@@ -17,21 +17,30 @@ const reportsPageSource = readFileSync(
   new URL('../src/pages/ReportsPage.vue', import.meta.url),
   'utf8',
 )
+const reportsLayoutSource = readFileSync(
+  new URL('../src/pages/ReportsLayout.vue', import.meta.url),
+  'utf8',
+)
 const sidebarLinkSource = readFileSync(
   new URL('../src/components/SidebarLink.vue', import.meta.url),
   'utf8',
 )
+const liveReportSources = [
+  'SalesPerformanceReport', 'PipelineAnalyticsReport', 'QuotationOrderReport',
+  'CustomerJourneyReport', 'ActivityContactCenterReport',
+].map(name => readFileSync(new URL(`../src/components/Reports/${name}.vue`, import.meta.url), 'utf8'))
 
-test('Reports Hub defines exactly five unique analytical sections', () => {
-  assert.equal(REPORT_SECTIONS.length, 5)
-  assert.equal(new Set(REPORT_SECTIONS.map(({ key }) => key)).size, 5)
-  assert.equal(new Set(REPORT_SECTIONS.map(({ name }) => name)).size, 5)
+test('Reports Hub defines six unique analytical sections', () => {
+  assert.equal(REPORT_SECTIONS.length, 6)
+  assert.equal(new Set(REPORT_SECTIONS.map(({ key }) => key)).size, 6)
+  assert.equal(new Set(REPORT_SECTIONS.map(({ name }) => name)).size, 6)
   assert.deepEqual(REPORT_SECTIONS.map(({ title }) => title), [
     'Sales Performance',
     'Pipeline Analytics',
     'Quotation & Order',
     'Customer Journey',
     'Activity & Contact Center',
+    'Smart Insights',
   ])
 })
 
@@ -58,4 +67,21 @@ test('Reports sidebar and breadcrumb navigate to the landing child route', () =>
 test('report pages disclose placeholder status without data requests', () => {
   assert.match(reportsPageSource, /Analytics not yet implemented/)
   assert.doesNotMatch(reportsPageSource, /createResource|frappeRequest|\bcall\s*\(/)
+})
+
+test('exports use the last successfully applied filters', () => {
+  for (const source of liveReportSources) {
+    assert.match(source, /:export-filters="appliedFilters \|\| \{\}"/)
+    assert.match(source, /:export-enabled="Boolean\(appliedFilters\)"/)
+    assert.match(source, /appliedFilters\.value = request/)
+  }
+})
+
+test('Reports uses one stable scroll shell and caches tab contents', () => {
+  assert.match(reportsLayoutSource, /h-full min-h-0 min-w-0 overflow-hidden/)
+  assert.match(reportsPageSource, /overflow-x-hidden overflow-y-scroll/)
+  assert.match(reportsPageSource, /<KeepAlive>/)
+  assert.match(reportsPageSource, /<component :is="activeReportComponent" :key="report\.key"/)
+  assert.match(reportsPageSource, /min-h-\[36rem\]/)
+  assert.doesNotMatch(reportsPageSource, /scrollbar-gutter/)
 })

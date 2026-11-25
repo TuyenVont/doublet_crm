@@ -111,7 +111,7 @@
     <ErrorMessage v-if="error" class="mt-2 pl-2" :message="error" />
     <div
       v-if="info"
-      class="whitespace-pre-line text-sm text-ink-blue-3 mt-2 pl-2"
+      class="whitespace-pre-line text-sm text-[#1D4ED8] mt-2 pl-2"
     >
       {{ info }}
     </div>

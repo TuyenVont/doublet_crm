@@ -3,6 +3,8 @@
 import frappe
 from frappe import _
 
+from doublet_crm.smart_insights import build_smart_insights
+
 
 DASHBOARD_NAME = "DoubleT CRM"
 MODULE = "DoubleT CRM"
@@ -143,7 +145,7 @@ def _readable_labels(doctype, names, fields, formatter):
 @frappe.whitelist()
 def get_overview():
 	"""Return the permission-scoped data used by the custom CRM overview."""
-	result = {"permissions": {}, "kpis": {}, "lead_sources": [], "deal_stages": [], "quotations": []}
+	result = {"permissions": {}, "kpis": {}, "lead_sources": [], "deal_stages": [], "quotations": [], "needs_attention": None}
 
 	for doctype, key in (("DoubleT Lead", "leads"), ("DoubleT Deal", "deals"), ("DoubleT Quotation", "quotations"), ("DoubleT Deal Stage", "stages")):
 		result["permissions"][key] = _can_read(doctype)
@@ -212,5 +214,20 @@ def get_overview():
 		]
 	else:
 		result["kpis"]["draft_quotations"] = None
+
+	try:
+		insights = build_smart_insights(limit=5)
+		result["permissions"]["insights"] = True
+		result["needs_attention"] = {
+			"as_of_date": insights["as_of_date"], "semantics": insights["semantics"],
+			"summary": insights["summary"], "alerts": insights["alerts"],
+		}
+	except Exception:
+		try:
+			frappe.log_error(title="Dashboard Smart Insights failed")
+		except Exception:
+			pass
+		result["permissions"]["insights"] = False
+		result["insights_error"] = True
 
 	return result

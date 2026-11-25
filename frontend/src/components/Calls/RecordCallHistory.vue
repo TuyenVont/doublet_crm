@@ -8,7 +8,7 @@
       <li v-for="row in rows" :key="row.name">
         <RouterLink
           :to="{ name: 'CallDetail', params: { callId: row.name }, query: { from: 'customer' } }"
-          class="flex flex-wrap items-center justify-between gap-2 py-3 hover:text-ink-blue-3"
+          class="flex flex-wrap items-center justify-between gap-2 py-3 hover:text-[#1D4ED8]"
         >
           <span class="flex min-w-0 items-center gap-2 text-sm font-medium">
             <FeatherIcon name="phone" class="size-4 shrink-0" />

@@ -5,7 +5,9 @@
       v-model:salesperson="filters.salesperson" v-model:compare-previous="filters.comparePrevious"
       :salesperson-options="salespeople" :salesperson-supported="true"
       :team-unsupported-reason="teamUnsupportedReason" :loading="loading"
-      @apply="loadReport" @reset="resetFilters"
+      report-key="pipeline-analytics"
+      :export-filters="appliedFilters || {}" :export-enabled="Boolean(appliedFilters)"
+      @apply="loadReport" @reset="resetFilters" @restore="restoreFilters"
     />
 
     <div v-if="permissionDenied" class="rounded-xl border border-outline-gray-2 bg-surface-gray-1 p-6 text-center" role="alert">
@@ -58,7 +60,7 @@
           <template v-for="reason in data.lost_reasons" :key="reason.reason">
             <tr class="border-t border-outline-gray-1 font-medium text-ink-gray-8"><Td>{{ reason.reason }}</Td><Td right>{{ integer(reason.deal_count) }}</Td><Td right>{{ percent(reason.count_percentage) }}</Td><Td right>{{ money(reason.deal_value) }}</Td><Td right>{{ percent(reason.value_percentage) }}</Td></tr>
             <tr v-for="deal in reason.deals" :key="deal.name" class="border-t border-outline-gray-1 bg-surface-gray-1 text-xs">
-              <Td><RouterLink :to="{ name: 'DealDetail', params: { dealId: deal.name } }" class="text-ink-blue-3 hover:underline">↳ {{ deal.deal_title || deal.name }}</RouterLink></Td><Td>{{ displayDate(deal.event_date) }}</Td><Td>{{ deal.deal_owner || __('Unassigned') }}</Td><Td right>{{ money(deal.amount) }}</Td><Td />
+              <Td><RouterLink :to="{ name: 'DealDetail', params: { dealId: deal.name } }" class="text-[#1D4ED8] hover:underline">↳ {{ deal.deal_title || deal.name }}</RouterLink></Td><Td>{{ displayDate(deal.event_date) }}</Td><Td>{{ deal.deal_owner || __('Unassigned') }}</Td><Td right>{{ money(deal.amount) }}</Td><Td />
             </tr>
           </template>
         </ReportTable>
@@ -68,7 +70,7 @@
 
         <ReportTable v-if="data.recent_deals.length" title="Recently created Deals" description="Latest 20 readable Deals in the applied Creation range.">
           <template #head><tr><Th>Deal</Th><Th>Stage</Th><Th>Deal Owner</Th><Th>Created</Th><Th right>Deal Value</Th></tr></template>
-          <tr v-for="deal in data.recent_deals" :key="deal.name" class="border-t border-outline-gray-1"><Td><RouterLink :to="{ name: 'DealDetail', params: { dealId: deal.name } }" class="font-medium text-ink-blue-3 hover:underline">{{ deal.deal_title || deal.name }}</RouterLink></Td><Td>{{ deal.stage_label }}</Td><Td>{{ deal.deal_owner || __('Unassigned') }}</Td><Td>{{ displayDate(deal.creation) }}</Td><Td right>{{ money(deal.amount) }}</Td></tr>
+          <tr v-for="deal in data.recent_deals" :key="deal.name" class="border-t border-outline-gray-1"><Td><RouterLink :to="{ name: 'DealDetail', params: { dealId: deal.name } }" class="font-medium text-[#1D4ED8] hover:underline">{{ deal.deal_title || deal.name }}</RouterLink></Td><Td>{{ deal.stage_label }}</Td><Td>{{ deal.deal_owner || __('Unassigned') }}</Td><Td>{{ displayDate(deal.creation) }}</Td><Td right>{{ money(deal.amount) }}</Td></tr>
         </ReportTable>
       </template>
     </template>
@@ -90,13 +92,14 @@ const Th = defineComponent({ props: { right: Boolean }, setup: (props, { slots }
 const Td = defineComponent({ props: { right: Boolean }, setup: (props, { slots }) => () => cell('td', props.right, slots) })
 const MetricCard = defineComponent({ props: { label: String, value: String, note: String, change: String }, setup: (props) => () => h('article', { class: 'rounded-xl border border-outline-gray-2 bg-surface-white p-4' }, [h('p', { class: 'text-sm text-ink-gray-5' }, props.label), h('p', { class: 'mt-2 text-2xl font-semibold text-ink-gray-9' }, props.value), props.note ? h('p', { class: 'mt-1 text-xs text-ink-gray-5' }, props.note) : null, props.change ? h('p', { class: 'mt-1 text-xs text-ink-gray-6' }, props.change) : null]) })
 const ReportTable = defineComponent({ props: { title: String, description: String }, setup: (props, { slots }) => () => h('section', { class: 'overflow-hidden rounded-xl border border-outline-gray-2 bg-surface-white' }, [h('div', { class: 'p-4 sm:p-5' }, [h('h2', { class: 'font-semibold text-ink-gray-9' }, props.title), h('p', { class: 'mt-1 text-sm text-ink-gray-5' }, props.description)]), h('div', { class: 'overflow-x-auto' }, [h('table', { class: 'min-w-full text-left text-sm' }, [h('thead', { class: 'border-y border-outline-gray-2 bg-surface-gray-1 text-ink-gray-5' }, slots.head?.()), h('tbody', { class: 'text-ink-gray-7' }, slots.default?.())])])]) })
-const RiskTable = defineComponent({ props: { title: String, rows: Array, dateLabel: String, dateField: String }, setup: (props) => () => h(ReportTable, { title: props.title, description: 'Every readable Open Deal included in this risk aggregate.' }, { head: () => h('tr', [h(Th, 'Deal'), h(Th, 'Stage'), h(Th, 'Deal Owner'), h(Th, props.dateLabel), h(Th, { right: true }, () => 'Deal Value')]), default: () => props.rows.map(deal => h('tr', { class: 'border-t border-outline-gray-1', key: deal.name }, [h(Td, () => h(RouterLink, { to: { name: 'DealDetail', params: { dealId: deal.name } }, class: 'font-medium text-ink-blue-3 hover:underline' }, () => deal.deal_title || deal.name)), h(Td, deal.stage_label), h(Td, deal.deal_owner || 'Unassigned'), h(Td, displayDate(deal[props.dateField])), h(Td, { right: true }, () => money(deal.amount))])) }) })
+const RiskTable = defineComponent({ props: { title: String, rows: Array, dateLabel: String, dateField: String }, setup: (props) => () => h(ReportTable, { title: props.title, description: 'Every readable Open Deal included in this risk aggregate.' }, { head: () => h('tr', [h(Th, 'Deal'), h(Th, 'Stage'), h(Th, 'Deal Owner'), h(Th, props.dateLabel), h(Th, { right: true }, () => 'Deal Value')]), default: () => props.rows.map(deal => h('tr', { class: 'border-t border-outline-gray-1', key: deal.name }, [h(Td, () => h(RouterLink, { to: { name: 'DealDetail', params: { dealId: deal.name } }, class: 'font-medium text-[#1D4ED8] hover:underline' }, () => deal.deal_title || deal.name)), h(Td, deal.stage_label), h(Td, deal.deal_owner || 'Unassigned'), h(Td, displayDate(deal[props.dateField])), h(Td, { right: true }, () => money(deal.amount))])) }) })
 
 const initialRange = reportDatePreset('30-days')
 const filters = reactive({ ...initialRange, salesperson: '', comparePrevious: false })
 const data = ref(null), loading = ref(false), errorMessage = ref(''), permissionDenied = ref(false)
+const appliedFilters = ref(null)
 const salespeople = computed(() => data.value?.salespeople || [])
-const teamUnsupportedReason = computed(() => data.value?.capabilities?.team_filter?.reason || '')
+const teamUnsupportedReason = computed(() => data.value?.capabilities?.team_filter?.reason || 'Team filtering is unavailable because DoubleT Deal has no team field.')
 const hasResults = computed(() => Boolean(data.value?.deal_count || data.value?.lost_reason_count || data.value?.overdue_open_count || data.value?.stale_open_count))
 const maxStageValue = computed(() => Math.max(...(data.value?.by_stage || []).map(stage => Number(stage.deal_value) || 0), 0))
 const integer = value => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(value) || 0)
@@ -122,10 +125,17 @@ function comparisonChange(metric, format = 'number') {
 }
 async function loadReport() {
   loading.value = true; errorMessage.value = ''; permissionDenied.value = false
-  try { data.value = await call('doublet_crm.reports.get_pipeline_analytics', { start_date: filters.startDate, end_date: filters.endDate, salesperson: filters.salesperson || null, compare_previous: filters.comparePrevious ? 1 : 0 }) }
+  try { const request = { start_date: filters.startDate, end_date: filters.endDate, salesperson: filters.salesperson || null, compare_previous: filters.comparePrevious ? 1 : 0 }; data.value = await call('doublet_crm.reports.get_pipeline_analytics', request); appliedFilters.value = request }
   catch (error) { data.value = null; permissionDenied.value = isPermissionError(error); if (!permissionDenied.value) errorMessage.value = message(error) }
   finally { loading.value = false }
 }
 function resetFilters() { Object.assign(filters, reportDatePreset('30-days'), { salesperson: '', comparePrevious: false }); loadReport() }
+function restoreFilters(saved) {
+  Object.assign(filters, {
+    startDate: saved.start_date || filters.startDate, endDate: saved.end_date || filters.endDate,
+    salesperson: saved.salesperson || '', comparePrevious: Boolean(Number(saved.compare_previous || 0)),
+  })
+  loadReport()
+}
 onMounted(loadReport)
 </script>
