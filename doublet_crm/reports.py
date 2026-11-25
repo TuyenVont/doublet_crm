@@ -6,6 +6,8 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, get_datetime, getdate, now_datetime, nowdate
 
+from doublet_crm.stage_aging import stage_aging_for_deals, summarize_stage_aging
+
 BOOKED_ORDER_STATUSES = ("Confirmed", "Completed")
 MAX_REPORT_RANGE_DAYS = 366
 RECENT_ORDER_LIMIT = 10
@@ -303,6 +305,7 @@ def get_sales_performance(start_date, end_date, salesperson=None, compare_previo
 
 
 DEAL_REPORT_FIELDS = ["name", "deal_title", "amount", "deal_owner", "stage", "creation", "modified", "expected_close_date", "won_on", "lost_on", "lost_reason"]
+PROBABILITY_FIELD_NAMES = ("probability", "win_probability", "conversion_probability", "stage_probability")
 
 
 def _get_deals(filters, order_by):
@@ -366,6 +369,150 @@ def _risk_row(deal, stages):
 	}
 
 
+def _probability_field(doctype):
+	"""Return a readable numeric probability field already present in the installed schema."""
+	from frappe.model import get_permitted_fields
+
+	permitted = set(get_permitted_fields(doctype, permission_type="read"))
+	fields = {field.fieldname: field for field in frappe.get_meta(doctype).fields}
+	candidates = list(PROBABILITY_FIELD_NAMES)
+	candidates.extend(sorted(
+		fieldname for fieldname, field in fields.items()
+		if "probability" in f"{fieldname} {field.label or ''}".lower() and fieldname not in candidates
+	))
+	for fieldname in candidates:
+		field = fields.get(fieldname)
+		if field and fieldname in permitted and field.fieldtype in ("Percent", "Float", "Int"):
+			return fieldname
+	return None
+
+
+def _forecast_deal_row(deal, stages, probability=None, probability_source=None):
+	amount = flt(deal.amount, 2)
+	return {
+		"name": deal.name, "deal_title": deal.deal_title, "deal_owner": deal.deal_owner,
+		"stage": deal.stage,
+		"stage_label": stages[deal.stage].stage_name if deal.stage in stages else (deal.stage or _("Unassigned Stage")),
+		"amount": amount, "expected_close_date": deal.expected_close_date,
+		"probability": probability, "probability_source": probability_source,
+		"weighted_value": flt(amount * probability / 100, 2) if probability is not None else None,
+	}
+
+
+def _summarize_forecast(deals, stages, start, end, as_of, deal_probability_field=None, stage_probability_field=None):
+	"""Group each readable Open Deal exactly once and disclose incomplete forecast evidence."""
+	monthly = defaultdict(lambda: {"deal_count": 0, "unweighted_value": 0.0, "weighted_value": 0.0, "weighted_deal_count": 0, "deals": []})
+	missing_close, overdue, outside = [], [], []
+	open_rows = []
+	for deal in deals:
+		stage = stages.get(deal.stage)
+		if _deal_lifecycle(deal, stage) != "OPEN":
+			continue
+		probability = getattr(deal, deal_probability_field, None) if deal_probability_field else None
+		probability_source = f"DoubleT Deal.{deal_probability_field}" if probability is not None and deal_probability_field else None
+		if probability is None and stage_probability_field and stage:
+			probability = getattr(stage, stage_probability_field, None)
+			probability_source = f"DoubleT Deal Stage.{stage_probability_field}" if probability is not None else None
+		try:
+			probability = flt(probability, 2) if probability not in (None, "") else None
+		except (TypeError, ValueError):
+			probability = None
+		if probability is not None and not 0 <= probability <= 100:
+			probability, probability_source = None, None
+		item = _forecast_deal_row(deal, stages, probability, probability_source)
+		open_rows.append(item)
+		if not deal.expected_close_date:
+			missing_close.append(item)
+			continue
+		close_date = getdate(deal.expected_close_date)
+		if close_date < as_of:
+			overdue.append(item)
+			continue
+		if close_date < start or close_date > end:
+			outside.append(item)
+			continue
+		month = str(close_date)[:7]
+		bucket = monthly[month]
+		bucket["deal_count"] += 1
+		bucket["unweighted_value"] += item["amount"]
+		bucket["deals"].append(item)
+		if probability is not None:
+			bucket["weighted_deal_count"] += 1
+			bucket["weighted_value"] += item["weighted_value"]
+	configured = bool(deal_probability_field or stage_probability_field)
+	months = []
+	for month, values in sorted(monthly.items()):
+		values["unweighted_value"] = flt(values["unweighted_value"], 2)
+		values["weighted_value"] = flt(values["weighted_value"], 2) if configured else None
+		values["missing_probability_count"] = values["deal_count"] - values["weighted_deal_count"]
+		months.append({"month": month, **values})
+	forecast_deals = [item for month in months for item in month["deals"]]
+	missing_probability = [item for item in forecast_deals if item["probability"] is None]
+	return {
+		"available": True, "as_of_date": str(as_of),
+		"definition": _("Forecast uses readable Open Deal Amount by Expected Close Date. It is forecast revenue, not actual booked sales."),
+		"probability_fields": {"deal": deal_probability_field, "stage": stage_probability_field},
+		"weighted_available": configured,
+		"weighted_reason": None if configured else _("Weighted forecast is unavailable because no readable numeric probability field exists on Deal or Deal Stage."),
+		"open_deal_count": len(open_rows), "total_unweighted_pipeline_value": flt(sum(row["amount"] for row in open_rows), 2),
+		"forecast_deal_count": len(forecast_deals), "unweighted_forecast_value": flt(sum(row["amount"] for row in forecast_deals), 2),
+		"weighted_forecast_value": flt(sum(row["weighted_value"] or 0 for row in forecast_deals), 2) if configured else None,
+		"missing_probability_count": len(missing_probability) if configured else len(forecast_deals),
+		"missing_probability_value": flt(sum(row["amount"] for row in missing_probability), 2),
+		"missing_close_date_count": len(missing_close), "missing_close_date_value": flt(sum(row["amount"] for row in missing_close), 2),
+		"overdue_count": len(overdue), "overdue_value": flt(sum(row["amount"] for row in overdue), 2),
+		"outside_period_count": len(outside), "outside_period_value": flt(sum(row["amount"] for row in outside), 2),
+		"months": months, "deals": forecast_deals, "missing_close_date_deals": missing_close,
+		"overdue_deals": overdue, "outside_period_deals": outside,
+	}
+
+
+def _sales_forecast(start, end, salesperson, can_read_stages):
+	from frappe.model import get_permitted_fields
+
+	required_fields = {"name", "deal_title", "amount", "deal_owner", "stage", "creation", "expected_close_date", "won_on", "lost_on"}
+	permitted_fields = set(get_permitted_fields("DoubleT Deal", permission_type="read")) | {"name"}
+	restricted_fields = sorted(required_fields - permitted_fields)
+	if restricted_fields:
+		return {
+			"available": False,
+			"reason": _("Sales forecast is unavailable because required Deal fields are restricted: {0}.").format(", ".join(restricted_fields)),
+			"weighted_available": False, "months": [], "deals": [], "missing_close_date_deals": [],
+			"overdue_deals": [], "outside_period_deals": [], "owners": [],
+		}
+	deal_probability_field = _probability_field("DoubleT Deal")
+	stage_probability_field = _probability_field("DoubleT Deal Stage") if can_read_stages else None
+	fields = DEAL_REPORT_FIELDS + ([deal_probability_field] if deal_probability_field and deal_probability_field not in DEAL_REPORT_FIELDS else [])
+	deals = frappe.get_list(
+		"DoubleT Deal", filters=[["creation", "<", f"{add_days(end, 1)} 00:00:00"]], fields=fields,
+		order_by="expected_close_date asc, name asc", limit_page_length=0,
+	)
+	if salesperson:
+		deals = [deal for deal in deals if deal.deal_owner == salesperson]
+	stage_names = sorted({deal.stage for deal in deals if deal.stage})
+	stages = {}
+	if can_read_stages and stage_names:
+		stage_fields = ["name", "stage_name", "stage_type", "color", "sort_order"]
+		if stage_probability_field not in (None, *stage_fields):
+			stage_fields.append(stage_probability_field)
+		stages = {stage.name: stage for stage in frappe.get_list(
+			"DoubleT Deal Stage", filters={"name": ["in", stage_names]}, fields=stage_fields,
+			order_by="sort_order asc, name asc", limit_page_length=0,
+		)}
+	result = _summarize_forecast(deals, stages, start, end, min(end, getdate(nowdate())), deal_probability_field, stage_probability_field)
+	result["owners"] = sorted({deal.deal_owner for deal in deals if deal.deal_owner})
+	return result
+
+
+def _pipeline_stage_aging(end, salesperson, can_read_stages):
+	deals = _get_deals([["creation", "<", f"{add_days(end, 1)} 00:00:00"]], "creation asc, name asc")
+	if salesperson:
+		deals = [deal for deal in deals if deal.deal_owner == salesperson]
+	stages = _stages_for((deals,), can_read_stages)
+	open_deals = [deal for deal in deals if _deal_lifecycle(deal, stages.get(deal.stage)) == "OPEN"]
+	return summarize_stage_aging(stage_aging_for_deals(open_deals, stages, min(end, getdate(nowdate()))))
+
+
 @frappe.whitelist()
 def get_pipeline_analytics(start_date, end_date, salesperson=None, compare_previous=0):
 	"""Return current-stage, Lost Reason and open-Deal risk analytics."""
@@ -374,7 +521,9 @@ def get_pipeline_analytics(start_date, end_date, salesperson=None, compare_previ
 	salesperson = _validated_salesperson(salesperson, can_read_deals=True)
 	can_read_stages = bool(frappe.has_permission("DoubleT Deal Stage", "read"))
 	period = _pipeline_period(start, end, salesperson, can_read_stages)
-	owners = sorted(period["owners"])
+	forecast = _sales_forecast(start, end, salesperson, can_read_stages)
+	stage_aging = _pipeline_stage_aging(end, salesperson, can_read_stages)
+	owners = sorted(period["owners"] | set(forecast.get("owners") or []))
 	if salesperson and salesperson not in owners:
 		owners.append(salesperson)
 	owners.sort()
@@ -409,6 +558,8 @@ def get_pipeline_analytics(start_date, end_date, salesperson=None, compare_previ
 		),
 		"rounding_definition": _("Reason percentages are rounded to two decimals; displayed shares can differ from 100% by rounding."),
 		"salespeople": [{"value": owner, "label": owner} for owner in owners], **period["summary"],
+		"forecast": forecast,
+		"stage_aging": stage_aging,
 		"lost_reason_count": len(period["lost"]), "lost_reason_value": flt(sum(flt(deal.amount, 2) for deal in period["lost"]), 2),
 		"lost_reasons": _summarize_lost_reasons(period["lost"]),
 		"overdue_open_count": len(period["overdue"]), "overdue_open_value": flt(sum(flt(deal.amount, 2) for deal in period["overdue"]), 2),

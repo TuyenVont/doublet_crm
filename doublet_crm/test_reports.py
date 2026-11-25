@@ -16,20 +16,22 @@ from doublet_crm.reports import (
 	_summarize_lost_reasons,
 	_summarize_outcomes,
 	_summarize_pipeline,
+	_summarize_forecast,
 	get_pipeline_analytics,
 	get_sales_performance,
 )
+from doublet_crm.stage_aging import _stage_entry, stage_aging_for_deals, summarize_stage_aging
 
 
 def row(**values):
 	return frappe._dict(values)
 
 
-def deal(name, amount, owner=None, creation="2026-10-01 00:00:00", won_on=None, lost_on=None, lost_reason=None, stage="Open", expected_close_date=None, modified="2026-11-01 00:00:00"):
+def deal(name, amount, owner=None, creation="2026-10-01 00:00:00", won_on=None, lost_on=None, lost_reason=None, stage="Open", expected_close_date=None, modified="2026-11-01 00:00:00", **extra):
 	return row(
 		name=name, deal_title=name, amount=amount, deal_owner=owner, creation=creation,
 		won_on=won_on, lost_on=lost_on, lost_reason=lost_reason, stage=stage,
-		expected_close_date=expected_close_date, modified=modified,
+		expected_close_date=expected_close_date, modified=modified, **extra,
 	)
 
 
@@ -175,6 +177,89 @@ class TestSalesPerformanceReport(FrappeTestCase):
 
 
 class TestPipelineAnalyticsReport(FrappeTestCase):
+	def test_stage_aging_resets_on_return_to_a_previous_stage(self):
+		item = deal("D-1", 100, creation="2026-10-01", stage="A")
+		versions = [
+			row(name="V-1", creation="2026-11-05 09:00:00", data=frappe.as_json({"changed": [["stage", "A", "B"]]})),
+			row(name="V-2", creation="2026-11-20 09:00:00", data=frappe.as_json({"changed": [["stage", "B", "A"]]})),
+		]
+		entry, days, reason = _stage_entry(item, versions, date(2026, 11, 25))
+		self.assertEqual(entry, "2026-11-20 09:00:00")
+		self.assertEqual(days, 5)
+		self.assertIsNone(reason)
+
+	def test_unrelated_edits_do_not_reset_stage_aging(self):
+		item = deal("D-1", 100, creation="2026-10-01", stage="B")
+		versions = [
+			row(name="V-1", creation="2026-11-01", data=frappe.as_json({"changed": [["stage", "A", "B"]]})),
+			row(name="V-2", creation="2026-11-24", data=frappe.as_json({"changed": [["deal_title", "Old", "New"]]})),
+		]
+		entry, days, _reason = _stage_entry(item, versions, date(2026, 11, 25))
+		self.assertEqual(entry, "2026-11-01")
+		self.assertEqual(days, 24)
+
+	def test_stage_aging_uses_creation_only_for_tracked_no_transition_history(self):
+		item = deal("D-1", 100, creation="2026-11-01", stage="A")
+		self.assertEqual(_stage_entry(item, [], date(2026, 11, 25), tracking_enabled=True)[:2], ("2026-11-01", 24))
+		self.assertEqual(_stage_entry(item, [], date(2026, 11, 25), tracking_enabled=False)[:2], (None, None))
+
+	def test_incomplete_history_is_unknown_and_bucket_totals_reconcile(self):
+		item = deal("D-1", 100, creation="2026-10-01", stage="A")
+		entry, days, reason = _stage_entry(item, [row(name="V-1", creation="2026-11-20", data="not-json")], date(2026, 11, 25))
+		self.assertIsNone(entry)
+		self.assertIsNone(days)
+		self.assertIn("unreadable", reason)
+		result = summarize_stage_aging({"available": True, "rows": [
+			{"name": "A", "stage": "S", "stage_label": "Stage", "days_in_stage": 7},
+			{"name": "B", "stage": "S", "stage_label": "Stage", "days_in_stage": 31},
+			{"name": "C", "stage": "S", "stage_label": "Stage", "days_in_stage": None},
+		]})
+		self.assertEqual(result["average_days_in_stage"], 19)
+		self.assertEqual(sum(bucket["deal_count"] for bucket in result["buckets"]), 3)
+		self.assertEqual((result["known_count"], result["unknown_count"]), (2, 1))
+
+	@patch("doublet_crm.stage_aging.frappe.get_list")
+	@patch("doublet_crm.stage_aging.frappe.has_permission", return_value=False)
+	@patch("frappe.model.get_permitted_fields", return_value=["name", "deal_title", "deal_owner", "stage", "creation"])
+	def test_unreadable_version_history_keeps_every_duration_unknown(self, _fields, _permission, get_list):
+		result = stage_aging_for_deals([deal("D-1", 100, creation="2026-11-01", stage="A")], {}, date(2026, 11, 25))
+		self.assertTrue(result["available"])
+		self.assertFalse(result["history_available"])
+		self.assertIsNone(result["rows"][0]["days_in_stage"])
+		self.assertEqual(result["rows"][0]["history_status"], "Unknown")
+		get_list.assert_not_called()
+
+	def test_monthly_forecast_reconciles_boundaries_without_double_counting(self):
+		deals = [
+			deal("START", 100, expected_close_date="2026-11-25"),
+			deal("END", 200, expected_close_date="2026-12-31"),
+			deal("OVERDUE", 30, expected_close_date="2026-11-24"),
+			deal("MISSING", 40), deal("OUTSIDE", 50, expected_close_date="2027-01-01"),
+			deal("WON", 999, expected_close_date="2026-12-01", won_on="2026-11-20"),
+		]
+		result = _summarize_forecast(deals, {}, date(2026, 11, 1), date(2026, 12, 31), date(2026, 11, 25))
+
+		self.assertEqual(result["total_unweighted_pipeline_value"], 420)
+		self.assertEqual(result["unweighted_forecast_value"], 300)
+		self.assertEqual([month["month"] for month in result["months"]], ["2026-11", "2026-12"])
+		self.assertEqual({item["name"] for item in result["deals"]}, {"START", "END"})
+		self.assertEqual((result["overdue_count"], result["missing_close_date_count"], result["outside_period_count"]), (1, 1, 1))
+		self.assertFalse(result["weighted_available"])
+		self.assertIsNone(result["weighted_forecast_value"])
+
+	def test_weighted_forecast_uses_only_valid_existing_probabilities(self):
+		deals = [
+			deal("FULL", 100, expected_close_date="2026-12-01", probability=80),
+			deal("MISSING", 200, expected_close_date="2026-12-02", probability=None),
+			deal("INVALID", 300, expected_close_date="2026-12-03", probability=120),
+		]
+		result = _summarize_forecast(deals, {}, date(2026, 12, 1), date(2026, 12, 31), date(2026, 12, 1), "probability")
+
+		self.assertTrue(result["weighted_available"])
+		self.assertEqual(result["weighted_forecast_value"], 80)
+		self.assertEqual(result["missing_probability_count"], 2)
+		self.assertEqual(result["missing_probability_value"], 500)
+
 	def test_current_stage_summary_remains_creation_cohort_based(self):
 		deals = [
 			deal("OPEN-1", 100, stage="Prospecting"),
@@ -204,9 +289,11 @@ class TestPipelineAnalyticsReport(FrappeTestCase):
 		self.assertAlmostEqual(sum(item["count_percentage"] for item in result), 100, places=1)
 		self.assertEqual({deal_row["name"] for item in result for deal_row in item["deals"]}, {"L1", "L2", "L3"})
 
+	@patch("doublet_crm.reports._pipeline_stage_aging", return_value={"available": True, "rows": []})
+	@patch("doublet_crm.reports._sales_forecast", return_value={"available": True})
 	@patch("doublet_crm.reports._pipeline_period")
 	@patch("doublet_crm.reports.frappe.has_permission")
-	def test_api_risk_and_lost_drilldowns_match_aggregates(self, has_permission, pipeline_period):
+	def test_api_risk_and_lost_drilldowns_match_aggregates(self, has_permission, pipeline_period, _forecast, _aging):
 		has_permission.side_effect = [True, True]
 		created = [deal("OPEN", 100)]
 		lost = [deal("LOST", 75, lost_on="2026-11-10", lost_reason=None)]

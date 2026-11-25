@@ -7,11 +7,13 @@ from frappe import _
 from frappe.utils import add_days, cint, flt, get_datetime, getdate, nowdate
 
 from doublet_crm.doublet_crm.doctype.doublet_task.doublet_task import ALLOWED_REFERENCES
+from doublet_crm.stage_aging import stage_aging_for_deals
 
 
 ALERT_THRESHOLDS = {
 	"deal_unchanged_days": 7,
 	"quotation_expiry_days": 3,
+	"stage_aging_days": 30,
 }
 HEALTH_FACTORS = {
 	"update_recency": 25,
@@ -140,7 +142,7 @@ def build_smart_insights(as_of_date=None, salesperson=None, alert_type=None, lim
 	as_of = _as_of(as_of_date)
 	salesperson = (salesperson or "").strip() or None
 	alert_type = (alert_type or "").strip() or None
-	allowed_types = {"stale_deal", "past_expected_close", "quotation_expiry", "overdue_task"}
+	allowed_types = {"stale_deal", "past_expected_close", "quotation_expiry", "overdue_task", "prolonged_stage"}
 	if alert_type and alert_type not in allowed_types:
 		frappe.throw(_("Alert Type is invalid."), frappe.ValidationError)
 	bounded_limit = None if limit is None else max(1, min(cint(limit) or 100, 500))
@@ -156,7 +158,7 @@ def build_smart_insights(as_of_date=None, salesperson=None, alert_type=None, lim
 		frappe.throw(_("You do not have permission to view Smart Insights sources."), frappe.PermissionError)
 
 	deals = frappe.get_list(
-		"DoubleT Deal", fields=["name", "deal_title", "deal_owner", "amount", "stage", "modified", "expected_close_date", "won_on", "lost_on"],
+		"DoubleT Deal", fields=["name", "deal_title", "deal_owner", "amount", "stage", "creation", "modified", "expected_close_date", "won_on", "lost_on"],
 		order_by="modified asc, name asc", limit_page_length=0,
 	) if permissions["deals"] else []
 	stages = _stage_map(deals)
@@ -166,6 +168,8 @@ def build_smart_insights(as_of_date=None, salesperson=None, alert_type=None, lim
 		if len(salesperson) > 140 or salesperson not in owners:
 			frappe.throw(_("Salesperson must own a Deal you can access."), frappe.ValidationError)
 		open_deals = [row for row in open_deals if row.deal_owner == salesperson]
+	stage_aging = stage_aging_for_deals(open_deals, stages, as_of)
+	permissions["stage_history"] = bool(stage_aging.get("history_available"))
 	deal_names = [row.name for row in open_deals]
 
 	quotation_filters = {"deal": ["in", deal_names]} if salesperson else None
@@ -215,6 +219,16 @@ def build_smart_insights(as_of_date=None, salesperson=None, alert_type=None, lim
 		if deal.expected_close_date and getdate(deal.expected_close_date) < as_of:
 			days = _days_since(deal.expected_close_date, as_of)
 			alerts.append({"type": "past_expected_close", "severity": "critical", "reason": _("Open Deal is {0} day(s) past Expected Close Date.").format(days), "relevant_date": deal.expected_close_date, "days": days, "owner": deal.deal_owner, "source_doctype": "DoubleT Deal", "source_id": deal.name, "source_label": deal.deal_title or deal.name, "route": _route("DoubleT Deal", deal.name)})
+	for aging in stage_aging.get("rows") or []:
+		if aging["days_in_stage"] is None or aging["days_in_stage"] < ALERT_THRESHOLDS["stage_aging_days"]:
+			continue
+		alerts.append({
+			"type": "prolonged_stage", "severity": "critical" if aging["days_in_stage"] >= ALERT_THRESHOLDS["stage_aging_days"] * 2 else "warning",
+			"reason": _("Open Deal has remained in {0} for {1} day(s).").format(aging["stage_label"], aging["days_in_stage"]),
+			"relevant_date": aging["stage_entry_date"], "days": aging["days_in_stage"], "owner": aging["deal_owner"],
+			"source_doctype": "DoubleT Deal", "source_id": aging["name"], "source_label": aging["deal_title"] or aging["name"],
+			"stage": aging["stage"], "stage_label": aging["stage_label"], "route": _route("DoubleT Deal", aging["name"]),
+		})
 	for quotation in quotations:
 		if quotation.status != "Sent" or not quotation.valid_until:
 			continue
@@ -254,7 +268,14 @@ def build_smart_insights(as_of_date=None, salesperson=None, alert_type=None, lim
 	return {
 		"as_of_date": str(as_of), "semantics": _("Current readable records evaluated as of the stated date; this is not a historical snapshot or period aggregate."),
 		"thresholds": ALERT_THRESHOLDS, "health_weights": HEALTH_FACTORS, "permissions": permissions,
-		"capabilities": {"follow_up_task": {"available": can_create_follow_up, "reason": None if can_create_follow_up else _("You do not have permission to create DoubleT Tasks.")}},
+		"capabilities": {
+			"follow_up_task": {"available": can_create_follow_up, "reason": None if can_create_follow_up else _("You do not have permission to create DoubleT Tasks.")},
+			"stage_aging": {
+				"available": bool(stage_aging.get("history_available")),
+				"unknown_count": sum(row.get("days_in_stage") is None for row in stage_aging.get("rows") or []),
+				"reason": stage_aging.get("reason") if not stage_aging.get("history_available") else None,
+			},
+		},
 		"filters": {"salesperson": salesperson, "alert_type": alert_type},
 		"salespeople": [{"value": owner, "label": owner} for owner in owners],
 		"alerts": alerts if bounded_limit is None else alerts[:bounded_limit], "alert_total": len(alerts), "health": health,

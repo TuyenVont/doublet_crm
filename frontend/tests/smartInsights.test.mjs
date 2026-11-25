@@ -16,6 +16,8 @@ test('Smart Insights is a live report with current alert and health UI', () => {
   assert.match(report, /Deal Health Score/)
   assert.match(report, /coverage\.known_factors/)
   assert.match(report, /Reading this report never creates Tasks/)
+  assert.match(report, /value="prolonged_stage"/)
+  assert.match(report, /stage_aging_days/)
 })
 
 test('follow-up is explicit and Dashboard reuses the shared summary routes', () => {
