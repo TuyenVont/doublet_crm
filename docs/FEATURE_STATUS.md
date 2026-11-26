@@ -1,5 +1,14 @@
 # DoubleT CRM — Feature status
-Updated 2026-11-25. GitHub main verified at `ed76ba1` (PR #32; feature `acf1d7a`). Local deploy parity with this commit and fresh runtime acceptance are not verified in this review. Source present, reported tests and observed acceptance are distinct.
+Updated 2026-11-26. Sales Completion is based on verified main `319ee10`; older Reports/deployment evidence below retains its original baseline and date. Source present, automated tests and observed acceptance are distinct.
+
+## Sales Completion Phase 1 — 2026-11-26
+
+| ID | Status | Evidence and next check |
+|---|---|---|
+| EXT-05 | IMPLEMENTED; MOCKED PASS; MIGRATION/BROWSER PENDING | Deal Products tab, sellable Catalog multi-select, quantity/remove/save, persistent child schema, duplicate/SKU and quantity validation, permission-aware current reference pricing, and Deal-to-Quotation draft suggestions are implemented. Backend focused suite is included in the 11/11 Phase 1 pass; frontend focused files pass. Run migration, then verify persistence, roles, current Price List values and no Deal Amount/status or historical Quotation changes. |
+| EXT-06 | IMPLEMENTED; MOCKED PASS; MIGRATION/BROWSER PENDING | Qualified/Converted Lead backend eligibility, conversion/Deal guidance, exact `source_lead` relationship, one/multiple Deal handling, Quotation create and linked-record permission checks are implemented without automatic conversion or duplicate record creation. Verify live roles, conversion paths and browser messages after migration. |
+
+The Phase 1 implementation is acceptance pending and is not marked Done. No Reports or AI Foundation source was changed in this worktree.
 
 ## Current Reports / deployment evidence
 

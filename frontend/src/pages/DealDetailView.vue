@@ -155,6 +155,11 @@
             :deal-id="dealId"
           />
 
+          <DealInterestedProducts
+            v-else-if="activeTabName === 'Products'"
+            :deal-id="dealId"
+          />
+
           <ZaloRecordChat
             v-else-if="activeTabName === 'Zalo OA'"
             reference-doctype="DoubleT Deal"
@@ -347,6 +352,7 @@ import Activities from '@/components/Activities/Activities.vue'
 import SharedNotes from '@/components/Notes/SharedNotes.vue'
 import ZaloRecordChat from '@/components/Zalo/ZaloRecordChat.vue'
 import DealQuotations from '@/components/Deal/DealQuotations.vue'
+import DealInterestedProducts from '@/components/Deal/DealInterestedProducts.vue'
 import QuotationEmails from '@/components/QuotationEmails.vue'
 import Resizer from '@/components/Resizer.vue'
 import AssignTo from '@/components/AssignTo.vue'
@@ -577,6 +583,12 @@ const tabs = computed(() => {
       name: 'Notes',
       label: __('Notes'),
       icon: NoteIcon,
+    },
+
+    {
+      name: 'Products',
+      label: __('Products'),
+      icon: DetailsIcon,
     },
 
     {

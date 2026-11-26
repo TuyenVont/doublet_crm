@@ -13,6 +13,7 @@
   "contact",
   "company",
   "source_lead",
+  "interested_products",
   "expected_close_date",
   "stage",
   "won_on",
@@ -59,6 +60,13 @@
    "fieldname": "expected_close_date",
    "fieldtype": "Date",
    "label": "Expected Close Date",
+   "permlevel": 0
+  },
+  {
+   "fieldname": "interested_products",
+   "fieldtype": "Table",
+   "label": "Interested Products",
+   "options": "DoubleT Deal Product",
    "permlevel": 0
   },
   {
