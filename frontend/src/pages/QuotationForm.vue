@@ -309,7 +309,7 @@ import { Button, Dialog, TextInput, call } from 'frappe-ui'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import ProductThumbnail from '@/components/ProductThumbnail.vue'
 import QuotationEmails from '@/components/QuotationEmails.vue'
-import { appendCatalogSelections, contactsForCustomer, createQuotationItem, customerFromDeal, dealsForCustomer, lineAmounts, message, money, productOptionsForItem, shouldRepriceItem } from '@/utils/quotation'
+import { appendCatalogSelections, contactsForCustomer, createQuotationItem, customerFromDeal, dealsForCustomer, lineAmounts, message, money, productOptionsForItem, quotationDraftFromContext, shouldRepriceItem } from '@/utils/quotation'
 import { useSellableProducts } from '@/composables/useSellableProducts'
 
 const route = useRoute(), router = useRouter()
@@ -485,6 +485,31 @@ async function selectDeal(value = doc.value?.deal) {
       : message(e)
     dealLabel.value = ''
   } finally { if (requestId === dealRequestId) dealLoading.value = false }
+}
+
+async function loadDraftContext(dealName, leadName = '') {
+  dealLoading.value = true
+  dealError.value = ''
+  try {
+    const context = await call('doublet_crm.sales_completion.get_quotation_draft_context', {
+      deal_name: dealName,
+      lead_name: leadName || null,
+    })
+    if (!context?.deal) throw new Error(context?.message || __('Unable to prepare a quotation from this Deal.'))
+    Object.assign(doc.value, quotationDraftFromContext(context))
+    context.items?.forEach((source, index) => {
+      const state = itemPricing(doc.value.items[index])
+      state.auto = true
+      state.manual = false
+      state.source = source.pricing_source || ''
+      state.priceList = source.pricing_price_list || ''
+    })
+    await loadDealLabel(context.deal)
+  } catch (exception) {
+    dealError.value = isPermissionError(exception)
+      ? __('You do not have permission to prepare a quotation from this Deal.')
+      : message(exception)
+  } finally { dealLoading.value = false }
 }
 
 function itemPricing(item) {
@@ -808,7 +833,8 @@ onMounted(async () => {
   loadProducts()
   await loadDocument()
   const queryDeal = Array.isArray(route.query.deal) ? '' : dealName(route.query.deal)
-  if (isNew.value && queryDeal && doc.value) await selectDeal(queryDeal)
+  const queryLead = Array.isArray(route.query.lead) ? '' : dealName(route.query.lead)
+  if (isNew.value && queryDeal && doc.value) await loadDraftContext(queryDeal, queryLead)
 })
 watch(() => route.params.quotationId, async (current, previous) => {
   if (!previous || current === previous) return

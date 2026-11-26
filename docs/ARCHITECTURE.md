@@ -1,6 +1,15 @@
 # DoubleT CRM — Architecture map
 
-## Current baseline — 2026-11-25
+## Sales Completion Phase 1 — implemented, acceptance pending
+
+- Worktree `/tmp/doublet-crm-sales`, branch `feat/sales-completion`, verified baseline `319ee10b48d0dff61268ffbdeb3964b39d5a16ba`.
+- `DoubleT Deal.interested_products` is a Table of `DoubleT Deal Product`. Each row stores the Product link plus display snapshots, Variant attributes, quantity and a current reference price. The Deal controller revalidates Product read access, active Standard/Variant sellability, quantity and unique SKU, then resolves price through `doublet_crm/pricing.py`; it does not derive or update Deal Amount.
+- `doublet_crm.sales_completion` is the permission boundary for reading/saving Deal products and preparing a Quotation Draft. It checks Deal read/write and customer-field permlevels, linked Product/Contact/Company/Lead reads, exact `Deal.source_lead` relationships and Quotation create permission. The API returns only draft data and never inserts a Quotation or converts a Lead.
+- Deal-first draft creation resolves prices at request time and copies suggestions into editable new Quotation rows. Saved Quotations retain their existing snapshots and are never synchronized from Deal products.
+- Lead-first creation uses the verified `QUALIFIED` status and continues from `CONVERTED` because the existing conversion flow changes the status. Missing records are handled by guidance to the existing conversion/Deal workflow; one source Deal is used directly and multiple source Deals require selection. Traceability uses the persisted `Quotation.deal -> DoubleT Deal.source_lead` chain.
+- Schema sync is required after deployment. Automated evidence is pure/mocked only; persisted-site and browser acceptance remain pending.
+
+## Historical Reports baseline — 2026-11-25
 
 - GitHub `main` verified at `ed76ba1` (PR #32, feature `acf1d7a`, merged 24 Nov). The earlier planning baseline was `4d835a9` (PR #29); PR #30 synchronized deployment assets and PR #31 (`015251f`) added Sales and Pipeline analytics. Local WSL/deploy parity with `ed76ba1`, migration and current browser acceptance have not been independently verified in this review.
 - Historical local evidence at `015251f`: deploy/main-20261123 was 0/0 against origin/main, Yarn build passed with chunk-size warnings, and two generated files differed locally. Recheck actual status before editing; preserve local changes/stashes.
