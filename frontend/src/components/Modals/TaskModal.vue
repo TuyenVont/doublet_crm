@@ -45,6 +45,27 @@
         />
 
         <FormControl
+          v-model="form.reminder_type"
+          type="select"
+          :label="__('Reminder')"
+          :options="reminderOptions"
+        />
+
+        <FormControl
+          v-if="form.reminder_type === 'Custom'"
+          v-model="form.reminder_at"
+          type="datetime-local"
+          :label="__('Custom reminder date and time')"
+        />
+
+        <div
+          v-else-if="form.reminder_at"
+          class="rounded bg-surface-gray-1 px-3 py-2 text-sm text-ink-gray-6"
+        >
+          {{ __('Reminder at {0}', [new Date(form.reminder_at).toLocaleString()]) }}
+        </div>
+
+        <FormControl
           v-model="form.assigned_to"
           type="select"
           :label="__('Assign To')"
@@ -194,6 +215,22 @@ const priorityOptions = priorities.map((value) => ({
   value,
 }))
 
+const reminderValues = [
+  'No Reminder',
+  '15 Minutes Before',
+  '30 Minutes Before',
+  '1 Hour Before',
+  '1 Day Before',
+  'Custom',
+]
+const reminderOptions = reminderValues.map((value) => ({ label: __(value), value }))
+const reminderOffsets = {
+  '15 Minutes Before': 15,
+  '30 Minutes Before': 30,
+  '1 Hour Before': 60,
+  '1 Day Before': 1440,
+}
+
 const referenceTypeOptions = [
   {
     label: __('None'),
@@ -238,6 +275,8 @@ function emptyForm() {
     status: 'Backlog',
     priority: 'Low',
     due_date: '',
+    reminder_type: 'No Reminder',
+    reminder_at: '',
     assigned_to: currentUser(),
     reference_doctype: '',
     reference_docname: '',
@@ -262,6 +301,23 @@ function toServerDate(value) {
   return normalized.length === 16
     ? normalized + ':00'
     : normalized
+}
+
+function toLocalInput(date) {
+  const pad = (value) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function updateRelativeReminder() {
+  const offset = reminderOffsets[form.value.reminder_type]
+  if (form.value.reminder_type === 'No Reminder') {
+    form.value.reminder_at = ''
+    return
+  }
+  if (!offset || !form.value.due_date) return
+  const date = new Date(form.value.due_date)
+  date.setMinutes(date.getMinutes() - offset)
+  form.value.reminder_at = toLocalInput(date)
 }
 
 function resetForm() {
@@ -368,6 +424,7 @@ async function loadTask(name) {
       ...emptyForm(),
       ...task,
       due_date: toInputDate(task.due_date),
+      reminder_at: toInputDate(task.reminder_at),
     }
   } catch (err) {
     if (!show.value) return
@@ -384,6 +441,11 @@ watch(
       loadRelatedRecords(doctype)
     }
   },
+)
+
+watch(
+  () => [form.value.due_date, form.value.reminder_type],
+  updateRelativeReminder,
 )
 
 watch(
@@ -426,6 +488,11 @@ async function saveTask() {
     return
   }
 
+  if (form.value.reminder_at && (!form.value.due_date || new Date(form.value.reminder_at) > new Date(form.value.due_date))) {
+    error.value = __('Reminder time cannot be after the due date')
+    return
+  }
+
   saving.value = true
   error.value = ''
 
@@ -435,6 +502,8 @@ async function saveTask() {
     status: form.value.status || 'Backlog',
     priority: form.value.priority || 'Low',
     due_date: toServerDate(form.value.due_date),
+    reminder_type: form.value.reminder_type || 'No Reminder',
+    reminder_at: toServerDate(form.value.reminder_at),
     assigned_to: form.value.assigned_to || null,
     reference_doctype:
       form.value.reference_doctype || '',

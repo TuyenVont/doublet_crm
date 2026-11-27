@@ -3,6 +3,8 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cstr, flt, now_datetime
 
+from doublet_crm.deal_probability import set_probability_configuration
+
 
 class DoubleTDeal(Document):
 	def _set_defaults(self):
@@ -14,6 +16,7 @@ class DoubleTDeal(Document):
 	def validate(self):
 		if flt(self.amount) < 0:
 			frappe.throw(_("Amount cannot be negative."))
+		set_probability_configuration(self, _("Close Probability"))
 
 		if self.deal_type not in {"PERSONAL", "COMPANY"}:
 			frappe.throw(_("Deal Type must be PERSONAL or COMPANY."), frappe.ValidationError)
@@ -32,6 +35,7 @@ class DoubleTDeal(Document):
 			frappe.throw(_("Select a valid Deal Stage."), frappe.ValidationError)
 
 		previous = self.get_doc_before_save()
+		self._set_stage_transition_evidence(previous)
 		previous_stage_type = (
 			frappe.db.get_value("DoubleT Deal Stage", previous.stage, "stage_type")
 			if previous and previous.stage
@@ -59,3 +63,13 @@ class DoubleTDeal(Document):
 				previous.lost_on if previous_stage_type == "LOST" and previous.lost_on else now_datetime()
 			)
 			self.won_on = None
+
+	def _set_stage_transition_evidence(self, previous):
+		"""Record a real initial Stage entry or Stage transition exactly once per save."""
+		if self.is_new() or (previous and previous.stage != self.stage):
+			self.stage_entered_on = now_datetime()
+			self.stage_entered_by = frappe.session.user
+		elif previous:
+			# Read-only evidence cannot be reset by unrelated edits or client payloads.
+			self.stage_entered_on = previous.stage_entered_on
+			self.stage_entered_by = previous.stage_entered_by

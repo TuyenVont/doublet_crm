@@ -7,7 +7,7 @@ from frappe import _
 from frappe.utils import add_days, cint, flt, get_datetime, getdate, nowdate
 
 from doublet_crm.doublet_crm.doctype.doublet_task.doublet_task import ALLOWED_REFERENCES
-from doublet_crm.stage_aging import stage_aging_for_deals
+from doublet_crm.stage_aging import readable_stage_evidence_fields, stage_aging_for_deals
 
 
 ALERT_THRESHOLDS = {
@@ -135,16 +135,19 @@ def _health_score(deal, tasks, quotations, as_of, permissions, interactions=None
 	}
 
 
-def build_smart_insights(as_of_date=None, salesperson=None, alert_type=None, limit=100):
+def build_smart_insights(as_of_date=None, salesperson=None, alert_type=None, severity=None, limit=100):
 	"""Build current alerts and Deal health using only permission-filtered source lists."""
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Authentication required."), frappe.PermissionError)
 	as_of = _as_of(as_of_date)
 	salesperson = (salesperson or "").strip() or None
 	alert_type = (alert_type or "").strip() or None
+	severity = (severity or "").strip().lower() or None
 	allowed_types = {"stale_deal", "past_expected_close", "quotation_expiry", "overdue_task", "prolonged_stage"}
 	if alert_type and alert_type not in allowed_types:
 		frappe.throw(_("Alert Type is invalid."), frappe.ValidationError)
+	if severity and severity not in {"critical", "warning"}:
+		frappe.throw(_("Severity is invalid."), frappe.ValidationError)
 	bounded_limit = None if limit is None else max(1, min(cint(limit) or 100, 500))
 	permissions = {
 		"deals": bool(frappe.has_permission("DoubleT Deal", "read")),
@@ -157,8 +160,10 @@ def build_smart_insights(as_of_date=None, salesperson=None, alert_type=None, lim
 	if not any(permissions.values()):
 		frappe.throw(_("You do not have permission to view Smart Insights sources."), frappe.PermissionError)
 
+	deal_fields = ["name", "deal_title", "deal_owner", "amount", "stage", "creation", "modified", "expected_close_date", "won_on", "lost_on"]
+	deal_fields.extend(field for field in readable_stage_evidence_fields() if field not in deal_fields)
 	deals = frappe.get_list(
-		"DoubleT Deal", fields=["name", "deal_title", "deal_owner", "amount", "stage", "creation", "modified", "expected_close_date", "won_on", "lost_on"],
+		"DoubleT Deal", fields=deal_fields,
 		order_by="modified asc, name asc", limit_page_length=0,
 	) if permissions["deals"] else []
 	stages = _stage_map(deals)
@@ -228,6 +233,7 @@ def build_smart_insights(as_of_date=None, salesperson=None, alert_type=None, lim
 			"relevant_date": aging["stage_entry_date"], "days": aging["days_in_stage"], "owner": aging["deal_owner"],
 			"source_doctype": "DoubleT Deal", "source_id": aging["name"], "source_label": aging["deal_title"] or aging["name"],
 			"stage": aging["stage"], "stage_label": aging["stage_label"], "route": _route("DoubleT Deal", aging["name"]),
+			"stage_entry_actor": aging.get("stage_entry_actor"), "evidence_source": aging.get("evidence_source"),
 		})
 	for quotation in quotations:
 		if quotation.status != "Sent" or not quotation.valid_until:
@@ -244,6 +250,8 @@ def build_smart_insights(as_of_date=None, salesperson=None, alert_type=None, lim
 
 	if alert_type:
 		alerts = [row for row in alerts if row["type"] == alert_type]
+	if severity:
+		alerts = [row for row in alerts if row["severity"] == severity]
 	for alert in alerts:
 		reference_doctype = reference_docname = None
 		if alert["source_doctype"] == "DoubleT Deal":
@@ -276,7 +284,7 @@ def build_smart_insights(as_of_date=None, salesperson=None, alert_type=None, lim
 				"reason": stage_aging.get("reason") if not stage_aging.get("history_available") else None,
 			},
 		},
-		"filters": {"salesperson": salesperson, "alert_type": alert_type},
+		"filters": {"salesperson": salesperson, "alert_type": alert_type, "severity": severity},
 		"salespeople": [{"value": owner, "label": owner} for owner in owners],
 		"alerts": alerts if bounded_limit is None else alerts[:bounded_limit], "alert_total": len(alerts), "health": health,
 		"summary": {
@@ -288,8 +296,8 @@ def build_smart_insights(as_of_date=None, salesperson=None, alert_type=None, lim
 
 
 @frappe.whitelist()
-def get_smart_insights(as_of_date=None, salesperson=None, alert_type=None, limit=100):
-	return build_smart_insights(as_of_date, salesperson, alert_type, limit)
+def get_smart_insights(as_of_date=None, salesperson=None, alert_type=None, severity=None, limit=100):
+	return build_smart_insights(as_of_date, salesperson, alert_type, severity, limit)
 
 
 def _task_reference(alert):

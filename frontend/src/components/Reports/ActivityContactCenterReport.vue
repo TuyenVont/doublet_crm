@@ -88,6 +88,27 @@
         </ReportTable>
       </SourceSection>
 
+      <SourceSection v-if="sources.appointments.selected" title="Appointments" :available="sources.appointments.available" date-note="Filtered by Starts On; employee means Appointment Assignee.">
+        <div class="grid gap-3 sm:grid-cols-4">
+          <MetricCard label="Total" :value="metric(sources.appointments.total)" />
+          <MetricCard label="Upcoming" :value="metric(sources.appointments.upcoming)" />
+          <MetricCard label="Completed" :value="metric(sources.appointments.completed)" />
+          <MetricCard label="Cancelled" :value="metric(sources.appointments.cancelled)" />
+        </div>
+        <ReportTable v-if="sources.appointments.rows.length" :headers="['Appointment', 'Assignee', 'Status', 'Starts On', 'Ends On']">
+          <tr v-for="item in sources.appointments.rows" :key="item.name" class="border-t border-outline-gray-1">
+            <td class="px-4 py-3"><RouterLink class="font-medium text-[#1D4ED8] hover:underline" :to="{ name: 'AppointmentDetail', params: { appointmentId: item.name } }">{{ item.title || item.name }}</RouterLink></td>
+            <td class="px-4 py-3">{{ item.assigned_to || __('Unassigned') }}</td><td class="px-4 py-3">{{ item.status }}</td>
+            <td class="px-4 py-3">{{ displayDateTime(item.starts_on) }}</td><td class="px-4 py-3 text-right">{{ displayDateTime(item.ends_on) }}</td>
+          </tr>
+        </ReportTable>
+      </SourceSection>
+
+      <section v-if="sources.reminders.available" class="space-y-3 rounded-xl border border-outline-gray-2 bg-surface-white p-4 sm:p-5">
+        <div><h2 class="font-semibold text-ink-gray-9">{{ __('Reminders') }}</h2><p class="mt-1 text-sm text-ink-gray-5">{{ sources.reminders.definition }}</p></div>
+        <div class="grid gap-3 sm:grid-cols-2"><MetricCard label="Pending" :value="metric(sources.reminders.pending)" /><MetricCard label="Sent" :value="metric(sources.reminders.sent)" /></div>
+      </section>
+
       <SourceSection v-if="sources.email.selected" title="Email" :available="sources.email.available" date-note="Filtered by Communication Creation.">
         <UnsupportedEmployee v-if="filters.employee" :text="sources.email.unsupported_filter_reason" />
         <div class="grid gap-3 sm:grid-cols-2">
@@ -150,10 +171,11 @@ const data = ref(null), loading = ref(false), errorMessage = ref('')
 const appliedFilters = ref(null)
 const sources = computed(() => data.value.sources)
 const employees = computed(() => data.value?.employees || [])
-const channelOptions = computed(() => data.value?.channel_options || ['Call', 'Task', 'Email', 'Zalo'].map(value => ({ value, label: value })))
-const employeeFilterSupported = computed(() => Boolean(data.value?.permissions?.calls || data.value?.permissions?.tasks))
+const channelOptions = computed(() => data.value?.channel_options || ['Call', 'Task', 'Appointment', 'Email', 'Zalo'].map(value => ({ value, label: value })))
+const employeeFilterSupported = computed(() => Boolean(data.value?.permissions?.calls || data.value?.permissions?.tasks || data.value?.permissions?.appointments))
 const legend = [
   { key: 'calls', label: 'Calls', color: 'bg-blue-500' }, { key: 'tasks', label: 'Tasks', color: 'bg-green-500' },
+  { key: 'appointments', label: 'Appointments', color: 'bg-cyan-500' },
   { key: 'emails', label: 'Email', color: 'bg-violet-500' }, { key: 'zalo_messages', label: 'Zalo messages', color: 'bg-orange-500' },
 ]
 const maxDaily = computed(() => Math.max(...(data.value?.trend || []).map(point => legend.reduce((sum, item) => sum + (Number(point[item.key]) || 0), 0)), 1))

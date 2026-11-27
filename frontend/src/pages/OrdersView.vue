@@ -5,7 +5,7 @@
       <template #right-header><Button v-if="canCreate" variant="solid" :label="__('Create Order')" iconLeft="plus" @click="router.push({ name: 'OrderCreate' })" /></template>
     </LayoutHeader>
     <div class="flex flex-wrap items-center gap-2 border-b px-5 py-3">
-      <TextInput v-model="search" type="search" :placeholder="__('Search order number')" @keyup.enter="load(true)" />
+      <TextInput v-model="search" type="search" :placeholder="__('Search order, customer or deal')" @keyup.enter="load(true)" />
       <select v-model="status" class="rounded border px-2 py-1 text-sm" @change="load(true)">
         <option value="">{{ __('All statuses') }}</option><option v-for="s in statuses" :key="s">{{ s }}</option>
       </select>
@@ -18,7 +18,7 @@
       <div v-else-if="rows.length" class="overflow-x-auto rounded border">
         <table class="w-full min-w-[760px] text-left text-sm">
           <thead><tr><th class="p-3">{{ __('Order') }}</th><th>{{ __('Customer') }}</th><th>{{ __('Deal') }}</th><th>{{ __('Date') }}</th><th>{{ __('Status') }}</th><th class="p-3 text-right">{{ __('Total') }}</th></tr></thead>
-          <tbody><tr v-for="row in rows" :key="row.name" class="cursor-pointer border-t hover:bg-surface-gray-1" @click="router.push({ name: 'OrderDetail', params: { orderId: row.name } })"><td class="p-3"><button class="hover:underline">{{ row.name }}</button></td><td><RouterLink v-if="row.company || row.contact" class="hover:underline" :to="customerRoute(row)" @click.stop>{{ customerLabels[row.company || row.contact] || row.company || row.contact }}</RouterLink><span v-else>—</span></td><td><button v-if="dealLabels[row.deal]" class="hover:underline" @click.stop="openDeal(row.deal)">{{ dealLabels[row.deal] }}</button><span v-else>—</span></td><td>{{ row.order_date }}</td><td>{{ row.status }}</td><td class="p-3 text-right">{{ money(row.total) }}</td></tr></tbody>
+          <tbody><tr v-for="row in rows" :key="row.name" class="cursor-pointer border-t hover:bg-surface-gray-1" @click="router.push({ name: 'OrderDetail', params: { orderId: row.name } })"><td class="p-3"><button class="hover:underline">{{ row.name }}</button></td><td><RouterLink v-if="row.company || row.contact" class="hover:underline" :to="customerRoute(row)" @click.stop>{{ customerLabels[row.company || row.contact] || row.company || row.contact }}</RouterLink><span v-else>—</span></td><td><button v-if="dealLabels[row.deal]" class="hover:underline" @click.stop="openDeal(row.deal)">{{ dealLabels[row.deal] }}</button><span v-else>—</span></td><td>{{ row.order_date }}</td><td><span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="statusClass(row.status)">{{ __(row.status) }}</span></td><td class="p-3 text-right">{{ money(row.total) }}</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -40,6 +40,7 @@ const customerLabels = ref({})
 const dealLabels = ref({})
 const loading = ref(false), hasMore = ref(false), canCreate = ref(false)
 let requestVersion = 0
+const statusClass = value => ({ Draft: 'bg-gray-100 text-gray-700', Confirmed: 'bg-yellow-100 text-yellow-700', Completed: 'bg-green-100 text-green-700', Cancelled: 'bg-red-100 text-red-700' }[value] || 'bg-surface-gray-2')
 function customerRoute(row) {
   return row.company ? { name: 'CompanyDetail', params: { companyId: row.company } } : { name: 'ContactDetail', params: { contactId: row.contact } }
 }
@@ -66,10 +67,7 @@ async function load(reset) {
   error.value = ''
   if (reset) { rows.value = []; hasMore.value = false; dealLabels.value = {} }
   try {
-    const filters = []
-    if (search.value.trim()) filters.push(['name', 'like', `%${search.value.trim()}%`])
-    if (status.value) filters.push(['status', '=', status.value])
-    const data = await call('frappe.client.get_list', { doctype: 'DoubleT Order', fields: ['name', 'contact', 'company', 'deal', 'order_date', 'status', 'total'], filters, order_by: 'modified desc', limit_start: rows.value.length, limit_page_length: 20 })
+    const data = await call('doublet_crm.doublet_crm.doctype.doublet_order.doublet_order.list_orders', { search: search.value.trim(), status: status.value, limit_start: rows.value.length, limit_page_length: 20 })
     if (version !== requestVersion) return
     rows.value.push(...(data || [])); hasMore.value = data?.length === 20
     await Promise.allSettled([loadCustomerLabels(data || []), loadDealLabels(data || [])])

@@ -4,6 +4,8 @@
       v-model:start-date="filters.startDate" v-model:end-date="filters.endDate"
       v-model:salesperson="filters.salesperson" v-model:compare-previous="filters.comparePrevious"
       :salesperson-options="salespeople" :salesperson-supported="salespersonSupported"
+      person-label="Lead Owner" all-people-label="All lead owners"
+      person-unsupported-text="Lead ownership is unavailable with your permissions."
       :team-unsupported-reason="teamUnsupportedReason" :loading="loading"
       report-key="customer-journey"
       :export-filters="appliedFilters || {}" :export-enabled="Boolean(appliedFilters)"

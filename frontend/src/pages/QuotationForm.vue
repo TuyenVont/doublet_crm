@@ -3,7 +3,7 @@
     <LayoutHeader>
       <template #left-header><Button variant="subtle" :label="__('Quotations')" @click="router.push({ name: 'Quotations' })" /><span class="ml-2 text-base font-semibold">{{ isNew ? __('New Quotation') : (doc?.name || __('Quotation')) }}</span></template>
       <template #right-header>
-        <Button v-if="!isNew && doc && !editing && canCreateOrder" :label="__('Create Order')" :loading="creatingOrder" :disabled="saving" @click="createOrder" />
+        <Button v-if="!isNew && doc && !editing && (existingOrder || (canCreateOrder && doc.status === 'Accepted'))" :label="existingOrder ? __('Open Order') : __('Create Order')" :loading="creatingOrder" :disabled="saving" @click="createOrder" />
         <Button v-if="!isNew && doc && !editing" :label="__('Export PDF')" :loading="exporting" @click="exportPdf" />
         <Button v-if="!isNew && doc?.deal" :label="__('Back to Deal')" @click="router.push({ name: 'DealDetail', params: { dealId: doc.deal }, hash: '#quotations' })" />
         <Button v-if="!isNew && doc && canWrite && doc.status === 'Draft' && !editing" :label="__('Edit')" @click="startEditing" />
@@ -42,13 +42,53 @@
           <template v-if="isNew || activeTab === 'details'">
           <div class="flex flex-wrap items-center gap-3">
             <span class="font-semibold">{{ __('Status') }}: {{ doc.status || 'Draft' }}</span>
+            <span v-if="isQuotationExpired(doc, siteToday)" class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">{{ __('Expired') }}</span>
+            <span
+              v-if="doc.approval_status && doc.approval_status !== 'Not Required'"
+              class="rounded-full px-2 py-0.5 text-xs font-medium"
+              :class="approvalBadgeClass(doc.approval_status)"
+            >
+              {{ __('Approval') }}: {{ __(doc.approval_status) }}
+            </span>
             <span v-if="doc.deal">{{ __('Deal') }}: <button v-if="dealLabel" class="font-medium hover:underline" @click="openDeal">{{ dealLabel }}</button><span v-else>—</span></span>
             <template v-if="!isNew && !editing && canWrite">
-              <Button v-if="doc.status === 'Draft'" :label="__('Send by Email')" :disabled="saving || sendingEmail" @click="openEmailDialog" />
-              <Button v-if="doc.status === 'Draft'" :label="__('Mark as Sent')" :loading="saving" @click="changeStatus('Sent')" />
+              <Button v-if="doc.status === 'Draft'" :label="__('Send by Email')" :disabled="saving || sendingEmail || approvalBlockingSend" :tooltip="approvalBlockingSend ? __('Discount approval is required before sending.') : ''" @click="openEmailDialog" />
+              <Button v-if="doc.status === 'Draft'" :label="__('Mark as Sent')" :loading="saving" :disabled="approvalBlockingSend" :tooltip="approvalBlockingSend ? __('Discount approval is required before sending.') : ''" @click="changeStatus('Sent')" />
               <template v-if="doc.status === 'Sent'"><Button :label="__('Mark Accepted')" :loading="saving" @click="changeStatus('Accepted')" /><Button :label="__('Mark Rejected')" :loading="saving" @click="changeStatus('Rejected')" /></template>
             </template>
             <span v-if="doc.status === 'Sent'" class="text-xs text-ink-gray-5">{{ __('Delivery confirmed manually.') }}</span>
+          </div>
+          <div v-if="!isNew && doc.approval_status && doc.approval_status !== 'Not Required'" class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-outline-gray-2 bg-surface-gray-1 p-3 text-sm">
+            <div class="space-y-1">
+              <p class="font-medium text-ink-gray-8">
+                {{ __('Discount Approval') }}: {{ __(doc.approval_status) }}
+              </p>
+              <p v-if="doc.approval_requested_by" class="text-xs text-ink-gray-6">
+                {{ __('Requested by {0}', [doc.approval_requested_by]) }}<span v-if="doc.approval_requested_on"> · {{ doc.approval_requested_on }}</span>
+              </p>
+              <p v-if="doc.approved_by && ['Approved', 'Rejected'].includes(doc.approval_status)" class="text-xs text-ink-gray-6">
+                {{ doc.approval_status === 'Approved' ? __('Approved by {0}', [doc.approved_by]) : __('Rejected by {0}', [doc.approved_by]) }}<span v-if="doc.approved_on"> · {{ doc.approved_on }}</span>
+              </p>
+              <p v-if="doc.approval_status === 'Rejected' && doc.rejection_reason" class="text-xs text-red-700">
+                {{ __('Reason') }}: {{ doc.rejection_reason }}
+              </p>
+              <p v-if="doc.approval_status === 'Pending' && isOwnApprovalRequest" class="text-xs text-amber-700">
+                {{ __('You cannot approve or reject your own discount approval request.') }}
+              </p>
+            </div>
+            <div v-if="!editing && doc.status === 'Draft'" class="flex flex-wrap gap-2">
+              <Button
+                v-if="canWrite && ['Required', 'Rejected'].includes(doc.approval_status)"
+                variant="solid"
+                :label="__('Request Approval')"
+                :loading="approvalBusy"
+                @click="requestApproval"
+              />
+              <template v-if="doc.approval_status === 'Pending' && canManageApproval && !isOwnApprovalRequest">
+                <Button variant="solid" :label="__('Approve Discount')" :loading="approvalBusy" @click="approveDiscountRequest" />
+                <Button variant="subtle" theme="red" :label="__('Reject Discount')" :loading="approvalBusy" @click="rejectDiscountRequest" />
+              </template>
+            </div>
           </div>
           <fieldset :disabled="!editable" class="space-y-4">
             <div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
@@ -137,9 +177,21 @@
             <div class="grid gap-4 sm:grid-cols-2">
               <label class="field">{{ __('Quotation Date') }} *<TextInput v-model="doc.quotation_date" type="date" /></label>
               <label class="field">{{ __('Valid Until') }} *<TextInput v-model="doc.valid_until" type="date" /></label>
+              <label class="field sm:col-span-2">{{ __('Terms & Conditions') }}<textarea v-model="doc.terms" rows="2" /></label>
               <label class="field sm:col-span-2">{{ __('Notes') }}<textarea v-model="doc.notes" rows="2" /></label>
             </div>
           </fieldset>
+          <div v-if="editable && quotationTemplates.length" class="flex flex-wrap items-end gap-2 rounded border border-outline-gray-2 bg-surface-gray-1 p-3">
+            <label class="min-w-64 flex-1 text-sm text-ink-gray-7">{{ __('Load from Quotation Template') }}
+              <select v-model="selectedTemplate" class="mt-1" :disabled="applyingTemplate">
+                <option value="">{{ __('Select a template...') }}</option>
+                <option v-for="tpl in quotationTemplates" :key="tpl.name" :value="tpl.name">
+                  {{ tpl.template_name || tpl.name }}{{ tpl.product_category ? ` (${tpl.product_category})` : '' }}
+                </option>
+              </select>
+            </label>
+            <Button :label="__('Apply Template')" :loading="applyingTemplate" :disabled="!selectedTemplate" @click="applySelectedTemplate" />
+          </div>
           <div v-if="optionsError" class="text-sm text-red-600">{{ optionsError }}</div>
           <div v-if="editable" class="flex flex-wrap items-end gap-2 rounded border p-3">
             <label class="min-w-64 flex-1 text-sm text-ink-gray-7">{{ __('Search sellable products') }}
@@ -309,7 +361,7 @@ import { Button, Dialog, TextInput, call } from 'frappe-ui'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import ProductThumbnail from '@/components/ProductThumbnail.vue'
 import QuotationEmails from '@/components/QuotationEmails.vue'
-import { appendCatalogSelections, contactsForCustomer, createQuotationItem, customerFromDeal, dealsForCustomer, lineAmounts, message, money, productOptionsForItem, shouldRepriceItem } from '@/utils/quotation'
+import { appendCatalogSelections, approvalBadgeClass, buildQuotationItemsFromTemplate, contactsForCustomer, createQuotationItem, customerFromDeal, dealsForCustomer, isApprovalBlockingSend, isQuotationExpired, lineAmounts, message, money, productOptionsForItem, shouldRepriceItem } from '@/utils/quotation'
 import { useSellableProducts } from '@/composables/useSellableProducts'
 
 const route = useRoute(), router = useRouter()
@@ -317,7 +369,7 @@ const isNew = computed(() => route.name === 'QuotationCreate')
 const doc = ref(null), loading = ref(true), saving = ref(false), editing = ref(false)
 const exporting = ref(false)
 const activeTab = ref('details'), emailRefreshKey = ref(0)
-const creatingOrder = ref(false), canCreateOrder = ref(false)
+const creatingOrder = ref(false), canCreateOrder = ref(false), existingOrder = ref('')
 const showEmailDialog = ref(false), sendingEmail = ref(false), emailError = ref(''), emailQueue = ref('')
 const showCatalogDialog = ref(false), catalogAdding = ref(false)
 const catalogSelectedProducts = reactive({})
@@ -328,7 +380,12 @@ const emailContextLoading = ref(false), emailContactSearch = ref(''), selectedEm
 const emailContext = reactive({ suggested: null, company: null, companyContacts: [], validUntil: '', isExpired: false })
 const canWrite = ref(false), canDelete = ref(false), error = ref(''), dealError = ref(''), optionsError = ref(''), conflict = ref(false)
 const customerNotice = ref(''), dealNotice = ref('')
-const contacts = ref([]), companies = ref([]), deals = ref([]), priceLists = ref([])
+const contacts = ref([]), companies = ref([]), deals = ref([]), priceLists = ref([]), quotationTemplates = ref([])
+const selectedTemplate = ref(''), applyingTemplate = ref(false)
+const siteToday = ref('')
+const canManageApproval = ref(false), currentUser = ref(''), approvalBusy = ref(false)
+const approvalBlockingSend = computed(() => isApprovalBlockingSend(doc.value))
+const isOwnApprovalRequest = computed(() => Boolean(currentUser.value && (doc.value?.approval_requested_by || doc.value?.owner) === currentUser.value))
 const {
   products,
   productSearch,
@@ -371,9 +428,10 @@ async function loadOptions() {
     list('DoubleT Company', ['name', 'company_name']),
     list('DoubleT Deal', ['name', 'deal_title', 'deal_type', 'contact', 'company']),
     list('DoubleT Price List', ['name', 'price_list_name'], { is_active: 1 }),
+    list('DoubleT Quotation Template', ['name', 'template_name', 'product_category'], { is_active: 1 }),
   ])
-  ;[contacts, companies, deals, priceLists].forEach((target, i) => { if (results[i].status === 'fulfilled') target.value = results[i].value || [] })
-  if (results.some(r => r.status === 'rejected')) optionsError.value = __('Some linked records could not be loaded. Check your access and retry.')
+  ;[contacts, companies, deals, priceLists, quotationTemplates].forEach((target, i) => { if (results[i].status === 'fulfilled') target.value = results[i].value || [] })
+  if (results.slice(0, 4).some(r => r.status === 'rejected')) optionsError.value = __('Some linked records could not be loaded. Check your access and retry.')
 }
 
 watch(emailContactSearch, () => {
@@ -384,18 +442,23 @@ watch(emailContactSearch, () => {
 
 async function loadDocument() {
   loading.value = true; error.value = ''; dealError.value = ''; customerNotice.value = ''; dealNotice.value = ''; conflict.value = false
+  existingOrder.value = ''
   try {
     if (isNew.value) {
       const permission = await call('frappe.client.has_permission', { doctype: 'DoubleT Quotation', docname: '', perm_type: 'create' })
       canWrite.value = Boolean(permission?.has_permission)
       if (!canWrite.value) throw new Error(__('You do not have permission to create quotations.'))
-      doc.value = { doctype: 'DoubleT Quotation', status: 'Draft', customer_type: '', contact: '', company: '', deal: '', price_list: '', quotation_date: '', valid_until: '', notes: '', items: [] }
+      doc.value = { doctype: 'DoubleT Quotation', status: 'Draft', approval_status: 'Not Required', customer_type: '', contact: '', company: '', deal: '', price_list: '', quotation_template: '', quotation_date: '', valid_until: '', terms: '', notes: '', items: [] }
     } else {
       const [data, permissions] = await Promise.all([
         call('frappe.client.get', { doctype: 'DoubleT Quotation', name: route.params.quotationId }),
         call('frappe.client.get_doc_permissions', { doctype: 'DoubleT Quotation', docname: route.params.quotationId }),
       ])
       doc.value = data; canWrite.value = Boolean(permissions?.permissions?.write); canDelete.value = Boolean(permissions?.permissions?.delete)
+      try {
+        const linkedOrders = await list('DoubleT Order', ['name'], { quotation: data.name })
+        existingOrder.value = linkedOrders?.[0]?.name || ''
+      } catch { /* A restricted Order is not exposed from the Quotation. */ }
       await loadDealLabel(data.deal)
     }
     editing.value = false
@@ -667,6 +730,10 @@ function setError(e) {
 }
 async function createOrder() {
   if (creatingOrder.value || saving.value || editing.value || !doc.value?.name) return
+  if (existingOrder.value) {
+    await router.push({ name: 'OrderDetail', params: { orderId: existingOrder.value } })
+    return
+  }
   creatingOrder.value = true
   error.value = ''
   try {
@@ -778,6 +845,83 @@ async function sendEmail() {
   }
 }
 
+async function applySelectedTemplate() {
+  if (applyingTemplate.value || !editable.value || !selectedTemplate.value) return
+  if (doc.value.items?.length) {
+    const confirmed = window.confirm(__('This quotation already has items. Replace current items and terms with the selected template?'))
+    if (!confirmed) return
+  }
+  applyingTemplate.value = true
+  error.value = ''
+  try {
+    const payload = await call('doublet_crm.doublet_crm.doctype.doublet_quotation_template.doublet_quotation_template.get_quotation_template_payload', {
+      template: selectedTemplate.value,
+      customer_type: doc.value.customer_type || null,
+      contact: doc.value.contact || null,
+      company: doc.value.company || null,
+      price_list: doc.value.price_list || null,
+    })
+    const rows = buildQuotationItemsFromTemplate(payload)
+    doc.value.items = rows
+    doc.value.quotation_template = payload.template || selectedTemplate.value
+    if (payload.terms) doc.value.terms = payload.terms
+    rows.forEach((row, index) => {
+      const sourceItem = payload.items?.[index]
+      const state = itemPricing(row)
+      state.manual = false
+      state.auto = true
+      state.source = sourceItem?.price_source || ''
+      state.priceList = sourceItem?.price_list || ''
+    })
+  } catch (e) {
+    error.value = message(e)
+  } finally {
+    applyingTemplate.value = false
+  }
+}
+
+async function requestApproval() {
+  if (approvalBusy.value || !doc.value?.name) return
+  approvalBusy.value = true
+  error.value = ''
+  try {
+    await call('doublet_crm.doublet_crm.doctype.doublet_quotation.doublet_quotation.request_discount_approval', {
+      name: doc.value.name,
+      modified: doc.value.modified,
+    })
+    await loadDocument()
+  } catch (e) { setError(e) } finally { approvalBusy.value = false }
+}
+
+async function approveDiscountRequest() {
+  if (approvalBusy.value || !doc.value?.name) return
+  approvalBusy.value = true
+  error.value = ''
+  try {
+    await call('doublet_crm.doublet_crm.doctype.doublet_quotation.doublet_quotation.approve_discount', {
+      name: doc.value.name,
+      modified: doc.value.modified,
+    })
+    await loadDocument()
+  } catch (e) { setError(e) } finally { approvalBusy.value = false }
+}
+
+async function rejectDiscountRequest() {
+  if (approvalBusy.value || !doc.value?.name) return
+  const reason = window.prompt(__('Enter rejection reason:'))
+  if (!reason || !reason.trim()) return
+  approvalBusy.value = true
+  error.value = ''
+  try {
+    await call('doublet_crm.doublet_crm.doctype.doublet_quotation.doublet_quotation.reject_discount', {
+      name: doc.value.name,
+      reason: reason.trim(),
+      modified: doc.value.modified,
+    })
+    await loadDocument()
+  } catch (e) { setError(e) } finally { approvalBusy.value = false }
+}
+
 async function save() {
   if (saving.value || dealLoading.value || pricingPending.value || !editable.value) return
   error.value = validate(); if (error.value) return
@@ -803,6 +947,15 @@ onMounted(async () => {
   call('frappe.client.has_permission', { doctype: 'DoubleT Order', docname: '', perm_type: 'create' })
     .then(result => { canCreateOrder.value = Boolean(result?.has_permission) })
     .catch(() => { canCreateOrder.value = false })
+  call('doublet_crm.doublet_crm.doctype.doublet_quotation.doublet_quotation.get_site_today')
+    .then(result => { if (result?.today) siteToday.value = result.today })
+    .catch(() => {})
+  call('doublet_crm.doublet_crm.doctype.doublet_quotation.doublet_quotation.get_discount_approval_settings')
+    .then(result => {
+      canManageApproval.value = Boolean(result?.can_manage)
+      currentUser.value = result?.current_user || ''
+    })
+    .catch(() => { canManageApproval.value = false })
   loadOptions()
   loadProductCategories()
   loadProducts()

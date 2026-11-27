@@ -24,7 +24,7 @@ const filtersSource = readFileSync(
 
 test('Customer Journey report uses correct API and detail routes', () => {
   assert.match(reportPageSource, /customer-journey/)
-  assert.match(reportPageSource, /<CustomerJourneyReport/)
+  assert.match(reportPageSource, /'customer-journey': CustomerJourneyReport/)
   assert.match(journeyReportSource, /doublet_crm\.reports\.get_customer_journey/)
   assert.match(journeyReportSource, /name: 'LeadDetail'/)
   assert.match(journeyReportSource, /name: 'DealDetail'/)

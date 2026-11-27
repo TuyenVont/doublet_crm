@@ -90,6 +90,7 @@ class TestDoubleTDealKanban(FrappeTestCase):
 
 	def test_open_to_won_runs_deal_lifecycle(self):
 		deal = self.make_card()
+		frappe.db.set_value("DoubleT Deal", deal.name, "stage_entered_on", "2020-01-02 03:04:05", update_modified=False)
 		board = self.move_card(deal, self.won_stage.name)
 		deal.reload()
 
@@ -97,6 +98,8 @@ class TestDoubleTDealKanban(FrappeTestCase):
 		self.assertTrue(deal.won_on)
 		self.assertFalse(deal.lost_on)
 		self.assertFalse(deal.lost_reason)
+		self.assertNotEqual(str(deal.stage_entered_on), "2020-01-02 03:04:05")
+		self.assertEqual(deal.stage_entered_by, frappe.session.user)
 		self.assertIn(
 			deal.name,
 			frappe.parse_json(next(c.order for c in board.columns if c.column_name == self.won_stage.name)),

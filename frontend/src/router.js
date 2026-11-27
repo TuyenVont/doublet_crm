@@ -14,8 +14,10 @@ const ProductCategoriesView = () => import('@/pages/ProductCategoriesView.vue')
 const PriceListsView = () => import('@/pages/PriceListsView.vue')
 const QuotationsView = () => import('@/pages/QuotationsView.vue')
 const QuotationForm = () => import('@/pages/QuotationForm.vue')
+const QuotationTemplatesView = () => import('@/pages/QuotationTemplatesView.vue')
 const OrdersView = () => import('@/pages/OrdersView.vue')
 const OrderForm = () => import('@/pages/OrderForm.vue')
+const AppointmentsView = () => import('@/pages/AppointmentsView.vue')
 const CompanyDetailView = () => import('@/pages/CompanyDetailView.vue')
 import PlaceholderView from '@/pages/PlaceholderView.vue'
 const Dashboard = () => import('@/pages/Dashboard.vue')
@@ -161,7 +163,11 @@ const routes = [
   { path: '/orders', name: 'Orders', component: OrdersView },
   { path: '/orders/new', name: 'OrderCreate', component: OrderForm },
   { path: '/orders/:orderId', name: 'OrderDetail', component: OrderForm },
+  { path: '/appointments', name: 'Appointments', component: AppointmentsView },
+  { path: '/appointments/new', name: 'AppointmentCreate', component: AppointmentsView },
+  { path: '/appointments/:appointmentId', name: 'AppointmentDetail', component: AppointmentsView },
   { path: '/quotations', name: 'Quotations', component: QuotationsView },
+  { path: '/quotation-templates', name: 'QuotationTemplates', component: QuotationTemplatesView },
   { path: '/quotations/new', name: 'QuotationCreate', component: QuotationForm },
   { path: '/quotations/:quotationId', name: 'QuotationDetail', component: QuotationForm, props: true },
   {

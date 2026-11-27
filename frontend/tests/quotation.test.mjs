@@ -4,10 +4,14 @@ import { computed, isReactive, reactive } from 'vue'
 
 import {
   appendCatalogSelections,
+  approvalBadgeClass,
+  buildQuotationItemsFromTemplate,
   contactsForCustomer,
   createQuotationItem,
   customerFromDeal,
   dealsForCustomer,
+  isApprovalBlockingSend,
+  isQuotationExpired,
   lineAmounts,
   productOptionsForItem,
   shouldRepriceItem,
@@ -139,4 +143,45 @@ test('catalog multi-add preserves every field on existing saved and manual lines
   assert.strictEqual(items[1], manual)
   assert.deepEqual(items.slice(0, 2), before)
   assert.deepEqual(items.slice(2).map(item => [item.product, item.quantity]), [['NEW-1', 1], ['NEW-2', 5]])
+})
+
+test('EXT-07: isQuotationExpired checks Draft/Sent against siteToday and preserves Accepted/Rejected', () => {
+  const today = '2026-11-27'
+  assert.equal(isQuotationExpired({ status: 'Draft', valid_until: '2026-11-26' }, today), true)
+  assert.equal(isQuotationExpired({ status: 'Sent', valid_until: '2026-11-26' }, today), true)
+  assert.equal(isQuotationExpired({ status: 'Sent', valid_until: '2026-11-27' }, today), false)
+  assert.equal(isQuotationExpired({ status: 'Accepted', valid_until: '2026-11-20' }, today), false)
+  assert.equal(isQuotationExpired({ status: 'Rejected', valid_until: '2026-11-20' }, today), false)
+})
+
+test('EXT-08: buildQuotationItemsFromTemplate builds editable rows with resolved customer prices', () => {
+  const rows = buildQuotationItemsFromTemplate({
+    template: 'TPL-1',
+    items: [
+      { product: 'PROD-1', product_name: 'Product 1', sku: 'SKU-1', quantity: 3, unit_price: '45.50' },
+      { product: 'PROD-2', product_name: 'Product 2', sku: 'SKU-2', quantity: 1, unit_price: '' },
+    ],
+  })
+  assert.equal(rows.length, 2)
+  assert.deepEqual(rows[0], {
+    product: 'PROD-1',
+    product_name: 'Product 1',
+    sku: 'SKU-1',
+    quantity: 3,
+    unit_price: '45.50',
+    discount_type: 'Percentage',
+    discount_percent: 0,
+    discount_amount: 0,
+  })
+  assert.equal(rows[1].unit_price, '')
+})
+
+test('EXT-09: isApprovalBlockingSend and approvalBadgeClass reflect approval state', () => {
+  assert.equal(isApprovalBlockingSend({ approval_status: 'Required' }), true)
+  assert.equal(isApprovalBlockingSend({ approval_status: 'Pending' }), true)
+  assert.equal(isApprovalBlockingSend({ approval_status: 'Rejected' }), true)
+  assert.equal(isApprovalBlockingSend({ approval_status: 'Approved' }), false)
+  assert.equal(isApprovalBlockingSend({ approval_status: 'Not Required' }), false)
+  assert.match(approvalBadgeClass('Approved'), /green/)
+  assert.match(approvalBadgeClass('Rejected'), /red/)
 })

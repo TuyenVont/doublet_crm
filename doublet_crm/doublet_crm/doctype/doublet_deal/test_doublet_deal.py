@@ -44,6 +44,7 @@ class TestDoubleTDealLifecycle(FrappeTestCase):
 		self.assertEqual(deal.deal_type, "PERSONAL")
 		self.assertEqual(deal.contact, self.contact.name)
 		self.assertFalse(deal.company)
+		self.assertFalse(deal.probability_configured)
 
 	def test_valid_company_deal_with_optional_contact(self):
 		for contact in (None, self.contact.name):
@@ -107,6 +108,50 @@ class TestDoubleTDealLifecycle(FrappeTestCase):
 	def test_negative_amount_is_rejected(self):
 		with self.assertRaisesRegex(frappe.ValidationError, "Amount cannot be negative"):
 			self.make_deal(amount=-1)
+
+	def test_probability_accepts_zero_and_one_hundred_and_rejects_invalid_values(self):
+		for probability in (0, 100):
+			with self.subTest(probability=probability):
+				deal = self.make_deal(probability=probability)
+				self.assertEqual(deal.probability, probability)
+				self.assertTrue(deal.probability_configured)
+		for probability in (-1, 101, "not-a-number"):
+			with self.subTest(probability=probability):
+				with self.assertRaises(frappe.ValidationError):
+					self.make_deal(probability=probability)
+
+	def test_stage_probability_is_optional_and_validated(self):
+		self.open_stage.probability_configured = 1
+		self.open_stage.probability = 0
+		self.open_stage.save()
+		self.assertEqual(self.open_stage.probability, 0)
+		self.assertTrue(self.open_stage.probability_configured)
+		self.open_stage.probability = 100
+		self.open_stage.save()
+		self.assertEqual(self.open_stage.probability, 100)
+		self.open_stage.probability = 101
+		with self.assertRaises(frappe.ValidationError):
+			self.open_stage.save()
+
+	def test_stage_transition_evidence_changes_only_when_stage_changes(self):
+		deal = self.make_deal()
+		self.assertTrue(deal.stage_entered_on)
+		self.assertEqual(deal.stage_entered_by, frappe.session.user)
+		frappe.db.set_value(
+			"DoubleT Deal", deal.name,
+			{"stage_entered_on": "2020-01-02 03:04:05", "stage_entered_by": "Administrator"},
+			update_modified=False,
+		)
+		deal.reload()
+		deal.deal_title += " edited"
+		deal.save()
+		self.assertEqual(str(deal.stage_entered_on), "2020-01-02 03:04:05")
+		self.assertEqual(deal.stage_entered_by, "Administrator")
+
+		deal.stage = self.won_stage.name
+		deal.save()
+		self.assertNotEqual(str(deal.stage_entered_on), "2020-01-02 03:04:05")
+		self.assertEqual(deal.stage_entered_by, frappe.session.user)
 
 	def test_open_deal_has_no_lifecycle_fields(self):
 		deal = self.make_deal(

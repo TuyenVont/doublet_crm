@@ -1,12 +1,13 @@
 """Permission-scoped analytics APIs for the Reports Hub."""
 
 from collections import defaultdict
+from decimal import Decimal, InvalidOperation
 
 import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, get_datetime, getdate, now_datetime, nowdate
 
-from doublet_crm.stage_aging import stage_aging_for_deals, summarize_stage_aging
+from doublet_crm.stage_aging import readable_stage_evidence_fields, stage_aging_for_deals, summarize_stage_aging
 
 BOOKED_ORDER_STATUSES = ("Confirmed", "Completed")
 MAX_REPORT_RANGE_DAYS = 366
@@ -308,8 +309,8 @@ DEAL_REPORT_FIELDS = ["name", "deal_title", "amount", "deal_owner", "stage", "cr
 PROBABILITY_FIELD_NAMES = ("probability", "win_probability", "conversion_probability", "stage_probability")
 
 
-def _get_deals(filters, order_by):
-	return frappe.get_list("DoubleT Deal", filters=filters, fields=DEAL_REPORT_FIELDS, order_by=order_by, limit_page_length=0)
+def _get_deals(filters, order_by, fields=None):
+	return frappe.get_list("DoubleT Deal", filters=filters, fields=fields or DEAL_REPORT_FIELDS, order_by=order_by, limit_page_length=0)
 
 
 def _stages_for(deal_groups, can_read_stages):
@@ -382,9 +383,23 @@ def _probability_field(doctype):
 	))
 	for fieldname in candidates:
 		field = fields.get(fieldname)
+		configured_field = fields.get(f"{fieldname}_configured")
+		if configured_field and configured_field.fieldname not in permitted:
+			continue
 		if field and fieldname in permitted and field.fieldtype in ("Percent", "Float", "Int"):
 			return fieldname
 	return None
+
+
+def _probability_configuration_field(doctype, probability_field):
+	if not probability_field:
+		return None
+	from frappe.model import get_permitted_fields
+
+	fieldname = f"{probability_field}_configured"
+	field = frappe.get_meta(doctype).get_field(fieldname)
+	permitted = set(get_permitted_fields(doctype, permission_type="read"))
+	return fieldname if field and field.fieldtype == "Check" and fieldname in permitted else None
 
 
 def _forecast_deal_row(deal, stages, probability=None, probability_source=None):
@@ -399,7 +414,24 @@ def _forecast_deal_row(deal, stages, probability=None, probability_source=None):
 	}
 
 
-def _summarize_forecast(deals, stages, start, end, as_of, deal_probability_field=None, stage_probability_field=None):
+def _normalized_probability(value):
+	"""Return a valid 0–100 probability, preserving zero and rejecting invalid legacy values."""
+	if value in (None, ""):
+		return None
+	try:
+		probability = Decimal(str(value))
+	except (InvalidOperation, TypeError, ValueError):
+		return None
+	if not probability.is_finite() or probability < 0 or probability > 100:
+		return None
+	return flt(probability, 2)
+
+
+def _summarize_forecast(
+	deals, stages, start, end, as_of,
+	deal_probability_field=None, stage_probability_field=None,
+	deal_probability_configured_field=None, stage_probability_configured_field=None,
+):
 	"""Group each readable Open Deal exactly once and disclose incomplete forecast evidence."""
 	monthly = defaultdict(lambda: {"deal_count": 0, "unweighted_value": 0.0, "weighted_value": 0.0, "weighted_deal_count": 0, "deals": []})
 	missing_close, overdue, outside = [], [], []
@@ -409,16 +441,27 @@ def _summarize_forecast(deals, stages, start, end, as_of, deal_probability_field
 		if _deal_lifecycle(deal, stage) != "OPEN":
 			continue
 		probability = getattr(deal, deal_probability_field, None) if deal_probability_field else None
-		probability_source = f"DoubleT Deal.{deal_probability_field}" if probability is not None and deal_probability_field else None
-		if probability is None and stage_probability_field and stage:
+		probability_source = None
+		deal_probability_configured = (
+			bool(cint(getattr(deal, deal_probability_configured_field, 0)))
+			if deal_probability_configured_field else probability not in (None, "")
+		)
+		if deal_probability_configured and deal_probability_field:
+			probability_source = f"DoubleT Deal.{deal_probability_field}"
+		elif stage_probability_field and stage:
 			probability = getattr(stage, stage_probability_field, None)
-			probability_source = f"DoubleT Deal Stage.{stage_probability_field}" if probability is not None else None
-		try:
-			probability = flt(probability, 2) if probability not in (None, "") else None
-		except (TypeError, ValueError):
+			stage_probability_configured = (
+				bool(cint(getattr(stage, stage_probability_configured_field, 0)))
+				if stage_probability_configured_field else probability not in (None, "")
+			)
+			probability_source = f"DoubleT Deal Stage.{stage_probability_field}" if stage_probability_configured else None
+			if not stage_probability_configured:
+				probability = None
+		else:
 			probability = None
-		if probability is not None and not 0 <= probability <= 100:
-			probability, probability_source = None, None
+		probability = _normalized_probability(probability)
+		if probability is None:
+			probability_source = None
 		item = _forecast_deal_row(deal, stages, probability, probability_source)
 		open_rows.append(item)
 		if not deal.expected_close_date:
@@ -443,20 +486,23 @@ def _summarize_forecast(deals, stages, start, end, as_of, deal_probability_field
 	months = []
 	for month, values in sorted(monthly.items()):
 		values["unweighted_value"] = flt(values["unweighted_value"], 2)
-		values["weighted_value"] = flt(values["weighted_value"], 2) if configured else None
+		values["weighted_value"] = flt(values["weighted_value"], 2) if configured and values["weighted_deal_count"] else None
 		values["missing_probability_count"] = values["deal_count"] - values["weighted_deal_count"]
 		months.append({"month": month, **values})
 	forecast_deals = [item for month in months for item in month["deals"]]
 	missing_probability = [item for item in forecast_deals if item["probability"] is None]
+	weighted_deals = [item for item in forecast_deals if item["weighted_value"] is not None]
 	return {
 		"available": True, "as_of_date": str(as_of),
-		"definition": _("Forecast uses readable Open Deal Amount by Expected Close Date. It is forecast revenue, not actual booked sales."),
+		"definition": _("Forecast uses readable Open Deal Amount by Expected Close Date. Weighted value is Amount × configured Close Probability / 100; Deal probability overrides Stage probability. Unknown probability is excluded and disclosed, never treated as zero. This is forecast revenue, not actual booked sales."),
 		"probability_fields": {"deal": deal_probability_field, "stage": stage_probability_field},
+		"probability_configuration_fields": {"deal": deal_probability_configured_field, "stage": stage_probability_configured_field},
 		"weighted_available": configured,
 		"weighted_reason": None if configured else _("Weighted forecast is unavailable because no readable numeric probability field exists on Deal or Deal Stage."),
 		"open_deal_count": len(open_rows), "total_unweighted_pipeline_value": flt(sum(row["amount"] for row in open_rows), 2),
 		"forecast_deal_count": len(forecast_deals), "unweighted_forecast_value": flt(sum(row["amount"] for row in forecast_deals), 2),
-		"weighted_forecast_value": flt(sum(row["weighted_value"] or 0 for row in forecast_deals), 2) if configured else None,
+		"weighted_deal_count": len(weighted_deals),
+		"weighted_forecast_value": flt(sum(row["weighted_value"] for row in weighted_deals), 2) if configured and weighted_deals else None,
 		"missing_probability_count": len(missing_probability) if configured else len(forecast_deals),
 		"missing_probability_value": flt(sum(row["amount"] for row in missing_probability), 2),
 		"missing_close_date_count": len(missing_close), "missing_close_date_value": flt(sum(row["amount"] for row in missing_close), 2),
@@ -482,7 +528,12 @@ def _sales_forecast(start, end, salesperson, can_read_stages):
 		}
 	deal_probability_field = _probability_field("DoubleT Deal")
 	stage_probability_field = _probability_field("DoubleT Deal Stage") if can_read_stages else None
-	fields = DEAL_REPORT_FIELDS + ([deal_probability_field] if deal_probability_field and deal_probability_field not in DEAL_REPORT_FIELDS else [])
+	deal_probability_configured_field = _probability_configuration_field("DoubleT Deal", deal_probability_field)
+	stage_probability_configured_field = _probability_configuration_field("DoubleT Deal Stage", stage_probability_field) if can_read_stages else None
+	fields = DEAL_REPORT_FIELDS + [
+		field for field in (deal_probability_field, deal_probability_configured_field)
+		if field and field not in DEAL_REPORT_FIELDS
+	]
 	deals = frappe.get_list(
 		"DoubleT Deal", filters=[["creation", "<", f"{add_days(end, 1)} 00:00:00"]], fields=fields,
 		order_by="expected_close_date asc, name asc", limit_page_length=0,
@@ -493,19 +544,25 @@ def _sales_forecast(start, end, salesperson, can_read_stages):
 	stages = {}
 	if can_read_stages and stage_names:
 		stage_fields = ["name", "stage_name", "stage_type", "color", "sort_order"]
-		if stage_probability_field not in (None, *stage_fields):
-			stage_fields.append(stage_probability_field)
+		for field in (stage_probability_field, stage_probability_configured_field):
+			if field not in (None, *stage_fields):
+				stage_fields.append(field)
 		stages = {stage.name: stage for stage in frappe.get_list(
 			"DoubleT Deal Stage", filters={"name": ["in", stage_names]}, fields=stage_fields,
 			order_by="sort_order asc, name asc", limit_page_length=0,
 		)}
-	result = _summarize_forecast(deals, stages, start, end, min(end, getdate(nowdate())), deal_probability_field, stage_probability_field)
+	result = _summarize_forecast(
+		deals, stages, start, end, min(end, getdate(nowdate())),
+		deal_probability_field, stage_probability_field,
+		deal_probability_configured_field, stage_probability_configured_field,
+	)
 	result["owners"] = sorted({deal.deal_owner for deal in deals if deal.deal_owner})
 	return result
 
 
 def _pipeline_stage_aging(end, salesperson, can_read_stages):
-	deals = _get_deals([["creation", "<", f"{add_days(end, 1)} 00:00:00"]], "creation asc, name asc")
+	fields = DEAL_REPORT_FIELDS + [field for field in readable_stage_evidence_fields() if field not in DEAL_REPORT_FIELDS]
+	deals = _get_deals([["creation", "<", f"{add_days(end, 1)} 00:00:00"]], "creation asc, name asc", fields)
 	if salesperson:
 		deals = [deal for deal in deals if deal.deal_owner == salesperson]
 	stages = _stages_for((deals,), can_read_stages)
@@ -876,7 +933,7 @@ def _quotation_order_quotations(start, end):
 	"""Quotations with quotation_date in range."""
 	return frappe.get_list(
 		"DoubleT Quotation", filters=[["quotation_date", ">=", start], ["quotation_date", "<=", end]],
-		fields=["name", "deal", "status", "grand_total", "quotation_date", "creation"],
+		fields=["name", "deal", "status", "grand_total", "quotation_date", "valid_until", "approval_status", "creation"],
 		order_by="quotation_date desc, name desc", limit_page_length=0,
 	)
 
@@ -912,13 +969,19 @@ def _quotation_order_conversion_orders(quotation_names):
 	)
 
 
-def _summarize_quotations(quotations, deals):
+def _summarize_quotations(quotations, deals, as_of=None):
 	"""Build quotation summary by status."""
+	as_of = getdate(as_of or nowdate())
 	status_groups = defaultdict(lambda: {"count": 0, "value": 0.0, "quotations": []})
+	approval_groups = defaultdict(int)
+	expired_count = 0
 	for q in quotations:
 		status = q.status or "Draft"
 		status_groups[status]["count"] += 1
 		status_groups[status]["value"] += flt(q.grand_total, 2)
+		approval_groups[q.get("approval_status") or "Legacy / Unknown"] += 1
+		if status in {"Draft", "Sent"} and q.get("valid_until") and getdate(q.valid_until) < as_of:
+			expired_count += 1
 		readable_deal = deals.get(q.deal) if q.deal else None
 		status_groups[status]["quotations"].append({
 			"name": q.name, "deal": readable_deal.name if readable_deal else None,
@@ -935,6 +998,8 @@ def _summarize_quotations(quotations, deals):
 		"quotation_count": total_count,
 		"quotation_value": flt(total_value, 2),
 		"accepted_count": accepted_count,
+		"expired_count": expired_count,
+		"approval_statuses": [{"status": status, "count": count} for status, count in sorted(approval_groups.items())],
 		"acceptance_rate": acceptance_rate,
 		"by_status": sorted([
 			{
@@ -1036,7 +1101,7 @@ def _quotation_order_period(start, end, salesperson, permissions):
 	if salesperson:
 		quotations = [row for row in quotations if row.deal in deals and deals[row.deal].deal_owner == salesperson]
 		orders = [row for row in orders if row.deal in deals and deals[row.deal].deal_owner == salesperson]
-	quotation_summary = _summarize_quotations(quotations, deals) if permissions["quotations"] else None
+	quotation_summary = _summarize_quotations(quotations, deals, end) if permissions["quotations"] else None
 	order_summary = _summarize_orders(orders, deals) if permissions["orders"] else None
 	conversion_orders = _quotation_order_conversion_orders([q.name for q in quotations]) if permissions["quotations"] and permissions["orders"] else []
 	conversion_summary = _summarize_conversion(quotations, conversion_orders) if permissions["quotations"] and permissions["orders"] else None
@@ -1166,11 +1231,12 @@ def _activity_trend(start, end, sources):
 			"date": str(day),
 			"calls": 0 if sources["calls"]["available"] else None,
 			"tasks": 0 if sources["tasks"]["available"] else None,
+			"appointments": 0 if sources["appointments"]["available"] else None,
 			"emails": 0 if sources["email"]["available"] else None,
 			"zalo_messages": 0 if sources["zalo"]["messages_available"] else None,
 		}
 		day = getdate(add_days(day, 1))
-	for key, date_field in (("calls", "start_time"), ("tasks", "creation"), ("email", "creation")):
+	for key, date_field in (("calls", "start_time"), ("tasks", "creation"), ("appointments", "starts_on"), ("email", "creation")):
 		for row in sources[key]["rows"]:
 			series[str(getdate(row.get(date_field)))][key if key != "email" else "emails"] += 1
 	for row in sources["zalo"]["messages"]:
@@ -1186,18 +1252,19 @@ def get_activity_contact_center(start_date, end_date, employee=None, channel=Non
 	channel = (channel or "").strip().title() or None
 	if employee and len(employee) > 140:
 		frappe.throw(_("Employee is invalid."), frappe.ValidationError)
-	if channel not in (None, "Call", "Task", "Email", "Zalo"):
-		frappe.throw(_("Channel must be Call, Task, Email or Zalo."), frappe.ValidationError)
+	if channel not in (None, "Call", "Task", "Appointment", "Email", "Zalo"):
+		frappe.throw(_("Channel must be Call, Task, Appointment, Email or Zalo."), frappe.ValidationError)
 
 	permissions = {
 		"calls": _activity_source_permission("DoubleT Call Log"),
 		"tasks": _activity_source_permission("DoubleT Task"),
+		"appointments": _activity_source_permission("DoubleT Appointment"),
 		"email": _activity_source_permission("Communication"),
 		"zalo_conversations": _activity_source_permission("DoubleT Conversation"),
 		"zalo_messages": _activity_source_permission("DoubleT Message"),
 	}
 	enabled = {
-		"calls": channel in (None, "Call"), "tasks": channel in (None, "Task"),
+		"calls": channel in (None, "Call"), "tasks": channel in (None, "Task"), "appointments": channel in (None, "Appointment"),
 		"email": channel in (None, "Email"), "zalo": channel in (None, "Zalo"),
 	}
 
@@ -1208,9 +1275,14 @@ def get_activity_contact_center(start_date, end_date, employee=None, channel=Non
 	) if permissions["calls"] and enabled["calls"] else []
 	task_rows = _activity_rows(
 		"DoubleT Task", "creation",
-		["name", "title", "status", "priority", "due_date", "assigned_to", "reference_doctype", "reference_docname", "creation"],
+		["name", "title", "status", "priority", "due_date", "assigned_to", "reference_doctype", "reference_docname", "reminder_at", "reminder_sent_at", "creation"],
 		start, end, "creation desc, name desc",
 	) if permissions["tasks"] and enabled["tasks"] else []
+	appointment_rows = _activity_rows(
+		"DoubleT Appointment", "starts_on",
+		["name", "title", "status", "starts_on", "ends_on", "assigned_to", "reference_doctype", "reference_docname", "reminder_at", "reminder_sent_at"],
+		start, end, "starts_on desc, name desc",
+	) if permissions["appointments"] and enabled["appointments"] else []
 	email_rows = _activity_rows(
 		"Communication", "creation",
 		["name", "subject", "sender", "recipients", "sent_or_received", "reference_doctype", "reference_name", "creation"],
@@ -1229,18 +1301,22 @@ def get_activity_contact_center(start_date, end_date, employee=None, channel=Non
 		start, end, "sent_at desc, name desc",
 	) if permissions["zalo_messages"] and enabled["zalo"] else []
 
-	employee_values = {row.agent for row in call_rows if row.agent} | {row.assigned_to for row in task_rows if row.assigned_to}
+	employee_values = {row.agent for row in call_rows if row.agent} | {row.assigned_to for row in task_rows + appointment_rows if row.assigned_to}
 	if employee:
 		employee_values.add(employee)
 	employees = sorted(employee_values)
 	if employee:
 		call_rows = [row for row in call_rows if row.agent == employee]
 		task_rows = [row for row in task_rows if row.assigned_to == employee]
+		appointment_rows = [row for row in appointment_rows if row.assigned_to == employee]
 
 	pending_statuses = {"Backlog", "Todo", "In Progress"}
 	pending_tasks = [row for row in task_rows if row.status in pending_statuses]
 	as_of = now_datetime()
 	overdue_tasks = [row for row in pending_tasks if row.due_date and get_datetime(row.due_date) < as_of]
+	reminder_rows = task_rows + appointment_rows
+	pending_reminders = [row for row in reminder_rows if row.get("reminder_at") and not row.get("reminder_sent_at")]
+	sent_reminders = [row for row in reminder_rows if row.get("reminder_sent_at")]
 	readable_conversations = set()
 	if permissions["zalo_conversations"]:
 		for conversation in {row.conversation for row in message_rows if row.conversation}:
@@ -1267,6 +1343,19 @@ def get_activity_contact_center(start_date, end_date, employee=None, channel=Non
 			"overdue": len(overdue_tasks) if permissions["tasks"] and enabled["tasks"] else None,
 			"rows": task_rows,
 		},
+		"appointments": {
+			"available": permissions["appointments"] and enabled["appointments"], "permitted": permissions["appointments"], "selected": enabled["appointments"], "date_field": "starts_on", "employee_filter_supported": True,
+			"total": len(appointment_rows) if permissions["appointments"] and enabled["appointments"] else None,
+			"upcoming": sum(row.status == "Scheduled" and get_datetime(row.starts_on) >= as_of for row in appointment_rows) if permissions["appointments"] and enabled["appointments"] else None,
+			"completed": sum(row.status == "Completed" for row in appointment_rows) if permissions["appointments"] and enabled["appointments"] else None,
+			"cancelled": sum(row.status == "Cancelled" for row in appointment_rows) if permissions["appointments"] and enabled["appointments"] else None,
+			"rows": appointment_rows,
+		},
+		"reminders": {
+			"available": (permissions["tasks"] and enabled["tasks"]) or (permissions["appointments"] and enabled["appointments"]),
+			"pending": len(pending_reminders), "sent": len(sent_reminders),
+			"definition": _("Reminder counts use the readable Task and Appointment rows in this report range; Pending has Reminder At without Reminder Sent At."),
+		},
 		"email": {
 			"available": permissions["email"] and enabled["email"], "permitted": permissions["email"], "selected": enabled["email"], "date_field": "creation", "employee_filter_supported": False,
 			"unsupported_filter_reason": _("Employee filter is not applied: Communication has no verified employee field."),
@@ -1291,9 +1380,9 @@ def get_activity_contact_center(start_date, end_date, employee=None, channel=Non
 	return {
 		"filters": {"start_date": str(start), "end_date": str(end), "employee": employee, "channel": channel},
 		"permissions": permissions,
-		"channel_options": [{"value": value, "label": value} for value in ("Call", "Task", "Email", "Zalo")],
+		"channel_options": [{"value": value, "label": value} for value in ("Call", "Task", "Appointment", "Email", "Zalo")],
 		"employees": [{"value": value, "label": value} for value in employees],
-		"source_definitions": _("Calls use Start Time; Tasks and Email use Creation; Zalo conversations use Creation and messages use Sent At. Employee applies only to Call Agent and Task Assignee; Email and Zalo have no verified employee attribution."),
+		"source_definitions": _("Calls use Start Time; Tasks and Email use Creation; Appointments use Starts On; Zalo conversations use Creation and messages use Sent At. Employee applies to Call Agent and Task/Appointment Assignee; Email and Zalo have no verified employee attribution."),
 		"as_of": str(as_of),
 		"sources": sources,
 		"trend": _activity_trend(start, end, sources),

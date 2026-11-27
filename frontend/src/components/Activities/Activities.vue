@@ -11,6 +11,7 @@
     :modalRef="modalRef"
     :can-create-task="canCreateTask"
     :can-create-note="canCreateNote"
+    :can-create-appointment="canCreateAppointment"
   />
   <FadedScrollableDiv class="flex flex-col h-full overflow-y-auto">
     <div
@@ -192,7 +193,14 @@
             </div>
           </div>
           <div
-            v-if="activity.activity_type == 'communication'"
+            v-if="activity.activity_type == 'appointment'"
+            class="mb-4 rounded border border-outline-gray-2 p-3"
+          >
+            <a class="font-medium text-ink-blue-2 hover:underline" :href="`/doublet-crm/appointments/${activity.name}`">{{ activity.data.title }}</a>
+            <div class="mt-1 text-sm text-ink-gray-6">{{ activity.data.starts_on }} · {{ activity.data.status }} · {{ activity.data.assigned_to }}</div>
+          </div>
+          <div
+            v-else-if="activity.activity_type == 'communication'"
             class="pb-5 mt-px"
           >
             <EmailArea :activity="activity" :emailBox="emailBox" />
@@ -537,11 +545,13 @@ const modalRef = ref(null)
 const showFilesUploader = ref(false)
 const canCreateTask = ref(false)
 const canCreateNote = ref(false)
+const canCreateAppointment = ref(false)
 
 async function loadCreatePermissions() {
   const permissions = await getActivityCreatePermissions(call)
   canCreateTask.value = permissions.canCreateTask
   canCreateNote.value = permissions.canCreateNote
+  canCreateAppointment.value = permissions.canCreateAppointment
 }
 
 const title = computed(() => props.tabs?.[tabIndex.value]?.name || 'Activity')
@@ -762,6 +772,8 @@ const activities = computed(() => {
 
   _activities.forEach((activity) => {
     activity.icon = timelineIcon(activity.activity_type, activity.is_lead)
+
+    if (activity.activity_type === 'appointment') return
 
     if (
       activity.activity_type == 'incoming_call' ||

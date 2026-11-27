@@ -5,7 +5,7 @@ from decimal import Decimal
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import getdate, nowdate
+from frappe.utils import cint, getdate, nowdate
 
 from doublet_crm.doublet_crm.doctype.doublet_quotation.doublet_quotation import (
     DoubleTQuotation,
@@ -78,15 +78,36 @@ class DoubleTOrder(Document):
     def validate_quotation(self, previous):
         if not self.quotation:
             return None
-        quotation = (
-            readable_doc("DoubleT Quotation", self.quotation) if previous
-            else lock_quotation(self.quotation)
-        )
+        if previous:
+            return None
+        quotation = lock_quotation(self.quotation)
+        if quotation.status != "Accepted":
+            frappe.throw(_("Only Accepted Quotations can be linked to a new Order."), frappe.ValidationError)
         if any((self.get(field) or None) != (quotation.get(field) or None) for field in CUSTOMER_FIELDS):
             frappe.throw(_("Order customer and Deal must match the source Quotation."))
         if self.currency != (quotation.get("currency") or "USD"):
             frappe.throw(_("Order currency must match the source Quotation."))
+        self.validate_quotation_snapshot(quotation)
         return quotation
+
+    def validate_quotation_snapshot(self, quotation):
+        if len(self.items or []) != len(quotation.items or []):
+            frappe.throw(_("Order items must exactly match the Accepted Quotation snapshot."))
+        fields = (
+            "product", "quantity", "unit_price", "discount_type",
+            "discount_percent", "discount_amount",
+        )
+        number_fields = {"quantity", "unit_price", "discount_percent", "discount_amount"}
+        for order_row, quote_row in zip(self.items, quotation.items):
+            for field in fields:
+                order_value = order_row.get(field)
+                quote_value = quote_row.get(field)
+                if field in number_fields:
+                    matches = decimal_value(order_value or 0, _(field)) == decimal_value(quote_value or 0, _(field))
+                else:
+                    matches = (order_value or "Percentage") == (quote_value or "Percentage") if field == "discount_type" else order_value == quote_value
+                if not matches:
+                    frappe.throw(_("Order items must exactly match the Accepted Quotation snapshot."))
 
     def calculate_items(self, previous, quotation):
         if not self.items:
@@ -154,6 +175,8 @@ def create_order_from_quotation(quotation):
     )
     if existing:
         return readable_doc("DoubleT Order", existing).name
+    if source.status != "Accepted":
+        frappe.throw(_("Only Accepted Quotations can be converted to an Order."), frappe.ValidationError)
     frappe.has_permission("DoubleT Order", "create", throw=True)
     order = frappe.get_doc({
         "doctype": "DoubleT Order",
@@ -184,3 +207,34 @@ def create_order_from_quotation(quotation):
     order.insert()
     order.check_permission("read")
     return order.name
+
+
+@frappe.whitelist()
+def list_orders(search=None, status=None, limit_start=0, limit_page_length=20):
+    """Permission-scoped Order search across number, Customer and Deal labels."""
+    frappe.has_permission("DoubleT Order", "read", throw=True)
+    filters = []
+    term = (search or "").strip()
+    if term:
+        pattern = f"%{term}%"
+        companies = frappe.get_list("DoubleT Company", or_filters=[["name", "like", pattern], ["company_name", "like", pattern]], pluck="name", limit_page_length=100) if frappe.has_permission("DoubleT Company", "read") else []
+        contacts = frappe.get_list("DoubleT Contact", or_filters=[["name", "like", pattern], ["first_name", "like", pattern], ["last_name", "like", pattern]], pluck="name", limit_page_length=100) if frappe.has_permission("DoubleT Contact", "read") else []
+        deals = frappe.get_list("DoubleT Deal", or_filters=[["name", "like", pattern], ["deal_title", "like", pattern]], pluck="name", limit_page_length=100) if frappe.has_permission("DoubleT Deal", "read") else []
+        or_filters = [["name", "like", pattern]]
+        if companies:
+            or_filters.append(["company", "in", companies])
+        if contacts:
+            or_filters.append(["contact", "in", contacts])
+        if deals:
+            or_filters.append(["deal", "in", deals])
+        names = frappe.get_list("DoubleT Order", or_filters=or_filters, pluck="name", limit_page_length=0)
+        if not names:
+            return []
+        filters.append(["name", "in", names])
+    if status:
+        filters.append(["status", "=", status])
+    return frappe.get_list(
+        "DoubleT Order", fields=["name", "contact", "company", "deal", "quotation", "order_date", "status", "total"],
+        filters=filters, order_by="modified desc", limit_start=max(0, cint(limit_start)),
+        limit_page_length=min(100, max(1, cint(limit_page_length) or 20)),
+    )

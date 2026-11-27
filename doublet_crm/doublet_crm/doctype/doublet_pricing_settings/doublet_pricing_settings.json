@@ -5,7 +5,10 @@
   "issingle": 1,
   "engine": "InnoDB",
   "field_order": [
-    "default_price_list"
+    "default_price_list",
+    "enable_discount_approval",
+    "discount_approval_threshold_percent",
+    "discount_approval_threshold_amount"
   ],
   "fields": [
     {
@@ -13,6 +16,25 @@
       "fieldtype": "Link",
       "label": "Default Price List",
       "options": "DoubleT Price List"
+    },
+    {
+      "fieldname": "enable_discount_approval",
+      "fieldtype": "Check",
+      "label": "Enable Discount Approval",
+      "default": "0"
+    },
+    {
+      "fieldname": "discount_approval_threshold_percent",
+      "fieldtype": "Float",
+      "label": "Discount Approval Threshold (%)",
+      "default": "0"
+    },
+    {
+      "fieldname": "discount_approval_threshold_amount",
+      "fieldtype": "Currency",
+      "label": "Discount Approval Threshold (USD)",
+      "precision": "2",
+      "default": "0"
     }
   ],
   "permissions": [

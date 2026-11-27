@@ -37,6 +37,11 @@
         />
 
         <InfoRow
+          :label="__('Close Probability')"
+          :value="!deal.probability_configured ? __('Unknown') : `${deal.probability}%`"
+        />
+
+        <InfoRow
           :label="__('Close Date')"
           :value="deal.expected_close_date"
         />
@@ -88,6 +93,25 @@
             step="0.01"
             class="w-full rounded-lg border border-outline-gray-2 px-3 py-2 text-sm"
           />
+        </label>
+
+        <label class="block space-y-1">
+          <span class="text-xs text-ink-gray-5">
+            {{ __('Close Probability (%)') }}
+          </span>
+
+          <input
+            v-model="detailsForm.probability"
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            class="w-full rounded-lg border border-outline-gray-2 px-3 py-2 text-sm"
+          />
+
+          <span class="block text-xs text-ink-gray-5">
+            {{ !detailsStage?.probability_configured ? __('Blank remains Unknown because this Stage has no default probability.') : `${__('Blank uses the Stage default')}: ${detailsStage.probability}%` }}
+          </span>
         </label>
 
         <label class="block space-y-1">
@@ -402,6 +426,7 @@ const relatedError = ref('')
 const detailsForm = reactive({
   stage: '',
   amount: '',
+  probability: '',
   expected_close_date: '',
   deal_owner: '',
   deal_type: '',
@@ -474,6 +499,11 @@ function fillDetails() {
   detailsForm.amount =
     props.deal?.amount ??
     ''
+
+  detailsForm.probability =
+    props.deal?.probability_configured
+      ? props.deal.probability
+      : ''
 
   detailsForm.expected_close_date =
     props.deal
@@ -588,6 +618,8 @@ async function loadStages() {
           'name',
           'stage_name',
           'stage_type',
+          'probability',
+          'probability_configured',
           'sort_order',
           'enabled',
         ],
@@ -753,6 +785,20 @@ async function saveDetails() {
   }
 
   if (
+    detailsForm.probability !== '' &&
+    (
+      !Number.isFinite(Number(detailsForm.probability)) ||
+      Number(detailsForm.probability) < 0 ||
+      Number(detailsForm.probability) > 100
+    )
+  ) {
+    detailsError.value =
+      'Close Probability must be a number from 0 to 100.'
+
+    return
+  }
+
+  if (
     detailsStageType.value ===
       'LOST' &&
     !detailsForm.lost_reason.trim()
@@ -776,6 +822,18 @@ async function saveDetails() {
           : Number(
               detailsForm.amount
             ),
+
+      probability:
+        detailsForm.probability === ''
+          ? null
+          : Number(
+              detailsForm.probability
+            ),
+
+      probability_configured:
+        detailsForm.probability === ''
+          ? 0
+          : 1,
 
       expected_close_date:
         detailsForm.expected_close_date ||

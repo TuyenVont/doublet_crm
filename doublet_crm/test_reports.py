@@ -20,7 +20,7 @@ from doublet_crm.reports import (
 	get_pipeline_analytics,
 	get_sales_performance,
 )
-from doublet_crm.stage_aging import _stage_entry, stage_aging_for_deals, summarize_stage_aging
+from doublet_crm.stage_aging import _stage_entry, _stage_evidence, stage_aging_for_deals, summarize_stage_aging
 
 
 def row(**values):
@@ -188,6 +188,16 @@ class TestPipelineAnalyticsReport(FrappeTestCase):
 		self.assertEqual(days, 5)
 		self.assertIsNone(reason)
 
+	def test_stage_aging_prefers_explicit_transition_timestamp_and_actor(self):
+		item = deal(
+			"D-1", 100, creation="2026-10-01", stage="A",
+			stage_entered_on="2026-11-21 10:30:00", stage_entered_by="agent@example.com",
+		)
+		entry, days, actor, reason, source = _stage_evidence(item, [], date(2026, 11, 25))
+		self.assertEqual((entry, days, actor), ("2026-11-21 10:30:00", 4, "agent@example.com"))
+		self.assertIsNone(reason)
+		self.assertEqual(source, "deal_transition")
+
 	def test_unrelated_edits_do_not_reset_stage_aging(self):
 		item = deal("D-1", 100, creation="2026-10-01", stage="B")
 		versions = [
@@ -198,10 +208,11 @@ class TestPipelineAnalyticsReport(FrappeTestCase):
 		self.assertEqual(entry, "2026-11-01")
 		self.assertEqual(days, 24)
 
-	def test_stage_aging_uses_creation_only_for_tracked_no_transition_history(self):
+	def test_stage_aging_never_infers_legacy_entry_from_creation(self):
 		item = deal("D-1", 100, creation="2026-11-01", stage="A")
-		self.assertEqual(_stage_entry(item, [], date(2026, 11, 25), tracking_enabled=True)[:2], ("2026-11-01", 24))
+		self.assertEqual(_stage_entry(item, [], date(2026, 11, 25), tracking_enabled=True)[:2], (None, None))
 		self.assertEqual(_stage_entry(item, [], date(2026, 11, 25), tracking_enabled=False)[:2], (None, None))
+		self.assertIn("No recorded transition", _stage_entry(item, [], date(2026, 11, 25))[2])
 
 	def test_incomplete_history_is_unknown_and_bucket_totals_reconcile(self):
 		item = deal("D-1", 100, creation="2026-10-01", stage="A")
@@ -222,12 +233,21 @@ class TestPipelineAnalyticsReport(FrappeTestCase):
 	@patch("doublet_crm.stage_aging.frappe.has_permission", return_value=False)
 	@patch("frappe.model.get_permitted_fields", return_value=["name", "deal_title", "deal_owner", "stage", "creation"])
 	def test_unreadable_version_history_keeps_every_duration_unknown(self, _fields, _permission, get_list):
-		result = stage_aging_for_deals([deal("D-1", 100, creation="2026-11-01", stage="A")], {}, date(2026, 11, 25))
+		with patch("doublet_crm.stage_aging.readable_stage_evidence_fields", return_value=[]):
+			result = stage_aging_for_deals([deal("D-1", 100, creation="2026-11-01", stage="A")], {}, date(2026, 11, 25))
 		self.assertTrue(result["available"])
 		self.assertFalse(result["history_available"])
 		self.assertIsNone(result["rows"][0]["days_in_stage"])
 		self.assertEqual(result["rows"][0]["history_status"], "Unknown")
 		get_list.assert_not_called()
+
+	@patch("doublet_crm.stage_aging.frappe.has_permission", return_value=False)
+	@patch("frappe.model.get_permitted_fields", return_value=["name", "deal_title", "deal_owner", "stage", "creation", "stage_entered_on"])
+	def test_legacy_row_without_explicit_evidence_does_not_claim_version_access(self, _fields, _permission):
+		with patch("doublet_crm.stage_aging.readable_stage_evidence_fields", return_value=["stage_entered_on"]):
+			result = stage_aging_for_deals([deal("D-1", 100, creation="2026-11-01", stage="A")], {}, date(2026, 11, 25))
+		self.assertIsNone(result["rows"][0]["evidence_source"])
+		self.assertIn("Version history is unavailable", result["rows"][0]["unknown_reason"])
 
 	def test_monthly_forecast_reconciles_boundaries_without_double_counting(self):
 		deals = [
@@ -249,16 +269,46 @@ class TestPipelineAnalyticsReport(FrappeTestCase):
 
 	def test_weighted_forecast_uses_only_valid_existing_probabilities(self):
 		deals = [
-			deal("FULL", 100, expected_close_date="2026-12-01", probability=80),
+			deal("ZERO", 100, expected_close_date="2026-12-01", probability=0),
+			deal("FULL", 100, expected_close_date="2026-12-01", probability=100),
 			deal("MISSING", 200, expected_close_date="2026-12-02", probability=None),
-			deal("INVALID", 300, expected_close_date="2026-12-03", probability=120),
+			deal("INVALID", 300, expected_close_date="2026-12-03", probability="not-a-number"),
 		]
 		result = _summarize_forecast(deals, {}, date(2026, 12, 1), date(2026, 12, 31), date(2026, 12, 1), "probability")
 
 		self.assertTrue(result["weighted_available"])
-		self.assertEqual(result["weighted_forecast_value"], 80)
+		self.assertEqual(result["weighted_forecast_value"], 100)
+		self.assertEqual(result["weighted_deal_count"], 2)
 		self.assertEqual(result["missing_probability_count"], 2)
 		self.assertEqual(result["missing_probability_value"], 500)
+		self.assertEqual(result["months"][0]["weighted_deal_count"], 2)
+		self.assertEqual(next(row for row in result["deals"] if row["name"] == "ZERO")["weighted_value"], 0)
+
+	def test_deal_probability_overrides_stage_and_blank_uses_stage_default(self):
+		deals = [
+			deal("OVERRIDE", 100, stage="Qualified", expected_close_date="2026-12-01", probability=25, probability_configured=1),
+			deal("ZERO", 100, stage="Qualified", expected_close_date="2026-12-02", probability=0, probability_configured=1),
+			deal("DEFAULT", 100, stage="Qualified", expected_close_date="2026-12-03", probability=0, probability_configured=0),
+		]
+		stages = {"Qualified": row(stage_name="Qualified", stage_type="OPEN", probability=80, probability_configured=1)}
+		result = _summarize_forecast(
+			deals, stages, date(2026, 12, 1), date(2026, 12, 31), date(2026, 12, 1),
+			"probability", "probability", "probability_configured", "probability_configured",
+		)
+		by_name = {item["name"]: item for item in result["deals"]}
+		self.assertEqual((by_name["OVERRIDE"]["weighted_value"], by_name["ZERO"]["weighted_value"], by_name["DEFAULT"]["weighted_value"]), (25, 0, 80))
+		self.assertEqual(by_name["OVERRIDE"]["probability_source"], "DoubleT Deal.probability")
+		self.assertEqual(by_name["DEFAULT"]["probability_source"], "DoubleT Deal Stage.probability")
+
+	def test_configured_forecast_with_only_unknown_probabilities_is_not_zero(self):
+		result = _summarize_forecast(
+			[deal("UNKNOWN", 100, expected_close_date="2026-12-01", probability=0, probability_configured=0)],
+			{}, date(2026, 12, 1), date(2026, 12, 31), date(2026, 12, 1),
+			"probability", None, "probability_configured",
+		)
+		self.assertTrue(result["weighted_available"])
+		self.assertIsNone(result["weighted_forecast_value"])
+		self.assertIsNone(result["months"][0]["weighted_value"])
 
 	def test_current_stage_summary_remains_creation_cohort_based(self):
 		deals = [

@@ -100,9 +100,10 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useMediaQuery } from '@vueuse/core'
 import { useRoute } from 'vue-router'
+import { Badge, call } from 'frappe-ui'
 import UserDropdown from '@/components/UserDropdown.vue'
 import SidebarLink from '@/components/SidebarLink.vue'
 import Section from '@/components/CollapsibleSection.vue'
@@ -117,7 +118,6 @@ import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import CollapseSidebar from '@/components/Icons/CollapseSidebar.vue'
 import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import { REPORTS_HOME_ROUTE } from '@/utils/reports'
-import { Badge } from 'frappe-ui'
 
 const route = useRoute()
 const narrow = useMediaQuery('(max-width: 1023px)')
@@ -132,7 +132,18 @@ function toggleCollapse() {
   localStorage.setItem('isSidebarCollapsed', String(collapsedPreference.value))
 }
 
-const links = [
+const canReadOrders = ref(true)
+const canReadAppointments = ref(true)
+onMounted(() => {
+  call('frappe.client.has_permission', { doctype: 'DoubleT Order', docname: '', perm_type: 'read' })
+    .then((res) => { canReadOrders.value = Boolean(res?.has_permission) })
+    .catch(() => { canReadOrders.value = false })
+  call('frappe.client.has_permission', { doctype: 'DoubleT Appointment', docname: '', perm_type: 'read' })
+    .then((res) => { canReadAppointments.value = Boolean(res?.has_permission) })
+    .catch(() => { canReadAppointments.value = false })
+})
+
+const links = computed(() => [
   { label: 'Dashboard', icon: DashboardIcon, to: 'Dashboard' },
   { label: 'Reports', icon: 'bar-chart-2', to: REPORTS_HOME_ROUTE },
   { label: 'Leads', icon: LeadsIcon, to: 'Leads' },
@@ -142,10 +153,12 @@ const links = [
   { label: 'Products', icon: 'package', to: 'Products' },
   { label: 'Price Lists', icon: 'tags', to: 'PriceLists' },
   { label: 'Quotations', icon: 'file-text', to: 'Quotations' },
-  { label: 'Orders', icon: 'shopping-cart', to: 'Orders' },
+  { label: 'Quotation Templates', icon: 'layers', to: 'QuotationTemplates' },
+  ...(canReadOrders.value ? [{ label: 'Orders', icon: 'shopping-cart', to: 'Orders' }] : []),
+  ...(canReadAppointments.value ? [{ label: 'Appointments', icon: 'calendar', to: 'Appointments' }] : []),
   { label: 'Notes', icon: NoteIcon, to: 'Notes' },
   { label: 'Tasks', icon: TaskIcon, to: 'Tasks' },
-]
+])
 
 const contactCenterLinks = [
   { label: 'Inbox', icon: 'inbox', to: 'Inbox' },

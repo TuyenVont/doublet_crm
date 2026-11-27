@@ -10,6 +10,9 @@
   "status",
   "priority",
   "due_date",
+  "reminder_type",
+  "reminder_at",
+  "reminder_sent_at",
   "assigned_to",
   "reference_doctype",
   "reference_docname",
@@ -51,6 +54,25 @@
    "fieldtype": "Datetime",
    "label": "Due Date",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "reminder_type",
+   "fieldtype": "Select",
+   "label": "Reminder",
+   "options": "No Reminder\n15 Minutes Before\n30 Minutes Before\n1 Hour Before\n1 Day Before\nCustom",
+   "default": "No Reminder"
+  },
+  {
+   "fieldname": "reminder_at",
+   "fieldtype": "Datetime",
+   "label": "Reminder At"
+  },
+  {
+   "fieldname": "reminder_sent_at",
+   "fieldtype": "Datetime",
+   "label": "Reminder Sent At",
+   "read_only": 1,
+   "no_copy": 1
   },
   {
    "fieldname": "assigned_to",

@@ -24,6 +24,22 @@ const backendSource = readFileSync(
   new URL('../../doublet_crm/reports.py', import.meta.url),
   'utf8',
 )
+const dealDataPanelSource = readFileSync(
+  new URL('../src/components/Deal/DoubleTDealDataPanel.vue', import.meta.url),
+  'utf8',
+)
+const dealInfoPanelSource = readFileSync(
+  new URL('../src/components/Deal/DoubleTDealInfoPanel.vue', import.meta.url),
+  'utf8',
+)
+const dealMeta = JSON.parse(readFileSync(
+  new URL('../../doublet_crm/doublet_crm/doctype/doublet_deal/doublet_deal.json', import.meta.url),
+  'utf8',
+))
+const stageMeta = JSON.parse(readFileSync(
+  new URL('../../doublet_crm/doublet_crm/doctype/doublet_deal_stage/doublet_deal_stage.json', import.meta.url),
+  'utf8',
+))
 
 test('Pipeline Analytics replaces only its Reports placeholder', () => {
   assert.match(reportsPageSource, /'pipeline-analytics': PipelineAnalyticsReport/)
@@ -49,7 +65,25 @@ test('Pipeline Analytics reuses common filters and the focused API', () => {
   assert.match(pipelineSource, /Stage Aging drill-down/)
   assert.match(pipelineSource, /Average days in current stage/)
   assert.match(pipelineSource, /deal\.unknown_reason/)
+  assert.match(pipelineSource, /month\.weighted_value == null/)
+  assert.match(pipelineSource, /deal\.stage_entry_actor/)
+  assert.match(pipelineSource, /probabilitySource\(deal\.probability_source\)/)
   assert.match(pipelineSource, /compare_previous/)
+})
+
+test('Forecast probability and Stage transition evidence have explicit schema and editing paths', () => {
+  const dealFields = Object.fromEntries(dealMeta.fields.map(field => [field.fieldname, field]))
+  const stageFields = Object.fromEntries(stageMeta.fields.map(field => [field.fieldname, field]))
+  assert.equal(dealFields.probability.fieldtype, 'Percent')
+  assert.equal(stageFields.probability.fieldtype, 'Percent')
+  assert.equal(dealFields.probability_configured.fieldtype, 'Check')
+  assert.equal(stageFields.probability_configured.fieldtype, 'Check')
+  assert.equal(dealFields.stage_entered_on.read_only, 1)
+  assert.equal(dealFields.stage_entered_by.read_only, 1)
+  assert.match(dealDataPanelSource, /v-model="form\.probability"/)
+  assert.match(dealInfoPanelSource, /v-model="detailsForm\.probability"/)
+  assert.match(dealDataPanelSource, /Number\(form\.probability\) > 100/)
+  assert.match(dealInfoPanelSource, /Number\(detailsForm\.probability\) > 100/)
 })
 
 test('stage chart and Deal rows use existing SPA routes', () => {

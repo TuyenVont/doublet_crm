@@ -1,3 +1,42 @@
+export const EXPIRABLE_STATUSES = new Set(['Draft', 'Sent'])
+export const BLOCKING_APPROVAL_STATUSES = new Set(['Required', 'Pending', 'Rejected'])
+
+export function isQuotationExpired(quotation, siteToday) {
+  if (!quotation?.valid_until || !EXPIRABLE_STATUSES.has(quotation.status)) return false
+  const today = siteToday || new Date().toISOString().slice(0, 10)
+  return String(quotation.valid_until).slice(0, 10) < String(today).slice(0, 10)
+}
+
+export function isApprovalBlockingSend(quotation) {
+  return BLOCKING_APPROVAL_STATUSES.has(quotation?.approval_status)
+}
+
+export function approvalBadgeClass(status) {
+  switch (status) {
+    case 'Approved':
+      return 'bg-green-100 text-green-800'
+    case 'Pending':
+      return 'bg-amber-100 text-amber-800'
+    case 'Required':
+      return 'bg-yellow-100 text-yellow-800'
+    case 'Rejected':
+      return 'bg-red-100 text-red-800'
+    default:
+      return 'bg-surface-gray-2 text-ink-gray-6'
+  }
+}
+
+export function buildQuotationItemsFromTemplate(payload) {
+  const rows = Array.isArray(payload?.items) ? payload.items : []
+  return rows.map((row) => ({
+    ...createQuotationItem(
+      { name: row.product, product_name: row.product_name, sku: row.sku },
+      row.quantity,
+    ),
+    unit_price: row.unit_price ?? '',
+  }))
+}
+
 export function money(value) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
