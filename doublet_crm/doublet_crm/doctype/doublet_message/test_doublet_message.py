@@ -4,7 +4,9 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from doublet_crm.patches.setup_zalo_lead_source import execute
+from doublet_crm.zalo_inbox import get_conversation_info
 from doublet_crm.zalo_oa import CONVERSATION, LEAD, LEAD_SOURCE, MESSAGE, receive_mock_text
+from doublet_crm.zalo_workflow import update_conversation
 
 
 class TestDoubleTMessage(FrappeTestCase):
@@ -36,9 +38,9 @@ class TestDoubleTMessage(FrappeTestCase):
         message = frappe.get_doc(MESSAGE, first["message"])
         self.assertEqual(conversation.external_user_id, self.payload["external_user_id"])
         self.assertEqual(conversation.oa_id, self.payload["oa_id"])
-        self.assertEqual(first["lead"], conversation.lead)
-        self.assertEqual(frappe.db.get_value(LEAD, first["lead"], "source"), LEAD_SOURCE)
-        self.assertEqual(frappe.db.get_value(LEAD, first["lead"], "status"), "NEW")
+        self.assertIsNone(first["lead"])
+        self.assertFalse(conversation.lead)
+        self.assertEqual(conversation.handling_status, "Waiting")
         self.assertEqual(message.conversation, conversation.name)
         self.assertEqual(message.external_message_id, self.payload["external_message_id"])
         self.assertEqual(message.source, "zalo_oa")
@@ -58,32 +60,39 @@ class TestDoubleTMessage(FrappeTestCase):
         self.assertNotEqual(first["conversation"], other_oa["conversation"])
         self.assertNotEqual(first["message"], other_oa["message"])
         self.assertEqual(first["lead"], second["lead"])
-        self.assertNotEqual(first["lead"], other_oa["lead"])
+        self.assertIsNone(other_oa["lead"])
 
-    def test_replay_links_a_conversation_created_before_lead_support(self):
+    def link_new_lead(self, conversation):
+        info = get_conversation_info(conversation)
+        update_conversation(conversation, "Create Lead", "create-lead", info["version"], lead_name="Zalo test")
+        return get_conversation_info(conversation)["lead"]
+
+    def test_replay_preserves_an_explicit_customer_link(self):
         first = self.receive()
-        frappe.db.set_value(CONVERSATION, first["conversation"], "lead", None)
-        frappe.delete_doc(LEAD, first["lead"])
+        lead = self.link_new_lead(first["conversation"])
 
         replay = self.receive()
 
         self.assertTrue(replay["duplicate"])
         self.assertEqual(replay["message"], first["message"])
-        self.assertEqual(frappe.db.get_value(CONVERSATION, first["conversation"], "lead"), replay["lead"])
+        self.assertEqual(replay["lead"], lead)
+        self.assertEqual(frappe.db.get_value(LEAD, lead, "source"), LEAD_SOURCE)
+        self.assertEqual(frappe.db.get_value(LEAD, lead, "status"), "NEW")
         self.assertEqual(frappe.db.count(MESSAGE, {"conversation": first["conversation"]}), 1)
 
     def test_converted_lead_returns_contact_without_creating_another_lead(self):
         first = self.receive()
+        lead = self.link_new_lead(first["conversation"])
         contact = frappe.get_doc({"doctype": "DoubleT Contact", "first_name": "Zalo test"}).insert()
         frappe.db.set_value(
-            LEAD, first["lead"], {"status": "CONVERTED", "converted_contact": contact.name}
+            LEAD, lead, {"status": "CONVERTED", "converted_contact": contact.name}
         )
 
         result = self.receive(external_message_id="after-conversion")
 
-        self.assertEqual(result["lead"], first["lead"])
+        self.assertEqual(result["lead"], lead)
         self.assertEqual(result["contact"], contact.name)
-        self.assertEqual(frappe.db.get_value(LEAD, first["lead"], "status"), "CONVERTED")
+        self.assertEqual(frappe.db.get_value(LEAD, lead, "status"), "CONVERTED")
 
     def test_reused_message_id_for_a_different_sender_is_rejected(self):
         self.receive()

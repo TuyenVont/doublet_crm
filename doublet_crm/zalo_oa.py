@@ -11,6 +11,7 @@ SOURCE = "zalo_oa"
 CONVERSATION = "DoubleT Conversation"
 MESSAGE = "DoubleT Message"
 LEAD = "DoubleT Lead"
+CONTACT = "DoubleT Contact"
 LEAD_SOURCE = "Zalo OA"
 
 
@@ -46,41 +47,24 @@ def _parse_sent_at(value):
         frappe.throw(_("Sent At is outside the supported datetime range."), frappe.ValidationError)
 
 
-def _message_result(conversation_name, message_name, *, duplicate):
-    conversation = frappe.get_doc(CONVERSATION, conversation_name, for_update=True)
-    if conversation.lead:
-        lead = frappe.get_doc(LEAD, conversation.lead, for_update=True)
-        lead.check_permission("read")
-    else:
-        conversation.check_permission("write")
-        lead = frappe.get_doc({
-            "doctype": LEAD,
-            "first_name": f"Zalo user {conversation.external_user_id}"[:140],
-            "source": LEAD_SOURCE,
-            "status": "NEW",
-        }).insert()
-        conversation.db_set("lead", lead.name)
-
-    contact = lead.converted_contact
-    if contact and not frappe.has_permission("DoubleT Contact", "read", doc=contact):
+def _message_result(doc, message_name, *, duplicate):
+    lead = doc.lead if doc.lead and frappe.has_permission(LEAD, "read", doc=doc.lead) else None
+    contact = doc.contact
+    if not contact and lead:
+        contact = frappe.db.get_value(LEAD, lead, "converted_contact")
+    if contact and not frappe.has_permission(CONTACT, "read", doc=contact):
         contact = None
-    return {
-        "conversation": conversation_name,
-        "message": message_name,
-        "duplicate": duplicate,
-        "lead": lead.name,
-        "contact": contact,
-    }
+    return {"conversation": doc.name, "message": message_name, "duplicate": duplicate,
+            "lead": lead, "contact": contact}
 
 
-def _duplicate_result(message_name, actual_conversation, expected_conversation):
-    if actual_conversation != expected_conversation:
+def _duplicate_result(doc, message_name, stored):
+    if stored.conversation != doc.name or stored.direction != "inbound":
         frappe.throw(
-            _("This message ID is already associated with a different sender for this OA."),
+            _("This message ID is already associated with a different sender or direction for this OA."),
             frappe.ValidationError,
         )
-
-    return _message_result(actual_conversation, message_name, duplicate=True)
+    return _message_result(doc, message_name, duplicate=True)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -95,16 +79,29 @@ def receive_mock_text(oa_id=None, external_user_id=None, external_message_id=Non
     oa_id = _required_text(oa_id, _("OA ID"), 140).strip()
     user_id = _required_text(external_user_id, _("External User ID"), 140).strip()
     message_id = _required_text(external_message_id, _("External Message ID"), 140).strip()
+    if message_id.startswith("mock-reply-"):
+        frappe.throw(_("This message ID prefix is reserved for mock replies."), frappe.ValidationError)
     content = _required_text(content, _("Content"), 10000)
     sent_at = _parse_sent_at(sent_at)
 
     conversation_name = external_key(SOURCE, oa_id, user_id)
     message_name = external_key(SOURCE, oa_id, message_id)
 
-    existing_conversation = frappe.db.get_value(MESSAGE, message_name, "conversation")
-    if existing_conversation:
-        return _duplicate_result(message_name, existing_conversation, conversation_name)
+    from doublet_crm.zalo_workflow import get_conversation, reopen_on_inbound
 
+    # Create the parent if needed, then serialize all updates to the thread.
+    savepoint = "doublet_inbound_message"
+    frappe.db.savepoint(savepoint)
+    parent_exists = frappe.db.exists(CONVERSATION, conversation_name)
+    if not parent_exists:
+        frappe.get_doc({
+            "doctype": CONVERSATION,
+            "source": SOURCE,
+            "oa_id": oa_id,
+            "external_user_id": user_id,
+        }).insert(ignore_if_duplicate=True)
+    doc = get_conversation(conversation_name, for_update=True)
+    key_fields = ["conversation", "direction"]
     message = frappe.get_doc({
         "doctype": MESSAGE,
         "conversation": conversation_name,
@@ -116,31 +113,17 @@ def receive_mock_text(oa_id=None, external_user_id=None, external_message_id=Non
         "sent_at": sent_at,
         "is_simulated": 1,
     })
-
-    savepoint = "doublet_inbound_message"
-    frappe.db.savepoint(savepoint)
     try:
-        if not frappe.db.exists(CONVERSATION, conversation_name):
-            frappe.get_doc({
-                "doctype": CONVERSATION,
-                "source": SOURCE,
-                "oa_id": oa_id,
-                "external_user_id": user_id,
-            }).insert(ignore_if_duplicate=True)
-
-        # The conversation above is server-resolved. A concurrent insert may be
-        # outside the transaction snapshot used by Frappe's link lookup.
+        # A concurrently created parent may be outside the initial read snapshot.
         message.insert(ignore_links=True)
     except frappe.DuplicateEntryError:
         frappe.db.rollback(save_point=savepoint)
-        frappe.db.release_savepoint(savepoint)
-        # A locking read can see the winner even under repeatable read.
-        existing_conversation = frappe.db.get_value(MESSAGE, message_name, "conversation", for_update=True)
-        if not existing_conversation:
+        stored = frappe.db.get_value(MESSAGE, message_name, key_fields, as_dict=True, for_update=True)
+        if not stored:
             raise
-        frappe.clear_last_message()
-        return _duplicate_result(message_name, existing_conversation, conversation_name)
+        return _duplicate_result(doc, message_name, stored)
+    finally:
+        frappe.db.release_savepoint(savepoint)
 
-    result = _message_result(conversation_name, message_name, duplicate=False)
-    frappe.db.release_savepoint(savepoint)
-    return result
+    reopen_on_inbound(doc, sent_at)
+    return _message_result(doc, message_name, duplicate=False)

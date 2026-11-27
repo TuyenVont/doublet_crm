@@ -8,7 +8,8 @@
   "title",
   "content",
   "reference_doctype",
-  "reference_name"
+  "reference_name",
+  "source_call_log"
  ],
  "fields": [
   {
@@ -36,6 +37,14 @@
    "label": "Related Record",
    "options": "reference_doctype",
    "reqd": 1
+  },
+  {
+   "fieldname": "source_call_log",
+   "fieldtype": "Link",
+   "label": "Source Call Log",
+   "options": "DoubleT Call Log",
+   "read_only": 1,
+   "unique": 1
   }
  ],
  "permissions": [

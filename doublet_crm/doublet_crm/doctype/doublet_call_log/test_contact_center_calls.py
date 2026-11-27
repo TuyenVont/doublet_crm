@@ -207,12 +207,14 @@ class TestContactCenterCalls(FrappeTestCase):
 		calls.link_customer(log.name, contact.doctype, contact.name)
 		calls.assign_call(log.name, sales_a)
 		frappe.set_user(sales_a)
-		started = calls.open_callback(log.name)
+		started = calls.open_callback(log.name, due_date="2026-12-15")
+		self.assertEqual(str(started["callback_task"]["due_date"]), "2026-12-15")
 		task_id = started["callback_task"]["name"]
 		self.assertEqual(started["handling_status"], "In Progress")
 		self.assertEqual(calls.open_callback(log.name)["callback_task"]["name"], task_id)
 		self.assertEqual(frappe.db.count(calls.TASK, {"callback_call_log": log.name}), 1)
 		task = get(calls.TASK, task_id)
+		self.assertEqual(str(task["due_date"]), "2026-12-15 23:59:59")
 		self.assertEqual((task["assigned_to"], task["reference_doctype"], task["reference_docname"]),
 			(sales_a, contact.doctype, contact.name))
 		self.assertIn(task_id, frappe.get_list(calls.TASK, pluck="name"))
@@ -226,6 +228,7 @@ class TestContactCenterCalls(FrappeTestCase):
 		frappe.set_user(manager)
 		transferred = calls.assign_call(log.name, sales_b)
 		self.assertEqual(transferred["callback_task"]["assigned_to"], sales_b)
+		self.assertEqual(str(transferred["callback_task"]["due_date"]), "2026-12-15")
 		frappe.set_user(sales_a)
 		with self.assertRaises(frappe.PermissionError):
 			get(calls.TASK, task_id)

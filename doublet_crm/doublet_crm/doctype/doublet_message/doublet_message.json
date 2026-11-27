@@ -74,6 +74,14 @@
    "create": 1,
    "read": 1,
    "role": "System Manager"
+  },
+  {
+   "read": 1,
+   "role": "Sales Manager"
+  },
+  {
+   "read": 1,
+   "role": "Sales User"
   }
  ],
  "sort_field": "sent_at",

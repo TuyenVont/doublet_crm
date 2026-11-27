@@ -1,0 +1,116 @@
+{
+ "doctype": "DocType",
+ "module": "DoubleT CRM",
+ "name": "DoubleT Conversation Event",
+ "engine": "InnoDB",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1
+  }
+ ],
+ "field_order": [
+  "conversation",
+  "action",
+  "actor",
+  "occurred_at",
+  "previous_assignee",
+  "new_assignee",
+  "reason",
+  "previous_customer_type",
+  "previous_customer",
+  "customer_type",
+  "customer",
+  "request_id",
+  "request_hash"
+ ],
+ "fields": [
+  {
+   "fieldname": "conversation",
+   "label": "Conversation",
+   "fieldtype": "Link",
+   "options": "DoubleT Conversation",
+   "reqd": 1,
+   "search_index": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "action",
+   "label": "Action",
+   "fieldtype": "Data",
+   "read_only": 1
+  },
+  {
+   "fieldname": "actor",
+   "label": "Actor",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "User"
+  },
+  {
+   "fieldname": "occurred_at",
+   "label": "Occurred At",
+   "fieldtype": "Datetime",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_assignee",
+   "label": "Previous Assignee",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "User"
+  },
+  {
+   "fieldname": "new_assignee",
+   "label": "New Assignee",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "User"
+  },
+  {
+   "fieldname": "reason",
+   "label": "Reason",
+   "fieldtype": "Small Text",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_customer_type",
+   "label": "Previous Customer Type",
+   "fieldtype": "Data",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_customer",
+   "label": "Previous Customer",
+   "fieldtype": "Data",
+   "read_only": 1
+  },
+  {
+   "fieldname": "customer_type",
+   "label": "Customer Type",
+   "fieldtype": "Data",
+   "read_only": 1
+  },
+  {
+   "fieldname": "customer",
+   "label": "Customer",
+   "fieldtype": "Data",
+   "read_only": 1
+  },
+  {
+   "fieldname": "request_id",
+   "label": "Request ID",
+   "fieldtype": "Data",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "request_hash",
+   "label": "Request Hash",
+   "fieldtype": "Data",
+   "read_only": 1,
+   "hidden": 1
+  }
+ ],
+ "track_changes": 0
+}

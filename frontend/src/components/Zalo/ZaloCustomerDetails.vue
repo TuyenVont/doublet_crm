@@ -15,7 +15,7 @@
       <section>
         <p class="text-xs font-medium uppercase tracking-wide text-ink-gray-5">{{ __('Zalo customer') }}</p>
         <p class="mt-2 break-words text-sm font-semibold text-ink-gray-9">
-          {{ details.lead?.label || conversation.display_name || details.external_user_id }}
+          {{ conversation.display_name || __(conversation.customer_linked ? 'Linked customer' : 'Unidentified Customer') }}
         </p>
         <dl class="mt-3 space-y-2 text-sm">
           <div class="flex justify-between gap-3">
@@ -106,5 +106,5 @@ async function load() {
   }
 }
 
-watch(conversationName, load, { immediate: true })
+watch([conversationName, () => props.conversation.version], load, { immediate: true })
 </script>

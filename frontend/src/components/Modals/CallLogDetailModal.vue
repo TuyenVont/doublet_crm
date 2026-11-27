@@ -8,7 +8,8 @@
       >
         <section
           ref="panel"
-          class="flex h-full w-full min-w-0 flex-col bg-white shadow-2xl outline-none sm:max-w-[34rem]"
+          class="flex h-full w-full min-w-0 flex-col bg-white shadow-2xl outline-none"
+          :class="activeSection === 'ai' ? 'sm:max-w-[46rem]' : 'sm:max-w-[34rem]'"
           role="dialog"
           aria-modal="true"
           :aria-label="__('Call details')"
@@ -54,6 +55,59 @@
           <slot name="feedback" />
 
           <div ref="body" class="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface-gray-1 px-3 py-3 sm:px-5 sm:py-4">
+            <section
+              v-show="activeSection === 'overview' || activeSection === 'ai'"
+              class="mb-3 rounded-xl border border-outline-gray-2 bg-white p-3.5 sm:p-4"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h3 class="flex items-center gap-2 text-sm font-semibold text-ink-gray-9">
+                  <FeatherIcon name="headphones" class="size-4 text-ink-gray-5" aria-hidden="true" />
+                  {{ __('Recording') }}
+                </h3>
+                <Badge
+                  v-if="callLog.recording?.state === 'Available' && !recordingFailed"
+                  :label="__('Recording ready')"
+                  theme="green"
+                />
+              </div>
+              <div v-if="callLog.recording?.state === 'Available' && !recordingFailed" class="mt-2 space-y-2">
+                <a
+                  :href="callLog.recording.url"
+                  :aria-label="__('Open recording')"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="flex items-start gap-1.5 break-all text-sm font-medium text-ink-blue-6 hover:underline"
+                >
+                  {{ callLog.recording.label }}
+                  <FeatherIcon name="arrow-up-right" class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                </a>
+                <audio
+                  class="block h-9 w-full min-w-0"
+                  controls
+                  preload="metadata"
+                  :src="callLog.recording.url"
+                  :aria-label="__('Call recording')"
+                  @error="recordingFailed = true"
+                />
+              </div>
+              <div v-else class="mt-2 rounded-md bg-surface-gray-1 p-2.5 text-sm leading-5 text-ink-gray-7">
+                <p role="status">{{ __(recordingMessage) }}</p>
+                <Button
+                  v-if="recordingFailed"
+                  class="mt-2"
+                  variant="subtle"
+                  :label="__('Retry playback')"
+                  @click="recordingFailed = false"
+                />
+              </div>
+              <Button
+                v-if="activeSection === 'overview' && callLog.can_use_ai_summary"
+                class="mt-3 w-full sm:w-auto"
+                variant="subtle"
+                :label="__(callLog.is_recording_demo ? 'View demo summary' : 'Open AI Call Assistant')"
+                @click="section = 'ai'"
+              />
+            </section>
             <div v-if="activeSection === 'overview'" class="space-y-3 sm:space-y-4">
               <section class="rounded-xl border border-outline-gray-2 bg-white p-3.5 sm:p-4">
                 <h3 class="text-sm font-semibold text-ink-gray-9">{{ __('Call information') }}</h3>
@@ -79,43 +133,6 @@
                     <dd class="mt-0.5 break-words text-ink-gray-8">{{ callLog.line_number }}</dd>
                   </div>
                 </dl>
-              </section>
-
-              <section class="rounded-xl border border-outline-gray-2 bg-white p-3.5 sm:p-4">
-                <h3 class="flex items-center gap-2 text-sm font-semibold text-ink-gray-9">
-                  <FeatherIcon name="headphones" class="size-4 text-ink-gray-5" aria-hidden="true" />
-                  {{ __('Recording') }}
-                </h3>
-                <div v-if="callLog.recording?.state === 'Available' && !recordingFailed" class="mt-2 space-y-2">
-                  <a
-                    :href="callLog.recording.url"
-                    :aria-label="__('Open recording')"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="flex items-start gap-1.5 break-all text-sm font-medium text-ink-blue-6 hover:underline"
-                  >
-                    {{ callLog.recording.label }}
-                    <FeatherIcon name="arrow-up-right" class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                  </a>
-                  <audio
-                    class="block h-9 w-full min-w-0"
-                    controls
-                    preload="none"
-                    :src="callLog.recording.url"
-                    :aria-label="__('Call recording')"
-                    @error="recordingFailed = true"
-                  />
-                </div>
-                <div v-else class="mt-2 rounded-md bg-surface-gray-1 p-2.5 text-sm leading-5 text-ink-gray-7">
-                  <p role="status">{{ __(recordingMessage) }}</p>
-                  <Button
-                    v-if="recordingFailed"
-                    class="mt-2"
-                    variant="subtle"
-                    :label="__('Retry playback')"
-                    @click="recordingFailed = false"
-                  />
-                </div>
               </section>
 
               <section id="call-customer-details" class="rounded-xl border border-outline-gray-2 bg-white p-3.5 sm:p-4">
@@ -202,7 +219,7 @@ const sections = computed(() => {
   if (props.callLog.can_handle) {
     items.push({ value: 'handling', label: 'Handling' }, { value: 'history', label: 'History' })
   }
-  if (props.callLog.can_use_ai_summary) items.push({ value: 'ai', label: 'AI Summary' })
+  if (props.callLog.can_use_ai_summary) items.push({ value: 'ai', label: 'AI Call Assistant' })
   return items
 })
 const recordingMessages = {

@@ -112,7 +112,7 @@ Other containers: crm-mariadb-1, crm-redis-1
 | Call Log | `doublet_crm.api.create_call_log` accepts authenticated integration events and uses `external_call_id` for duplicate detection. The controller can match a unique Lead or Contact by phone. Reported local WSL changes add explicit Deal references and use `frappe.client.get` for call details. Verify the active checkout before relying on those changes. |
 | Dashboard | `doublet_crm/dashboard.py` defines native Frappe Desk cards and charts and is wired to `after_migrate`. The custom CRM route renders `Dashboard.vue`, which calls `doublet_crm.dashboard.get_overview` for permission-scoped data. |
 | Zalo OA inbound | `doublet_crm.zalo_oa.receive_mock_text` receives simulated text through an authenticated request. A `DoubleT Conversation` is identified by source, OA ID, and external user ID. A `DoubleT Message` is identified by source, OA ID, and external message ID. Replaying a message returns the existing message and conversation. |
-| Zalo OA Lead linking | `DoubleT Conversation.lead` links to `DoubleT Lead`. The inbound flow creates a Lead with source `Zalo OA` and status `NEW` when the conversation first needs a Lead. Later messages reuse that link. A previously saved mock conversation can acquire the link when its message is replayed. The response can include the converted Contact when the caller has read access. |
+| Zalo OA Lead linking | `DoubleT Conversation.lead` links to `DoubleT Lead`. New Zalo conversations start unidentified. Inbox users with CRM permissions can link an exact Lead or Contact, or create a Lead with source `Zalo OA` and status `NEW`. Later messages and replays retain the link. The response can include the converted Contact when the caller has read access. |
 | Zalo OA Inbox | `doublet_crm.zalo_inbox` builds latest-message summaries from permission-filtered conversations/messages, applies customer/user search plus OA and reply-state filters before pagination, and orders by latest activity with conversation name as the stable tie-breaker. A mock reply is stored as a `DoubleT Message` with outbound direction and the simulation flag set. |
 | Zalo OA chat in record details | Task 24B adds a chat tab inside Lead, Deal, Contact and Company detail pages. `ZaloConversationThread.vue` provides the shared history/composer used by the record tab and standalone Inbox; `ZaloRecordChat.vue` resolves and selects record conversations. `doublet_crm.zalo_inbox` exposes permission-checked record list/history/reply APIs. |
 
@@ -153,6 +153,8 @@ This section defines the target behavior for Task 24B.
 - The current test flow covers simulated inbound and outbound messages. Live webhook ingestion and live outbound delivery require OA access and separate acceptance testing.
 
 ## Zalo OA Inbox contract — Task 24C
+
+See the [Contact Center QA and integration guide](CONTACT_CENTER.md) for handling, recording demos and release verification.
 
 - `list_conversations(start, search, oa_id, reply_status)` applies search and filters to the complete permission-filtered set before slicing a page. It returns latest-message preview, direction, timestamp, reply state, total count and available OA values.
 - Needs reply means the latest message is inbound; Replied means it is outbound. Conversations without messages appear only in All. Reading or refreshing does not mutate this state.

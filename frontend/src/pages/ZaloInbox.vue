@@ -3,6 +3,7 @@
     <LayoutHeader>
       <template #left-header>
         <h1 class="text-lg-medium text-ink-gray-9">{{ __('Inbox') }}</h1>
+        <Badge :label="__('Zalo OA · MOCK')" theme="orange" class="ml-2" />
       </template>
       <template #right-header>
         <Button :label="__('Refresh')" :loading="listPending" @click="refresh" />
@@ -39,6 +40,10 @@
               <option value="Replied">{{ __('Replied') }}</option>
             </select>
           </div>
+          <select v-model="handlingFilter" :aria-label="__('Handling status')" class="w-full rounded-md border border-outline-gray-3 bg-surface-white px-2 py-2 text-sm">
+            <option value="">{{ __('All handling statuses') }}</option>
+            <option v-for="status in handlingStatuses" :key="status" :value="status">{{ __(status) }}</option>
+          </select>
           <p class="text-xs text-ink-gray-5">{{ __('{0} conversations', [totalConversations]) }}</p>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto">
@@ -58,11 +63,11 @@
             @click="openConversation(item)"
           >
             <span class="flex items-start justify-between gap-2">
-              <span class="min-w-0 truncate text-sm font-medium">{{ item.display_name || item.external_user_id }}</span>
+              <span class="min-w-0 truncate text-sm font-medium">{{ customerLabel(item) }}</span>
               <span class="shrink-0 text-[11px] text-ink-gray-5">{{ formatMessageTime(item.last_message_sent_at) }}</span>
             </span>
             <span class="mt-1 flex items-center justify-between gap-2 text-xs text-ink-gray-5">
-              <span class="truncate">{{ __('OA') }} {{ item.oa_id }}</span>
+              <span class="truncate">{{ __('OA') }} {{ item.oa_id }} · {{ __(item.handling_status) }}</span>
               <span
                 v-if="item.reply_status"
                 class="shrink-0 rounded-full px-2 py-0.5"
@@ -83,14 +88,24 @@
         <header class="flex flex-wrap items-center gap-3 border-b border-outline-gray-2 px-4 py-3">
           <Button class="md:hidden" :label="__('Conversations')" @click="closeConversation" />
           <div class="min-w-0 flex-1">
-            <h2 class="truncate text-sm font-semibold">{{ selected.display_name || selected.external_user_id }}</h2>
-            <p class="mt-1 truncate text-xs text-ink-gray-5">{{ __('Zalo OA') }} · {{ selected.oa_id }}</p>
+            <h2 class="truncate text-sm font-semibold">{{ customerLabel(selected) }}</h2>
+            <p class="mt-1 truncate text-xs text-ink-gray-5">{{ selected.oa_id }} · {{ selected.external_user_id }}</p>
           </div>
           <Button
             :label="detailsOpen ? __('Hide customer details') : __('Customer details')"
             @click="detailsOpen = !detailsOpen"
           />
         </header>
+
+        <div class="space-y-2 border-b border-outline-gray-2 px-4 py-2">
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-gray-7">
+            <Badge :label="__(selected.handling_status)" />
+            <span>{{ selected.assigned_to || __('Unassigned') }}</span>
+            <span>{{ __('First response') }} · {{ formatZaloElapsed(selected.first_response_seconds) }}</span>
+            <span v-if="selected.reply_status === 'Needs reply'">{{ __('Waiting for reply') }} · {{ formatZaloElapsed(selected.waiting_seconds) }}</span>
+          </div>
+          <ZaloConversationActions :key="selected.name" :conversation="selected" @changed="refresh" />
+        </div>
 
         <div class="flex min-h-0 flex-1">
           <ZaloConversationThread
@@ -118,7 +133,9 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Button, call } from 'frappe-ui'
+import { Badge, Button, call } from 'frappe-ui'
+import { formatZaloElapsed } from '@/utils/zaloInbox'
+import ZaloConversationActions from '@/components/Zalo/ZaloConversationActions.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import ZaloConversationThread from '@/components/Zalo/ZaloConversationThread.vue'
 import ZaloCustomerDetails from '@/components/Zalo/ZaloCustomerDetails.vue'
@@ -133,12 +150,15 @@ const listError = ref('')
 const searchQuery = ref('')
 const oaFilter = ref('')
 const replyFilter = ref('All')
+const handlingFilter = ref('')
+const handlingStatuses = ['Waiting', 'In Progress', 'Resolved']
 const oaOptions = ref([])
 const totalConversations = ref(0)
 const detailsOpen = ref(false)
 const route = useRoute()
 const router = useRouter()
 let listRequest = 0
+let detailRequest = 0
 let filterTimer = null
 
 async function loadConversations(append = false) {
@@ -153,6 +173,7 @@ async function loadConversations(append = false) {
       search: searchQuery.value,
       oa_id: oaFilter.value,
       reply_status: replyFilter.value,
+      handling_status: handlingFilter.value,
     })
     if (request !== listRequest) return
     canRead.value = result.can_read
@@ -163,7 +184,8 @@ async function loadConversations(append = false) {
     if (!canRead.value) {
       closeConversation()
     } else if (selected.value) {
-      selected.value = conversations.value.find((item) => item.name === selected.value.name) || selected.value
+      const row = conversations.value.find((item) => item.name === selected.value.name)
+      if (row) selected.value = { ...selected.value, ...row }
     }
   } catch {
     if (request === listRequest) listError.value = __('Could not load conversations. Try refreshing.')
@@ -173,6 +195,7 @@ async function loadConversations(append = false) {
 }
 
 function closeConversation() {
+  ++detailRequest
   selected.value = null
   detailsOpen.value = false
   if (route.query.conversation) {
@@ -182,31 +205,48 @@ function closeConversation() {
   }
 }
 
-function openConversation(item, updateRoute = true) {
+function openConversation(item) {
   if (selected.value?.name === item.name) return
   selected.value = item
   detailsOpen.value = false
-  if (updateRoute && route.query.conversation !== item.name) {
+  if (route.query.conversation !== item.name) {
     router.replace({ query: { ...route.query, conversation: item.name } })
+  }
+  loadConversationInfo(item.name)
+}
+
+async function loadConversationInfo(conversation) {
+  const request = ++detailRequest
+  try {
+    const item = await call('doublet_crm.zalo_inbox.get_conversation_info', { conversation })
+    if (request !== detailRequest) return
+    selected.value = item
+  } catch {
+    if (request !== detailRequest) return
+    closeConversation()
+    listError.value = __('Could not open the requested conversation. You may not have access to it.')
   }
 }
 
 async function openRequestedConversation() {
   const conversation = route.query.conversation
   if (!conversation || selected.value?.name === conversation) return
-  try {
-    const item = conversations.value.find((row) => row.name === conversation)
-      || await call('doublet_crm.zalo_inbox.get_conversation_info', { conversation })
-    openConversation(item, false)
-  } catch {
-    listError.value = __('Could not open the requested conversation. You may not have access to it.')
-  }
+  detailsOpen.value = false
+  await loadConversationInfo(conversation)
 }
 
 async function refresh() {
   await loadConversations()
-  await openRequestedConversation()
-  if (selected.value) thread.value?.loadThread()
+  const conversation = selected.value?.name || route.query.conversation
+  if (canRead.value && conversation) {
+    await loadConversationInfo(conversation)
+    if (selected.value?.name === conversation) thread.value?.loadThread()
+  }
+}
+
+function customerLabel(conversation) {
+  return conversation.display_name
+    || __(conversation.customer_linked ? 'Linked customer' : 'Unidentified Customer')
 }
 
 function formatMessageTime(value) {
@@ -221,25 +261,10 @@ function formatMessageTime(value) {
   }).format(date)
 }
 
-function onReplySaved(message) {
+async function onReplySaved() {
   const conversation = selected.value?.name
-  if (!conversation) return
-  const summary = {
-    last_message_content: message.content,
-    last_message_direction: message.direction,
-    last_message_sent_at: message.sent_at,
-    last_message_is_simulated: message.is_simulated,
-    reply_status: 'Replied',
-  }
-  selected.value = { ...selected.value, ...summary }
-  conversations.value = conversations.value
-    .map((item) => item.name === conversation ? { ...item, ...summary } : item)
-    .filter((item) => replyFilter.value !== 'Needs reply' || item.reply_status === 'Needs reply')
-    .sort((a, b) =>
-      String(b.last_message_sent_at || '').localeCompare(String(a.last_message_sent_at || ''))
-      || b.name.localeCompare(a.name),
-    )
-  loadConversations()
+  await loadConversations()
+  if (conversation && selected.value?.name === conversation) await loadConversationInfo(conversation)
 }
 
 function scheduleFilterReload() {
@@ -254,13 +279,14 @@ onMounted(async () => {
 
 watch(() => route.query.conversation, (conversation) => {
   if (!conversation) {
+    ++detailRequest
     selected.value = null
     return
   }
   openRequestedConversation()
 })
 
-watch([searchQuery, oaFilter, replyFilter], scheduleFilterReload)
+watch([searchQuery, oaFilter, replyFilter, handlingFilter], scheduleFilterReload)
 onBeforeUnmount(() => {
   if (filterTimer) clearTimeout(filterTimer)
 })
