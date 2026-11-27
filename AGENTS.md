@@ -25,22 +25,32 @@ Do **not** reread every file on every turn. Read the relevant sections; inspect 
 4. Minimize diff size. Preserve existing public UI workflows, field names, and tests. Avoid unrelated refactors, generated assets, lock files or dependency changes.
 5. Prefer `frappe.get_list` / `frappe.get_doc` with appropriate user permissions; do not bypass Frappe permission checks or expose task data between users. Validate dynamic-link doctype against the four allowed DoubleT entities.
 6. Never invent `crm.*` API assumptions. Identify each inherited dependency and replace only what the current task needs.
-7. Do not execute database writes, fixtures, migrations, data deletion, package installation, or destructive tests without explicit approval. Read-only inspection and builds are permitted when safe.
+7. Do not execute database writes, fixtures, migrations, data deletion, package installation, or destructive tests without explicit approval. Read-only inspection is permitted when safe. Production builds, asset generation and broad verification commands require explicit user approval.
 8. Do not expose API keys, site config secrets, personal data or credentials in chat, commits or logs.
 9. Mark tests as PASS only when actually executed and observed. Use `NOT TESTED` when blocked.
-10. Do not auto-commit or push unless the user asks. Suggest an isolated commit after approval.
+10. Do not commit, push or merge unless explicitly requested. Suggest an isolated commit after approval.
 
 ## Branch and review workflow
 - Use a feature branch/worktree based on verified origin/main; never edit the deploy branch for feature work. Preserve any existing generated local changes and stashes; verify actual status rather than assuming the historical count.
-- Keep successive fixes within the same active Reports work package on the same branch; do not reuse a merged PR as a draft; batch commits and push only when requested for review; reuse a draft PR where applicable.
+- Keep successive fixes within the same active work package on the same branch; do not reuse a merged PR as a draft; batch commits and push only when requested for review; reuse a draft PR where applicable.
 - Implement and run focused tests in the same pass. Use an isolated test site for database-mutating tests, with explicit approval. Do not mutate the running demo site without approval.
 - Record commit, site, roles, commands, PASS/FAIL/NOT TESTED and browser evidence separately. Never infer acceptance from build or test-file existence.
 - Read the actual diff before review. Use current repo package manager/lockfile (Yarn was used successfully on 24 Nov). Keep deploy HTML/assets matched; do not commit incidental build outputs unless release policy requires them.
 
+## Quota-saving mode — default (2026-11-26)
+- Documentation-only work: edit only requested Markdown files; no Graphify commands, tests, build, migration, asset generation or Git mutations.
+- Coding work: read existing root/frontend Graphify with focused queries only when useful and available; never update/rebuild it or run post-update queries. If stale, inspect the relevant source directly. Do not invoke unnecessary subagents or repeat repo-wide scans.
+- Do not run `yarn build`, `npm run build`, `bench build`, broad test suites, migration, package installs or browser automation by default. Run only focused safe tests for the active change; report anything not run as NOT TESTED. User handles build, Graphify and manual browser acceptance separately.
+- No commit, push, merge, PR creation or deploy changes without explicit approval. Keep related fixes on one unmerged branch; the merged PR #33 is not a reusable draft.
+- Current next coding scope: Sales Completion Phase 1 (EXT-05 and EXT-06: new Quotation entry flows) only. Follow CURRENT_TASK.md. Reports EXT-15/33 and REP-13 Phase 1 are parked on separate unmerged worktrees; do not touch them. Later Sales phases need explicit user instruction.
+
+- Default coding model: GPT-5.6 Sol. Use Medium for bounded audit/repair and High for complex business logic or permissions. Recommend another model only when a concrete limitation warrants it; explain first.
+- For new work packages, verify origin/main and use an isolated feature worktree; never mix dirty files from parked branches. Audit existing implementation before adding code.
+
 ## Workflow / stop rule
 - Inspect `CURRENT_TASK.md`, current `git status`, and just the relevant code.
 - List impacted files and risks in 3–6 lines.
-- Make the smallest compatible code change; verify with focused tests/build (no database mutation unless approved).
+- Make the smallest compatible code change; verify with focused, non-mutating tests only; do not run builds unless explicitly approved.
 - Summarize: modified files, PASS/FAIL/NOT TESTED, compatibility concerns, next step. **Stop**. Do not self-assign the next feature or run unbounded fix loops.
 
 ## Repository-specific note
@@ -68,10 +78,10 @@ Do not run graphify update or rebuild graphs.
 The user handles Graphify updates manually.
 If the graph is stale, inspect relevant source directly.
 - In focused review-repair passes, stop after source/tests/docs; leave every Graphify rebuild and post-update query to the user, even when code changed.
-- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not regenerate it in quota-saving mode; report any automatic hook that would regenerate it before proceeding.
 ## Frontend consistency
 
-- Use the Frappe CRM reference screenshots as a visual guide. Before changing a screen, follow the Graphify rules below and inspect the closest existing DoubleT CRM screen of the same type. Implement the change with the repository's existing Vue and frappe-ui stack.
+- Use the Frappe CRM reference screenshots as a visual guide. Before changing a screen, follow the Graphify rules above and inspect the closest existing DoubleT CRM screen of the same type. Implement the change with the repository's existing Vue and frappe-ui stack.
 - Reuse existing layout, theme tokens and components for page headers, buttons, forms, tables, tabs and loading, empty and error states. Search for an existing component or variant before adding one.
 - For list views, place the breadcrumb and primary action in the page header, with search and filters above the table. Follow the reference screen's conventions for row actions, status indicators and pagination.
 - For record detail views, keep the record name and primary action in the header and place tabs below it. Use a side summary when users need record information alongside the active tab. On narrow screens, let that summary collapse or stack below the main content.
@@ -86,3 +96,10 @@ If the graph is stale, inspect relevant source directly.
 - Quota-saving mode: use focused Graphify queries and source reads, avoid repeated repo-wide scans, unnecessary subagents and long browser automation. Run relevant automated checks once per coherent change; rerun failing focused checks after fixes. Human browser acceptance is separate. Never claim a test was run if it was not.
 - Keep rule-based alerts, health scores, forecasts and AI explanations distinct. Never invent stage history, activity timestamps or probabilities. Use explicit business definitions, field/record permissions and source links; unknown or unauthorized data is not zero.
 - Export only the current user’s authorized filtered report; prevent spreadsheet formula injection. Keep personal saved filters isolated by authenticated user and report.
+
+
+## Sales / Catalog and Quotation boundaries
+- Keep Product/Category/Variant, Pricing and Quotation contracts compatible. Standard and active Variant are sellable; Template is not. Do not invent pricing rules or change existing customer precedence without explicit scope.
+- Price resolution is explicit list > Company > Contact > default, with Product price fallback for missing SKU. Distinguish zero from missing. Preserve USD decimal precision and saved Quotation snapshots; do not silently reprice existing rows.
+- Validate customer/Deal/product relationships and permissions on the backend; do not rely only on UI filtering. Preserve PDF/email delivery and manual Mark as Sent semantics.
+- Phase 1 implements EXT-05/06 only. Prioritize missing capabilities; the twelve Cần kiểm items are parked for later acceptance. Inspect existing code only as needed for integration and targeted regression. Do not implement expiry, translation, revision, template or approval features in this pass.

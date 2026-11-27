@@ -1,67 +1,128 @@
-# CURRENT TASK — Reports completion & Smart Insights
+# CURRENT TASK — Sales Completion Phase 3: Quotation Fixes & Order Management (EXT-09, ORD-03..06)
 
-Updated 2026-11-25. Status: IMPLEMENTED IN ACTIVE WORKTREE; focused automated checks pass, but role/browser/site-data acceptance remains incomplete and no checklist item is marked Done.
-Planning baseline: `4d835a9` (23 Nov). Verified GitHub main: `ed76ba1` (PR #32). Verify local checkout, remote and worktrees before editing. Use a new `feat/reports-smart-insights` branch based on verified main, or reuse an existing unmerged branch for this exact scope. Preserve deploy branch, local changes and stashes.
+Updated 2026-11-27. Finalized EXT-09 and Order Management (ORD-03..06), then added Appointment and in-app Reminder management. Migration (`bench migrate`), runtime role tests, production build, and browser acceptance remain pending until final verification.
 
-## Weekly objective (23–30 Nov)
-Complete reports for quotations, orders and customer-care activity; add actionable alerts, opportunity assessment, forecasting and export. Checklist: REP-03, REP-08, REP-09, REP-10, REP-12, REP-13, REP-14, EXT-14, EXT-15, EXT-33. Previous REP-06/11 drill-down gaps are related fixes; REP-05 filter limits remain explicitly documented. Mark Done only with recorded acceptance evidence.
+## Implemented in Phase 3 (27 Nov)
 
-## Active work package — implement and focused-test in one pass
-Model: GPT-6.2 if available in Codex; otherwise strongest available coding model. Reasoning: High. Quota-saving mode.
+- **EXT-09 Fixes**:
+  - `DoubleTQuotation.validate` now evaluates `validate_items_and_calculate` and `sync_discount_approval_state` before checking `ensure_quotation_can_send(self)` on `Draft -> Sent`, preventing financial edits + `Sent` in the same save from bypassing approval.
+  - `send_quotation_email` and `Mark as Sent` share `ensure_quotation_can_send`.
+  - Removed `write: 1` for `Sales Manager` on `DoubleT Pricing Settings` (`doublet_pricing_settings.json`); `update_discount_approval_settings` restricts `Sales Manager` to the 3 discount approval fields only.
+  - Controlled sends now re-evaluate the current financial data against current thresholds and require a matching approved snapshot when approval is currently required. Approval and email-send paths lock the Quotation row to prevent races.
+- **ORD-03 (Order Lifecycle & Snapshot)**:
+  - `DoubleTOrder.validate_quotation` validates Quotation consistency only at creation (`not previous`), so later source Quotation changes do not block `Confirm`, `Complete`, or `Cancel` on existing Orders.
+- **ORD-04 (Customer & Deal Filtering)**:
+  - `OrderForm.vue` reuses `contactsForCustomer` and `dealsForCustomer`, clears ineligible Deals on customer change, and does not overwrite customer fields when selecting a Deal.
+- **ORD-05 (Quotation to Order)**:
+  - Only `Accepted` Quotations can create a new linked Order through either conversion or direct insert. Direct inserts must exactly match the accepted item/customer/currency snapshot. Current approval thresholds are intentionally not applied retroactively after acceptance. Existing linked Orders remain openable.
+- **ORD-06 (Permissions & Order UI)**:
+  - Added `Delete` Draft Order action with confirmation in `OrderForm.vue` (gated by `canDelete` and `status === 'Draft'`), and hid `Orders` in `AppSidebar.vue` when `DoubleT Order` read permission is absent.
 
-Read AGENTS.md and root/frontend Graphify before source exploration (query first when graph.json exists). Verify current git status, main and runtime; inspect relevant reports.py helpers, report components, filters, dashboard, task APIs, permissions and schemas. If graph missing/stale, report and continue. Do not rebuild existing reports. Brief plan (3–6 lines); work through A–E in order. If a blocker prevents a group, keep earlier completed code stable and report the gap. No unbounded retry loops.
+## Sales Activities added (27 Nov)
 
-### A. Existing reports — REP-03, REP-08, EXT-14 (+ related REP-06/11)
-- Activity: add channel filter Call/Task/Email/Zalo with clear applicability. Preserve permission-scoped existing data and mock/live labels. Employee filter means Agent/Assignee for Calls/Tasks; disclose Email/Zalo attribution limitation rather than inventing ownership. Reporting only; no Contact Center workflow/transport changes. Verify existing routes and permissions.
-- Quotation & Order: preserve current all-quotation conversion and add Accepted Quotation → Booked Order conversion. Denominator = unique currently Accepted quotations dated in selected range; numerator = those with at least one exact linked Confirmed/Completed Order regardless of Order date. Deduplicate multiple Orders; exclude standalone Orders; zero denominator handled explicitly; disclose this is current status, not a historical acceptance event. Expose matching drill-down and definition.
-- Journey: extend existing Lead creation cohort with source filter and unique Lead → Deal / Lead with Won Deal counts and rates (explicit denominators and current-outcome limitation). Use saved links, not contact-name guesses. Add permission-scoped drill-down for all linked Deals/Quotations/Orders; distinguish direct Deal Orders vs quotation-linked Orders, deduplicate entity IDs and avoid leaking hidden records. Reuse current routes; preserve existing metrics.
-- Retain date/owner filters and prior-period comparison where supported. Do not fabricate Team or unsupported Activity comparisons; document remaining REP-05 limits.
+- **Appointment**: added `DoubleT Appointment` with Scheduled/Completed/Cancelled lifecycle, start/end validation, assignee, meeting type/location, optional Lead/Deal/Contact/Company reference, list search/time/status/assignee filters, upcoming view, navigation, permission-scoped ownership/assignment/sharing, and creation from record activity actions.
+- **Reminder**: added `reminder_at`/`reminder_sent_at` to Appointment and `DoubleT Task`; validation prevents reminders after start/due time. A minute scheduler creates an assignee-only Frappe `Notification Log`, links back to the activity, locks the source row, and persists a sent marker for idempotency. Schedule, assignee, status, or reminder changes reset the marker; completed/cancelled activities are skipped.
+- **Architecture decision**: Frappe Event was inspected but not used because its Public/Private participant permission model and Calendar/email/Google behavior do not match the CRM assignee/reference contract. Frappe User, Dynamic Link, Notification Log, scheduler, realtime notification, and existing Activity UI are reused.
+- **Migration required**: create `DoubleT Appointment` and add Task reminder fields.
 
-### B. Smart Insights — REP-09
-- Shared backend rule engine with current, explicit as-of date. Open Deal stale by `modified`, Open Deal past expected close, Sent Quotation approaching/after `valid_until`, unfinished Task past `due_date` (exclude Done/Canceled). Proposed new alert defaults: 7 days unchanged and 3 days until expiry; centralize and label thresholds, do not silently change existing Pipeline 30-day metric.
-- Return only authorized alerts and readable source fields: type, severity, reason, relevant dates/days, owner when available, stable source ID and route. No hidden related-record inference. Missing date/permission is unknown, not a false zero. Use the existing permission-aware query patterns; keep queries bounded/batched.
-- Add Smart Insights report section; support relevant filters and source links. Define current-alert vs period-report semantics explicitly. Follow-up Task creation is an authenticated explicit action, not an automatic job: reuse existing Task API/controller; validate source and supported reference (Lead/Deal/Contact/Company only), record read and Task create permissions, allowed assignee and active duplicate prevention including concurrent submissions. Quotation may reference readable linked Deal if valid; otherwise link only. No mutation during read.
+## Verification in finalization pass (27 Nov)
 
-### C. Deal Health Score — REP-10
-- Deterministic score 0–100, centralized documented factors/weights and category thresholds; no AI. Use trustworthy linked interaction timestamps, overdue Tasks, expected close, and linked Quotation status/expiry. If only modified time exists, label it as update recency, not customer interaction. Missing or restricted input must not expose hidden data or be treated as positive/negative evidence; show Unknown or transparent coverage. Avoid treating scores as Won probability.
-- Show score, Healthy/Needs Attention/At Risk (or Unknown), per-factor explanation and authorized source links in existing Pipeline/Smart Insights UI. Preserve existing metrics.
+- PASS: Order controller focused suite `21/21`.
+- PASS: Appointment/Task reminder validation and reminder idempotency suite `5/5`.
+- PASS: current-threshold discount approval pure suite `3/3`.
+- PASS: frontend quotation + activity-permission tests (`2` files); Python compile/JSON validation; `git diff --check`.
+- PASS: `yarn build` (`2,486` modules); existing large-chunk warning only.
+- BLOCKED / NOT RUN after migration: persisted Quotation suite and live Appointment/Reminder role/scheduler checks. The current site has not migrated the already-pending EXT-08/09 schema, so the attempted Quotation module produced missing DocType/field failures; this is not recorded as a product test pass.
+- NOT RUN: browser acceptance and full regression, per focused-test scope.
 
-### D. Dashboard — REP-14
-- Preserve current KPI, charts, links and layout contract. Add compact Needs Attention summary, totals, prioritised alerts and authorized source/action links. Use the same Smart Insights engine as Reports; View All navigates to Smart Insights. No redesign of unrelated pages. Loading/empty/error/retry and narrow layout.
+---
 
-### E. Export and saved filters — REP-12
-- Shared export for live Reports: CSV UTF-8 BOM (Excel-compatible); XLSX only if existing safe dependency supports it without new dependency churn. Export complete authorized filtered result, not page slice; preserve displayed column semantics, units, report name, applied period and generation time. Neutralize formula-injection strings. Backend validates allowlisted report/filter parameters and read/export/field permissions; never trust frontend-supplied records or user IDs. No raw unfiltered data export.
-- Named personal saved filters per authenticated user/report; save/apply/delete, validate filters on restore. Reuse existing preference mechanism if suitable; otherwise minimal justified schema with migration documented. Do not store customer records in preferences.
 
-## Acceptance (same pass; no fabricated evidence)
-1. Reports: focused tests for Accepted-only denominator, duplicate/standalone orders, source/Won cohort, multi-record links, date/owner/channel filters and missing/unauthorized sources. Existing KPI formulas unchanged.
-2. Alerts and score: test exact date boundaries, closed records, unknown data, rule arithmetic and source permission restrictions; unauthorized callers denied; follow-up action authorized and duplicate-safe.
-3. Dashboard: old KPI contracts still pass regression; summary matches shared alert engine; links/actions and loading/empty/error/retry available.
-4. Export/preferences: data reconciles to authorized applied filters, unicode/USD and formula injection safe, no cross-user filter access or export permission escalation.
-5. Run relevant existing and new backend/frontend tests, `git diff --check`, production Yarn build; document migration requirements. Do not execute DB-mutating tests, migrations, fixtures, installs or writes on any site without explicit authorization. Use pure/mocked focused tests and safe read-only checks where possible. Record blocked commands as NOT TESTED. Provide a short manual browser checklist (Admin, Sales Manager, Sales User, restricted user, desktop/375px, empty/error/retry); no long agent browser acceptance runs.
+Updated 2026-11-27. Implemented EXT-07, EXT-08, and EXT-09 source changes and focused unit tests. Migration (`bench migrate`), frontend production build, and live site/browser acceptance remain pending.
 
-## Later package — do not self-assign
-- EXT-15: forecast open Deal value by expected_close_date; add weighted forecast only with explicit configured probabilities and a defined denominator; no arbitrary stage probability or Health Score proxy.
-- EXT-33: capture actual stage entry and actor on transition; legacy stage-entry unknown unless reliable history can be proven. Schema/migration and permission tests required.
-- REP-13: AI only explains verified KPI snapshots and source/period/limitations, with human review. No fabricated calculations, external transfer of customer data or unapproved provider calls. If no AI configured, disclose blocker; deterministic text is not AI acceptance.
+## Implemented in this pass (27 Nov)
 
-## Active worktree evidence — 2026-11-25 (not release acceptance)
+### EXT-07 — Expired Quotations
+- Added centralized `is_quotation_expired` and `get_site_today` in `doublet_quotation.py` using site date (`nowdate()`), keeping `Accepted` and `Rejected` terminal states intact.
+- Synchronized `quotation_email.py`, `frontend/src/utils/quotation.js`, `QuotationsView.vue`, `QuotationForm.vue`, and `DealQuotations.vue` to display the `Expired` badge and filter (`Expired` / `Not Expired`) without mutating saved status or snapshots.
 
-- Branch/commit: `feat/reports-completion` at `acf1d7a`; it is one merge commit behind reference `ed76ba1`, with no tree difference between those commits. All A–E changes remain uncommitted on this one branch.
-- Implemented: REP-03/06/08/09/10/11/12/14 and EXT-14 source changes described above. REP-13, EXT-15 and EXT-33 were not implemented. Existing Sales/Pipeline KPI formulas and the Pipeline 30-day stale definition were not changed.
+### EXT-08 — Quotation Templates
+- Added `DoubleT Quotation Template` and `DoubleT Quotation Template Item` DocTypes (template name, description, product/service group, active flag, terms, sellable products, default quantities — no default unit price).
+- Added `get_quotation_template_payload` in `doublet_quotation_template.py` to load active template items and terms into a Quotation Draft, resolving current customer/Price List prices via `pricing.py`.
+- Added `QuotationTemplatesView.vue`, `QuotationTemplateModal.vue`, router `/quotation-templates`, sidebar navigation, and Draft template picker in `QuotationForm.vue` with overwrite confirmation when items already exist.
+
+### EXT-09 — Discount Approval
+- Extended `DoubleT Pricing Settings` (`enable_discount_approval`, `discount_approval_threshold_percent`, `discount_approval_threshold_amount`, `Sales Manager` write access) and `DoubleT Quotation` (`approval_status`, `approval_requested_by/on`, `approved_by/on`, `rejection_reason`, `approval_snapshot_hash`).
+- Implemented backend threshold evaluation, self-approval prevention, manager-only approve/reject, financial snapshot re-evaluation on Draft edits, and blocking `Draft -> Sent` / `send_quotation_email` when unapproved.
+- Added `DiscountApprovalSettingsModal.vue`, approval filter/column in `QuotationsView.vue`, and approval banner/actions in `QuotationForm.vue`.
+
+## Verification status (27 Nov)
+- `node --test frontend/tests/quotation.test.mjs`: PASS (12/12).
+- `git diff --check`: PASS.
+- `bench --site doublet.localhost migrate`, backend `run-tests`, production frontend build, and browser acceptance: NOT RUN (pending).
+
+---
+
+
+Updated 2026-11-26. Planning baseline `4d835a9` (23 Nov); last verified GitHub main `319ee10` (PR #33). Local/deploy parity not verified. User prioritizes missing capabilities over auditing existing code. No new Done status.
+
+## Active work package — Phase 1 only
+Model: GPT-5.6 Sol. Reasoning: High. Quota-saving mode.
+
+Read AGENTS.md and focused existing root/frontend Graphify queries before inspecting relevant source. If missing/stale, report and inspect source directly. Verify git status, origin/main and worktrees; use isolated `feat/sales-completion` worktree, or reuse the existing branch for this exact scope. Preserve dirty Reports and `/tmp/doublet-crm-rep13` worktrees. Keep later Sales phases on this same branch. Do not overwrite user changes.
+
+### EXT-05 — Interested products on Deal
+- Inspect Deal schema/controller/detail UI, existing Product selection and Quotation creation flow. Reuse equivalent fields/components if present; do not rebuild Catalog or Pricing.
+- Allow authorized users to add/remove Standard or active Variant products and positive quantities on Deal. Reject Template, inactive or unauthorized products when selecting new lines. Handle duplicate selection explicitly and consistently; preserve existing Deal records and permissions.
+- When creating a new Quotation from Deal, allow loading interested products as editable draft suggestions. Resolve current prices through existing customer/Price List precedence and fallback; preserve manual price/discount and saved quotation snapshots. Do not implicitly change Deal Amount or existing quotations.
+- Add minimal schema only if needed; document migration. Backend validates the same rules regardless of client.
+
+### EXT-06 — Quotation from Qualified Lead
+- Inspect FrappeLead.vue, existing Lead conversion, stored converted customer/Deal links and QuotationForm. Add a clear action for eligible Qualified Leads using the existing authorized conversion/Deal flow.
+- Reuse the existing linked Deal/customer where valid; if conversion is required, require explicit user action and use existing conversion service. Do not silently create duplicate customers or Deals, bypass qualification or invent customer mappings.
+- Open a new Quotation draft with correct Personal/Company context, linked Deal and traceable source Lead. Repeated clicks must not duplicate conversion or silently save quotations. Existing entry from Deal/list continues working.
+- Enforce eligibility and relevant read/create/write permissions on backend; handle missing/restricted/stale links clearly.
+
+## Acceptance — implement and focused-test in one pass
+1. Authorized user can save interested Standard and Variant products with quantities; invalid/unauthorized products and quantities are rejected.
+2. New Quotation from Deal loads editable suggestions with correct customer prices/fallback, without repricing saved quotations or modifying unrelated Deal data.
+3. Qualified Lead action opens correct draft via existing conversion/linked Deal; source Lead traceable, nonqualified/unauthorized paths denied, no duplicate conversion.
+4. Existing Deal/list Quotation flows and pricing contracts remain intact. Run relevant safe pure/mocked tests; record exact PASS/FAIL/NOT TESTED and manual acceptance steps.
+5. Document any schema/migration requirements and preserve existing data. No claim of runtime acceptance without evidence.
+
+## Weekly scope — 19 codes (23–30 Nov)
+Goal: correct customer, product, price and discounts; PDF matches saved total; saved prices do not silently change; narrow screen usable. Master CHECKLIST tab `KLTN · Đối chiếu bản cuối` read 26 Nov: 12 Cần kiểm, 4 Cần làm, 3 Đề xuất. User now prioritizes new feature development.
+
+| Phase | Codes | Boundary |
+|---|---|---|
+| 1 New Quotation flows | EXT-05, EXT-06 | Active only; implement missing Deal products and Qualified Lead entry. |
+| 2 Quotation lifecycle | EXT-07, NEW-01 | Later: expiry badge/filter, revision preserving original. |
+| 3 Advanced Quotation | EXT-08, EXT-09 | Later: business templates and discount approval. |
+| 4 Localization | UX-02 | Later: scoped Vietnamese UI. |
+| Separate acceptance | SALE-01, SALE-02, SALE-03, SALE-04, SALE-05, SALE-06, SALE-07, SALE-08, SALE-09, SALE-10, SALE-11, UX-01 | Existing code / Cần kiểm. Do not audit or reimplement independently now; targeted regression only where directly affected. |
+
+Do not self-assign later phases or Order Management. Proposed phases require user instruction.
+
+## Stop / exclusions
+- No Graphify update/rebuild/post-update query, yarn/npm/bench build, migration, package install, fixture, DB-mutating tests, full suite or browser automation without explicit approval.
+- No commit/push/merge/PR/deploy or generated assets; no unrelated refactors, actual AI API calls or changes to parked Reports/AI worktrees.
+- Handoff by checklist code: implemented behavior, files, exact focused test results, schema/migration needs, pending role/browser checks and blockers. Update relevant docs without marking Done; stop after EXT-05/06.
+
+## Parked work packages — preserve separately (26 Nov)
+
+- `feat/reports-forecast-stage-aging`: uncommitted EXT-15/33 completion in the original WSL checkout, as reported by Codex. Deal/Stage probability configuration and stage-entry timestamp/actor added; Reports 55/55, Smart Insights 26/26 and focused frontend test reported PASS. Migration, lifecycle/Kanban DB tests, build and browser acceptance pending. Review risks: unset vs 0% after persistence; probability field read/write permissions; every transition path and server-controlled actor/timestamp; CSV with missing probability. Do not resume in Sales worktree.
+- `feat/ai-business-insights`: uncommitted REP-13 Phase 1 in `/tmp/doublet-crm-rep13`, baseline `319ee10`. AI Settings, Password field, shared Beeknoee service and durable usage/reservation reported implemented. Backend mocked 11/11 and frontend 3/3 reported PASS. No live API call, migration, build or browser acceptance. Review risks: GET vs frontend call method, real MariaDB concurrency, duplicate requests, transaction commit isolation, key removal, and mock teardown. Later AI phases (data context, business insights, Dashboard integration) are not implemented. Do not resume in Sales worktree.
+- Both packages are **not merged** and not Done. Preserve their dirty files and worktrees; do not assume their schemas or assets exist on main. No fresh tests were run for this documentation update.
+
+## Historical worktree evidence — 2026-11-25 (not release acceptance)
+
+- Branch/commit: `feat/reports-completion` at `acf1d7a`; it is one merge commit behind reference `ed76ba1`, with no tree difference between those commits. At that checkpoint A–E changes were uncommitted; subsequently merged in PR #33.
+- Implemented: REP-03/06/08/09/10/11/12/14 and EXT-14 source changes described above. At this historical checkpoint REP-13, EXT-15 and EXT-33 were not implemented; final main now contains partial EXT-15/33 source. Existing Sales/Pipeline KPI formulas and the Pipeline 30-day stale definition were not changed.
 - PASS: Reports backend 44/44; Activity backend 8/8; Smart Insights/export safety backend 9/9; frontend suite 14/14 files after the intentional six-section regression update; Python compileall; `git diff --check`; production Yarn build (2,480 modules, 74.28s, existing large-chunk warning only).
 - PASS: root/frontend Graphify updated AST-only; frontend rebuilt to 3,281 nodes / 5,853 edges. Root follow-up found no tracked code changes after its completed rebuild.
 - NOT TESTED: persisted seeded data reconciliation, Admin/Sales Manager/Sales User/restricted-user interactive browser acceptance, 375 px visual acceptance, forced empty/error/retry, export download opened in Excel, cross-user saved-filter behavior on site, Task creation/duplicate concurrency against live Redis/site permissions. No migration is required because no DocType/patch/fixture/schema changed.
 - No migration, fixture, package install, site-data write, browser automation, commit, push or merge was performed.
 
-## Handoff and stop
-Update only relevant docs. Do not run Graphify update or rebuild commands; the user handles Graphify updates manually.
+Historical focused repair (25 Nov): backend mocked/read-only 66/66 PASS, frontend 5/5 files PASS, Python compile and diff check PASS. Production build/browser/migration/site writes/Graphify rebuild not run in that repair. These are reported historical results, not verification of final merge.
 
-Focused review repair (2026-11-25): Graphify rebuild, update and post-update queries remain explicitly assigned to the user. This repair pass must not replace the prior graph artifacts or claim they reflect the repaired source.
-
-- Repair evidence: focused backend mocked/read-only suite 66/66 PASS; focused frontend files 5/5 PASS; Python compile and `git diff --check` PASS.
-- Not run in this repair pass: production build, browser automation, migration, site-data mutation and Graphify update/rebuild/post-update query.
-
-Record exact branch/commit, changed files, formulas, actual commands/results, pending browser checks and blockers by checklist code.
-
-Do not commit/push/merge unless asked. Keep this package's fixes on the same branch. Reuse the draft PR when applicable. Preserve old evidence in FEATURE_STATUS; don't mark checklist Done based solely on code/build.
+26 Nov documentation-only update: source review against `319ee10`; no code changes, Graphify, build, test, migration or Git mutations performed.
