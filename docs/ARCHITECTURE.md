@@ -1,6 +1,19 @@
 # DoubleT CRM — Architecture map
 
-## Current baseline — 2026-11-26
+## Integration baseline — 2026-11-27
+
+PR #35 (`45bcb3f`) integrates with main (`7221e0e`, PR #34). Preserve Phase 1 and later Sales/Reports/Activities contracts. Prior 197/197 backend tests are reported evidence before integration; migration and build were confirmed by the user before integration. Post-integration build, migration and acceptance remain pending. Historical sections below retain their original scope.
+
+## Sales Completion Phase 1 — implemented, acceptance pending
+
+- Worktree `/tmp/doublet-crm-sales`, branch `feat/sales-completion`, verified baseline `319ee10b48d0dff61268ffbdeb3964b39d5a16ba`.
+- `DoubleT Deal.interested_products` is a Table of `DoubleT Deal Product`. Each row stores the Product link plus display snapshots, Variant attributes, quantity and a current reference price. The Deal controller revalidates Product read access, active Standard/Variant sellability, quantity and unique SKU, then resolves price through `doublet_crm/pricing.py`; it does not derive or update Deal Amount.
+- `doublet_crm.sales_completion` is the permission boundary for reading/saving Deal products and preparing a Quotation Draft. It checks Deal read/write and customer-field permlevels, linked Product/Contact/Company/Lead reads, exact `Deal.source_lead` relationships and Quotation create permission. The API returns only draft data and never inserts a Quotation or converts a Lead.
+- Deal-first draft creation resolves prices at request time and copies suggestions into editable new Quotation rows. Saved Quotations retain their existing snapshots and are never synchronized from Deal products.
+- Lead-first creation uses the verified `QUALIFIED` status and continues from `CONVERTED` because the existing conversion flow changes the status. Missing records are handled by guidance to the existing conversion/Deal workflow; one source Deal is used directly and multiple source Deals require selection. Traceability uses the persisted `Quotation.deal -> DoubleT Deal.source_lead` chain.
+- Schema sync is required after deployment. Automated evidence is pure/mocked only; persisted-site and browser acceptance remain pending.
+
+## Historical Reports baseline — 2026-11-25
 
 - GitHub `main` verified at `319ee10` (PR #33, merged 25 Nov; feature head `5980359`). PR #32 (`ed76ba1`, feature `acf1d7a`) is historical. The earlier planning baseline was `4d835a9` (PR #29); PR #30 synchronized deployment assets and PR #31 (`015251f`) added Sales and Pipeline analytics. Local WSL/deploy parity with `319ee10`, migration and current browser acceptance have not been independently verified in this review.
 - Historical local evidence at `015251f`: deploy/main-20261123 was 0/0 against origin/main, Yarn build passed with chunk-size warnings, and two generated files differed locally. Recheck actual status before editing; preserve local changes/stashes.
@@ -19,12 +32,12 @@
 
 Phase 1 implements the missing EXT-05/06 flows below. Existing catalog/pricing and quotation components are integration dependencies, not standalone audit tasks. Full browser/role/DB acceptance of the twelve Cần kiểm items is deferred. The exact 19-code scope and phase boundaries are in CURRENT_TASK.md.
 
-### Planned Phase 1 extension (not implemented or verified here)
+### Historical Phase 1 plan (implemented by PR #34; acceptance pending)
 - EXT-05: add a minimal Deal interested-products child table if no equivalent exists; store sellable Product references and positive quantities. Reuse pricing.py and QuotationForm to prefill a new Draft using the current authorized customer price context. Do not change saved quotations or Deal Amount implicitly.
 - EXT-06: add a Qualified Lead quotation entry via the existing permission-checked conversion/linked Deal flow. Reuse stored customer and source Lead links; never silently create duplicate customers or Deals, or bypass qualification/permissions. If conversion is required, make it explicit. Preserve existing Deal/list quotation entry points.
 - New schema, if needed, requires later migration; no migration or runtime acceptance is claimed.
 
-## Parked work packages — preserve separately (26 Nov)
+## Historical parked work packages (26 Nov; Reports now in PR #35)
 
 - `feat/reports-forecast-stage-aging`: uncommitted EXT-15/33 completion in the original WSL checkout, as reported by Codex. Deal/Stage probability configuration and stage-entry timestamp/actor added; Reports 55/55, Smart Insights 26/26 and focused frontend test reported PASS. Migration, lifecycle/Kanban DB tests, build and browser acceptance pending. Review risks: unset vs 0% after persistence; probability field read/write permissions; every transition path and server-controlled actor/timestamp; CSV with missing probability. Do not resume in Sales worktree.
 - `feat/ai-business-insights`: uncommitted REP-13 Phase 1 in `/tmp/doublet-crm-rep13`, baseline `319ee10`. AI Settings, Password field, shared Beeknoee service and durable usage/reservation reported implemented. Backend mocked 11/11 and frontend 3/3 reported PASS. No live API call, migration, build or browser acceptance. Review risks: GET vs frontend call method, real MariaDB concurrency, duplicate requests, transaction commit isolation, key removal, and mock teardown. Later AI phases (data context, business insights, Dashboard integration) are not implemented. Do not resume in Sales worktree.

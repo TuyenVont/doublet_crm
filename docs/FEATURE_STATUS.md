@@ -1,7 +1,7 @@
 # DoubleT CRM — Feature status
-Updated 2026-11-27. Working tree remains on `feat/reports-forecast-stage-aging` at `319ee10` with preserved uncommitted Reports/Deal Probability/Stage Aging and Sales changes. Local deploy parity and final runtime acceptance are not verified. Source, historical reported tests and observed acceptance are distinct.
+Updated 2026-11-27. PR #35 head `45bcb3f` is being integrated with main `7221e0e`. Before integration: 197/197 backend tests reported by Codex; migration and build confirmed by user. Post-integration verification and browser acceptance pending. Historical evidence below is not a current acceptance claim.
 
-## Active Sales checklist — 26 Nov
+## Historical Sales checklist — 26 Nov, with EXT-05/06 source status updated
 
 Read live master checklist tab `KLTN · Đối chiếu bản cuối`; verified main `319ee10`. All 19 statuses below retained; only five existing catalog/pricing source areas inspected directly in the preceding review. Later rows reflect checklist evidence, not new source audit. No new execution or acceptance. Active development now targets EXT-05/06; the twelve Cần kiểm items remain unchanged and are deferred to a separate acceptance pass. Next new-feature phases: EXT-07/NEW-01, EXT-08/09, then UX-02.
 
@@ -20,8 +20,8 @@ Read live master checklist tab `KLTN · Đối chiếu bản cuối`; verified m
 | SALE-11 | Cần kiểm | Customer/Deal/Price List flow; historical PR #25 Admin browser PASS per checklist; Sales User save/reopen pending. |
 | UX-01 | Cần kiểm | Narrow table/modal checks pending; local overflow and visible actions required. |
 | UX-02 | Cần làm | Scoped Vietnamese UI labels/messages; confirm language scope later. |
-| EXT-05 | Cần làm | Deal interested products; not established in checklist baseline. |
-| EXT-06 | Cần làm | Qualified Lead quotation entry; preserve source linkage. |
+| EXT-05 | IMPLEMENTED; INTEGRATION ACCEPTANCE PENDING | PR #34; see Phase 1 evidence below. |
+| EXT-06 | IMPLEMENTED; INTEGRATION ACCEPTANCE PENDING | PR #34; see Phase 1 evidence below. |
 | EXT-07 | IMPLEMENTED; UNIT/BUILD PENDING SITE | Expiry badge/filter (`is_quotation_expired`, `get_site_today`), preserves `Accepted`/`Rejected`; frontend `quotation.test.mjs` PASS (12/12); site/browser acceptance pending. |
 | NEW-01 | Đề xuất | Revision Draft linked to sent original; preserve original snapshot. |
 | EXT-08 | IMPLEMENTED; MIGRATION/SITE PENDING | `DoubleT Quotation Template` + `DoubleT Quotation Template Item`, `QuotationTemplatesView.vue`, `QuotationTemplateModal.vue`, Draft loader with customer pricing & overwrite confirmation; migration/site tests pending. |
@@ -35,11 +35,22 @@ Read live master checklist tab `KLTN · Đối chiếu bản cuối`; verified m
 
 Focused finalization evidence (27 Nov): Order `21/21` PASS; Appointment/Reminder `5/5` PASS; current-threshold approval `3/3` PASS; frontend quotation/activity-permission files PASS; production build PASS for 2,486 modules; syntax/JSON and diff checks PASS. Persisted Quotation module was attempted but the unmigrated site lacks EXT-08/09 DocTypes/fields, so its result is BLOCKED pending migration rather than accepted. Browser and live scheduler/role acceptance remain NOT RUN.
 
-## Parked work packages — preserve separately (26 Nov)
+## Historical parked work packages (26 Nov; Reports now in PR #35)
 
 - `feat/reports-forecast-stage-aging`: uncommitted EXT-15/33 completion in the original WSL checkout, as reported by Codex. Deal/Stage probability configuration and stage-entry timestamp/actor added; Reports 55/55, Smart Insights 26/26 and focused frontend test reported PASS. Migration, lifecycle/Kanban DB tests, build and browser acceptance pending. Review risks: unset vs 0% after persistence; probability field read/write permissions; every transition path and server-controlled actor/timestamp; CSV with missing probability. Do not resume in Sales worktree.
 - `feat/ai-business-insights`: uncommitted REP-13 Phase 1 in `/tmp/doublet-crm-rep13`, baseline `319ee10`. AI Settings, Password field, shared Beeknoee service and durable usage/reservation reported implemented. Backend mocked 11/11 and frontend 3/3 reported PASS. No live API call, migration, build or browser acceptance. Review risks: GET vs frontend call method, real MariaDB concurrency, duplicate requests, transaction commit isolation, key removal, and mock teardown. Later AI phases (data context, business insights, Dashboard integration) are not implemented. Do not resume in Sales worktree.
 - Both packages are **not merged** and not Done. Preserve their dirty files and worktrees; do not assume their schemas or assets exist on main. No fresh tests were run for this documentation update.
+
+Updated 2026-11-26. Sales Completion is based on verified main `319ee10`; older Reports/deployment evidence below retains its original baseline and date. Source present, automated tests and observed acceptance are distinct.
+
+## Sales Completion Phase 1 — 2026-11-26
+
+| ID | Status | Evidence and next check |
+|---|---|---|
+| EXT-05 | IMPLEMENTED; MOCKED PASS; MIGRATION/BROWSER PENDING | Deal Products tab, sellable Catalog multi-select, quantity/remove/save, persistent child schema, duplicate/SKU and quantity validation, permission-aware current reference pricing, and Deal-to-Quotation draft suggestions are implemented. Backend focused suite is included in the 11/11 Phase 1 pass; frontend focused files pass. Run migration, then verify persistence, roles, current Price List values and no Deal Amount/status or historical Quotation changes. |
+| EXT-06 | IMPLEMENTED; MOCKED PASS; MIGRATION/BROWSER PENDING | Qualified/Converted Lead backend eligibility, conversion/Deal guidance, exact `source_lead` relationship, one/multiple Deal handling, Quotation create and linked-record permission checks are implemented without automatic conversion or duplicate record creation. Verify live roles, conversion paths and browser messages after migration. |
+
+The Phase 1 implementation is acceptance pending and is not marked Done. No Reports or AI Foundation source was changed in this worktree.
 
 ## Current Reports / deployment evidence
 

@@ -152,3 +152,22 @@ export function lineAmounts(item) {
     total: Number(grossCents - discountCents) / 100,
   }
 }
+export function quotationDraftFromContext(context) {
+  return {
+    deal: context.deal,
+    customer_type: context.customer_type,
+    contact: context.contact || '',
+    company: context.company || '',
+    price_list: context.price_list || '',
+    items: (context.items || []).map(row => ({
+      product: row.product,
+      product_name: row.product_name,
+      sku: row.sku,
+      quantity: row.quantity,
+      unit_price: row.unit_price,
+      discount_type: row.discount_type || 'Percentage',
+      discount_percent: row.discount_percent || 0,
+      discount_amount: row.discount_amount || 0,
+    })),
+  }
+}

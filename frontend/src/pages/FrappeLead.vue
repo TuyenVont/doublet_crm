@@ -60,6 +60,13 @@
 
 <div class="flex items-center gap-2">
 
+  <Button
+    v-if="canStartQuotation"
+    :label="__('Create Quotation')"
+    :loading="quotationLoading"
+    @click="createQuotation"
+  />
+
   <!-- CHƯA CONVERT -->
   <Button
     v-if="!isConverted"
@@ -385,6 +392,22 @@
     @converted="handleConverted"
   />
 
+  <Dialog v-model="showQuotationDealDialog" :options="{ title: __('Select Deal') }">
+    <template #body-content>
+      <label class="flex flex-col gap-2 text-sm">
+        <span>{{ __('This Lead has multiple eligible Deals. Select one for the quotation.') }}</span>
+        <select v-model="quotationDeal" class="rounded border px-3 py-2">
+          <option value="">{{ __('Select Deal') }}</option>
+          <option v-for="deal in quotationDeals" :key="deal.name" :value="deal.name">{{ deal.label }}</option>
+        </select>
+      </label>
+    </template>
+    <template #actions>
+      <Button :label="__('Cancel')" @click="showQuotationDealDialog = false" />
+      <Button variant="solid" :label="__('Continue')" :disabled="!quotationDeal" @click="openQuotationDraft(quotationDeal)" />
+    </template>
+  </Dialog>
+
   <!-- FILE UPLOADER -->
   <FilesUploader
     v-model="showFilesUploader"
@@ -430,6 +453,7 @@ import {
   Avatar,
   Tabs,
   Breadcrumbs,
+  Dialog,
   call,
   usePageMeta,
   toast,
@@ -484,6 +508,7 @@ import { useDocument } from '@/data/document'
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
+import { message } from '@/utils/quotation'
 
 
 const { brand } = getSettings()
@@ -534,6 +559,11 @@ const showDeleteLinkedDocModal =
 const showConvertToDealModal =
   ref(false)
 
+const quotationLoading = ref(false)
+const showQuotationDealDialog = ref(false)
+const quotationDeals = ref([])
+const quotationDeal = ref('')
+
 const showFilesUploader =
   ref(false)
 
@@ -576,6 +606,47 @@ const isConverted = computed(() => {
     )
   )
 })
+
+const canStartQuotation = computed(() => {
+  return ['QUALIFIED', 'CONVERTED'].includes(doc.value?.status)
+})
+
+function openQuotationDraft(deal) {
+  showQuotationDealDialog.value = false
+  router.push({
+    name: 'QuotationCreate',
+    query: { lead: props.leadId, deal },
+  })
+}
+
+async function createQuotation() {
+  if (!canStartQuotation.value || quotationLoading.value) return
+  quotationLoading.value = true
+  try {
+    const result = await call('doublet_crm.sales_completion.get_quotation_draft_context', {
+      lead_name: props.leadId,
+    })
+    if (result?.conversion_required) {
+      toast.error(result.message || __('Convert this Lead before creating a quotation.'))
+      return
+    }
+    if (result?.deal_required) {
+      toast.error(result.message || __('Create or link a Deal before creating a quotation.'))
+      return
+    }
+    if (result?.requires_deal_selection) {
+      quotationDeals.value = result.deals || []
+      quotationDeal.value = ''
+      showQuotationDealDialog.value = true
+      return
+    }
+    if (result?.deal) openQuotationDraft(result.deal)
+  } catch (exception) {
+    toast.error(message(exception) || __('Unable to create a quotation from this Lead.'))
+  } finally {
+    quotationLoading.value = false
+  }
+}
 async function onLeadSidebarSaved(data) {
   if (
     data &&

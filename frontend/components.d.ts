@@ -63,6 +63,7 @@ declare module 'vue' {
     DashboardIcon: typeof import('./src/components/Icons/DashboardIcon.vue')['default']
     DataFields: typeof import('./src/components/Activities/DataFields.vue')['default']
     DataFieldsModal: typeof import('./src/components/Modals/DataFieldsModal.vue')['default']
+    DealInterestedProducts: typeof import('./src/components/Deal/DealInterestedProducts.vue')['default']
     DealModal: typeof import('./src/components/Modals/DealModal.vue')['default']
     DealQuotations: typeof import('./src/components/Deal/DealQuotations.vue')['default']
     DealsIcon: typeof import('./src/components/Icons/DealsIcon.vue')['default']
