@@ -86,6 +86,25 @@
             />
           </label>
 
+          <label class="space-y-1">
+            <span class="text-sm font-medium text-ink-gray-8">
+              {{ __('Close Probability (%)') }}
+            </span>
+
+            <input
+              v-model="form.probability"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              class="w-full rounded-lg border border-outline-gray-2 px-3 py-2 text-sm"
+            />
+
+            <span class="block text-xs text-ink-gray-5">
+              {{ !selectedStage?.probability_configured ? __('Blank remains Unknown because this Stage has no default probability.') : `${__('Blank uses the Stage default')}: ${selectedStage.probability}%` }}
+            </span>
+          </label>
+
           <!-- STAGE -->
           <label class="space-y-1">
             <span class="text-sm font-medium text-ink-gray-8">
@@ -358,6 +377,7 @@ const sourceLeadLabel = ref('')
 const form = reactive({
   deal_title: '',
   amount: '',
+  probability: '',
   stage: '',
   deal_type: '',
   deal_owner: '',
@@ -372,6 +392,7 @@ const form = reactive({
 const editableFields = [
   'deal_title',
   'amount',
+  'probability',
   'stage',
   'deal_type',
   'deal_owner',
@@ -397,6 +418,11 @@ function fillForm() {
       ''
   }
 
+  form.probability =
+    props.deal?.probability_configured
+      ? props.deal.probability
+      : ''
+
   if (!form.deal_type) {
     if (form.company) {
       form.deal_type =
@@ -418,7 +444,10 @@ const dirty = computed(() => {
     field =>
       normalize(form[field]) !==
       normalize(
-        props.deal?.[field]
+        field === 'probability' &&
+          !props.deal?.probability_configured
+          ? ''
+          : props.deal?.[field]
       )
   )
 })
@@ -481,6 +510,8 @@ async function loadStages() {
           'name',
           'stage_name',
           'stage_type',
+          'probability',
+          'probability_configured',
           'sort_order',
           'enabled',
         ],
@@ -777,6 +808,20 @@ async function save() {
   }
 
   if (
+    form.probability !== '' &&
+    (
+      !Number.isFinite(Number(form.probability)) ||
+      Number(form.probability) < 0 ||
+      Number(form.probability) > 100
+    )
+  ) {
+    error.value =
+      'Close Probability must be a number from 0 to 100.'
+
+    return
+  }
+
+  if (
     ![
       'PERSONAL',
       'COMPANY',
@@ -845,6 +890,16 @@ async function save() {
         form.amount === ''
           ? null
           : Number(form.amount),
+
+      probability:
+        form.probability === ''
+          ? null
+          : Number(form.probability),
+
+      probability_configured:
+        form.probability === ''
+          ? 0
+          : 1,
 
       stage:
         form.stage,

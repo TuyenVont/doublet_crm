@@ -7,6 +7,8 @@
  "field_order": [
   "deal_title",
   "amount",
+  "probability_configured",
+  "probability",
   "deal_owner",
   "source",
   "deal_type",
@@ -16,6 +18,8 @@
   "interested_products",
   "expected_close_date",
   "stage",
+  "stage_entered_on",
+  "stage_entered_by",
   "won_on",
   "lost_on",
   "lost_reason"
@@ -36,6 +40,22 @@
    "label": "Amount",
    "permlevel": 0,
    "precision": "2"
+  },
+  {
+   "description": "Optional Deal-specific override. Leave blank to use the configured Deal Stage probability.",
+   "depends_on": "eval:doc.probability_configured",
+   "fieldname": "probability",
+   "fieldtype": "Percent",
+   "label": "Close Probability",
+   "precision": "2"
+  },
+  {
+   "default": "0",
+   "description": "Enable a Deal-specific probability override. When disabled, Forecast uses the Stage default if configured.",
+   "fieldname": "probability_configured",
+   "fieldtype": "Check",
+   "label": "Set Close Probability Override",
+   "no_copy": 1
   },
   {
    "fieldname": "deal_owner",
@@ -76,6 +96,21 @@
    "label": "Stage",
    "options": "DoubleT Deal Stage",
    "reqd": 1
+  },
+  {
+   "fieldname": "stage_entered_on",
+   "fieldtype": "Datetime",
+   "label": "Stage Entered On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "stage_entered_by",
+   "fieldtype": "Link",
+   "label": "Stage Entered By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
   },
   {
    "fieldname": "deal_type",

@@ -1,0 +1,37 @@
+{
+  "doctype": "DocType",
+  "name": "DoubleT Appointment",
+  "module": "DoubleT CRM",
+  "autoname": "APT-.#####",
+  "engine": "InnoDB",
+  "title_field": "title",
+  "search_fields": "title,assigned_to,reference_docname,location",
+  "sort_field": "starts_on",
+  "sort_order": "DESC",
+  "track_changes": 1,
+  "field_order": [
+    "title", "description", "starts_on", "ends_on", "assigned_to", "status",
+    "meeting_type", "location", "reference_doctype", "reference_docname",
+    "reminder_type", "reminder_at", "reminder_sent_at"
+  ],
+  "fields": [
+    {"fieldname": "title", "fieldtype": "Data", "label": "Title", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "description", "fieldtype": "Text", "label": "Description"},
+    {"fieldname": "starts_on", "fieldtype": "Datetime", "label": "Starts On", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "ends_on", "fieldtype": "Datetime", "label": "Ends On", "reqd": 1},
+    {"fieldname": "assigned_to", "fieldtype": "Link", "label": "Assigned To", "options": "User", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Scheduled\nCompleted\nCancelled", "default": "Scheduled", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "meeting_type", "fieldtype": "Select", "label": "Meeting Type", "options": "In Person\nPhone\nVideo\nOther", "default": "In Person"},
+    {"fieldname": "location", "fieldtype": "Data", "label": "Location or Meeting Link"},
+    {"fieldname": "reference_doctype", "fieldtype": "Select", "label": "Related Type", "options": "\nDoubleT Lead\nDoubleT Deal\nDoubleT Contact\nDoubleT Company"},
+    {"fieldname": "reference_docname", "fieldtype": "Dynamic Link", "label": "Related Record", "options": "reference_doctype"},
+    {"fieldname": "reminder_type", "fieldtype": "Select", "label": "Reminder", "options": "No Reminder\n15 Minutes Before\n30 Minutes Before\n1 Hour Before\n1 Day Before\nCustom", "default": "No Reminder"},
+    {"fieldname": "reminder_at", "fieldtype": "Datetime", "label": "Reminder At"},
+    {"fieldname": "reminder_sent_at", "fieldtype": "Datetime", "label": "Reminder Sent At", "read_only": 1, "no_copy": 1}
+  ],
+  "permissions": [
+    {"role": "System Manager", "read": 1, "create": 1, "write": 1, "delete": 1, "report": 1, "export": 1},
+    {"role": "Sales Manager", "read": 1, "create": 1, "write": 1, "delete": 1, "report": 1, "export": 1},
+    {"role": "Sales User", "read": 1, "create": 1, "write": 1}
+  ]
+}

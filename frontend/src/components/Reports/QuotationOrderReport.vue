@@ -31,6 +31,12 @@
         <MetricCard label="Quotation Value" :value="moneyMetric(quotationSummary?.quotation_value)" :change="comparisonChange('quotation_value', 'money')" />
         <MetricCard label="Accepted" :value="metric(quotationSummary?.accepted_count)" :change="comparisonChange('accepted_count')" />
         <MetricCard label="Acceptance Rate" :value="percentage(quotationSummary?.acceptance_rate)" :change="comparisonChange('acceptance_rate', 'points')" />
+        <MetricCard label="Expired Quotations" :value="metric(quotationSummary?.expired_count)" />
+      </section>
+
+      <section v-if="quotationSummary?.approval_statuses?.length" class="rounded-xl border border-outline-gray-2 bg-surface-white p-4 sm:p-5">
+        <h2 class="font-semibold text-ink-gray-9">{{ __('Discount Approval Status') }}</h2>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><div v-for="row in quotationSummary.approval_statuses" :key="row.status" class="flex items-center justify-between rounded bg-surface-gray-1 px-3 py-2 text-sm"><span>{{ __(row.status) }}</span><strong>{{ metric(row.count) }}</strong></div></div>
       </section>
 
       <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" :aria-label="__('Order summary')">

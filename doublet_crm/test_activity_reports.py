@@ -19,8 +19,12 @@ class TestActivityContactCenterReport(FrappeTestCase):
 				row(name="CALL-B", agent="b@example.com", assigned_to=None, call_type="Outgoing", duration=90, status="Completed", start_time="2026-11-11 09:00:00", from_number="2", to_number="3"),
 			],
 			"DoubleT Task": [
-				row(name="TASK-A", title="A", status="Todo", priority="High", due_date="2026-11-24 11:59:59", assigned_to="a@example.com", reference_doctype=None, reference_docname=None, creation="2026-11-10 10:00:00"),
-				row(name="TASK-B", title="B", status="Done", priority="Low", due_date="2026-11-24 12:00:00", assigned_to="b@example.com", reference_doctype=None, reference_docname=None, creation="2026-11-11 10:00:00"),
+				row(name="TASK-A", title="A", status="Todo", priority="High", due_date="2026-11-24 11:59:59", assigned_to="a@example.com", reference_doctype=None, reference_docname=None, reminder_at="2026-11-24 11:00:00", reminder_sent_at=None, creation="2026-11-10 10:00:00"),
+				row(name="TASK-B", title="B", status="Done", priority="Low", due_date="2026-11-24 12:00:00", assigned_to="b@example.com", reference_doctype=None, reference_docname=None, reminder_at="2026-11-24 10:00:00", reminder_sent_at="2026-11-24 10:00:00", creation="2026-11-11 10:00:00"),
+			],
+			"DoubleT Appointment": [
+				row(name="APT-A", title="Review", status="Scheduled", starts_on="2026-11-25 09:00:00", ends_on="2026-11-25 09:30:00", assigned_to="a@example.com", reference_doctype=None, reference_docname=None, reminder_at="2026-11-25 08:30:00", reminder_sent_at=None),
+				row(name="APT-B", title="Completed", status="Completed", starts_on="2026-11-12 09:00:00", ends_on="2026-11-12 09:30:00", assigned_to="b@example.com", reference_doctype=None, reference_docname=None, reminder_at="2026-11-12 08:30:00", reminder_sent_at="2026-11-12 08:30:00"),
 			],
 			"Communication": [
 				row(name="MAIL-IN", subject="In", sender="x@example.com", recipients="a@example.com", sent_or_received="Received", creation="2026-11-10 08:00:00"),
@@ -48,6 +52,8 @@ class TestActivityContactCenterReport(FrappeTestCase):
 		self.assertEqual((result["sources"]["calls"]["total"], result["sources"]["calls"]["missed"], result["sources"]["calls"]["duration_seconds"]), (1, 1, 30))
 		self.assertEqual([item.name for item in result["sources"]["calls"]["rows"]], ["CALL-A"])
 		self.assertEqual((result["sources"]["tasks"]["total"], result["sources"]["tasks"]["pending"], result["sources"]["tasks"]["overdue"]), (1, 1, 1))
+		self.assertEqual((result["sources"]["appointments"]["total"], result["sources"]["appointments"]["upcoming"]), (1, 1))
+		self.assertEqual((result["sources"]["reminders"]["pending"], result["sources"]["reminders"]["sent"]), (2, 0))
 		self.assertEqual((result["sources"]["email"]["incoming"], result["sources"]["email"]["outgoing"]), (1, 1))
 		self.assertEqual((result["sources"]["zalo"]["message_count"], result["sources"]["zalo"]["real_message_count"], result["sources"]["zalo"]["simulated_message_count"]), (2, 1, 1))
 
@@ -59,9 +65,10 @@ class TestActivityContactCenterReport(FrappeTestCase):
 
 		get_activity_contact_center("2026-11-01", "2026-11-30")
 
-		calls, tasks, email, conversations, messages = get_list.call_args_list
+		calls, tasks, appointments, email, conversations, messages = get_list.call_args_list
 		self.assertEqual(calls.kwargs["filters"][:2], [["start_time", ">=", "2026-11-01 00:00:00"], ["start_time", "<", "2026-12-01 00:00:00"]])
 		self.assertEqual(tasks.kwargs["filters"][:2], [["creation", ">=", "2026-11-01 00:00:00"], ["creation", "<", "2026-12-01 00:00:00"]])
+		self.assertEqual(appointments.kwargs["filters"][:2], [["starts_on", ">=", "2026-11-01 00:00:00"], ["starts_on", "<", "2026-12-01 00:00:00"]])
 		self.assertIn(["communication_medium", "=", "Email"], email.kwargs["filters"])
 		self.assertIn(["communication_type", "=", "Communication"], email.kwargs["filters"])
 		self.assertIn(["reference_doctype", "in", ("DoubleT Lead", "DoubleT Deal", "DoubleT Contact", "DoubleT Company", "DoubleT Quotation", "DoubleT Order")], email.kwargs["filters"])
@@ -72,7 +79,7 @@ class TestActivityContactCenterReport(FrappeTestCase):
 	@patch("doublet_crm.reports.frappe.get_list")
 	@patch("doublet_crm.reports.frappe.has_permission")
 	def test_sources_are_independently_unavailable_and_links_are_not_exposed(self, has_permission, get_list, _now):
-		allowed = {"DoubleT Call Log": False, "DoubleT Task": True, "Communication": False, "DoubleT Conversation": False, "DoubleT Message": True}
+		allowed = {"DoubleT Call Log": False, "DoubleT Task": True, "DoubleT Appointment": True, "Communication": False, "DoubleT Conversation": False, "DoubleT Message": True}
 		has_permission.side_effect = lambda doctype, _ptype: allowed[doctype]
 		get_list.side_effect = lambda doctype, **_kwargs: self._source_rows(doctype)
 
@@ -84,7 +91,7 @@ class TestActivityContactCenterReport(FrappeTestCase):
 		self.assertEqual(result["sources"]["tasks"]["total"], 2)
 		self.assertEqual(result["sources"]["zalo"]["message_count"], 2)
 		self.assertTrue(all(item.conversation is None for item in result["sources"]["zalo"]["messages"]))
-		self.assertEqual([call.args[0] for call in get_list.call_args_list], ["DoubleT Task", "DoubleT Message"])
+		self.assertEqual([call.args[0] for call in get_list.call_args_list], ["DoubleT Task", "DoubleT Appointment", "DoubleT Message"])
 
 	@patch("doublet_crm.reports.now_datetime", return_value=datetime(2026, 11, 24, 12, 0, 0))
 	@patch("doublet_crm.reports.frappe.get_list")
@@ -131,7 +138,7 @@ class TestActivityContactCenterReport(FrappeTestCase):
 	def test_channel_filter_queries_only_the_selected_source(self, _permission, get_list, _now):
 		get_list.side_effect = lambda doctype, **_kwargs: self._source_rows(doctype)
 		result = get_activity_contact_center("2026-11-01", "2026-11-30", channel="Call")
-		activity_doctypes = {"DoubleT Call Log", "DoubleT Task", "Communication", "DoubleT Conversation", "DoubleT Message"}
+		activity_doctypes = {"DoubleT Call Log", "DoubleT Task", "DoubleT Appointment", "Communication", "DoubleT Conversation", "DoubleT Message"}
 		self.assertEqual([call.args[0] for call in get_list.call_args_list if call.args[0] in activity_doctypes], ["DoubleT Call Log"])
 		self.assertEqual(result["filters"]["channel"], "Call")
 		self.assertTrue(result["sources"]["calls"]["selected"])

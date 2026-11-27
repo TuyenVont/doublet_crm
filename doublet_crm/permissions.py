@@ -183,3 +183,36 @@ def get_doublet_call_event_permission_query_conditions(user=None, doctype=None):
 def has_doublet_call_event_permission(doc, user=None, ptype=None, debug=False):
     if ptype in {"read", "select"}:
         return can_handle_call(_call_assignee(doc.call_log), user)
+
+
+def get_doublet_appointment_permission_query_conditions(user=None, doctype=None):
+    user = user or frappe.session.user
+    if user == "Administrator" or set(frappe.get_roles(user)) & CALL_MANAGER_ROLES:
+        return ""
+    escaped = frappe.db.escape(user, percent=False)
+    shared = share.get_shared("DoubleT Appointment", user)
+    conditions = [
+        f"`tabDoubleT Appointment`.`owner` = {escaped}",
+        f"`tabDoubleT Appointment`.`assigned_to` = {escaped}",
+    ]
+    if shared:
+        names = ", ".join(frappe.db.escape(name, percent=False) for name in shared)
+        conditions.append(f"`tabDoubleT Appointment`.`name` in ({names})")
+    return f"({' or '.join(conditions)})"
+
+
+def has_doublet_appointment_permission(doc, user=None, ptype=None, debug=False):
+    user = user or frappe.session.user
+    if user == "Administrator" or set(frappe.get_roles(user)) & CALL_MANAGER_ROLES:
+        return None
+    if ptype in {"read", "select", "write", "delete"}:
+        if doc.owner == user or doc.assigned_to == user:
+            return None
+        share_field = "write" if ptype in {"write", "delete"} else "read"
+        return bool(frappe.db.exists("DocShare", {
+            "share_doctype": "DoubleT Appointment",
+            "share_name": doc.name,
+            "user": user,
+            share_field: 1,
+        }))
+    return None

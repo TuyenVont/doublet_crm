@@ -8,6 +8,8 @@
   "stage_name",
   "sort_order",
   "stage_type",
+  "probability_configured",
+  "probability",
   "color",
   "enabled"
  ],
@@ -34,6 +36,22 @@
    "reqd": 1,
    "in_list_view": 1,
    "options": "OPEN\nWON\nLOST"
+  },
+  {
+   "description": "Optional default for Open Deals in this Stage. A Deal-specific probability takes precedence.",
+   "depends_on": "eval:doc.probability_configured",
+   "fieldname": "probability",
+   "fieldtype": "Percent",
+   "label": "Default Close Probability",
+   "precision": "2"
+  },
+  {
+   "default": "0",
+   "description": "Enable a default probability for Open Deals in this Stage.",
+   "fieldname": "probability_configured",
+   "fieldtype": "Check",
+   "label": "Set Default Close Probability",
+   "no_copy": 1
   },
   {
    "fieldname": "color",

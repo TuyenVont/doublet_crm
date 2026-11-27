@@ -2,6 +2,7 @@
 
 import frappe
 from frappe import _
+from frappe.utils import add_days, flt, now_datetime
 
 from doublet_crm.smart_insights import build_smart_insights
 
@@ -145,9 +146,9 @@ def _readable_labels(doctype, names, fields, formatter):
 @frappe.whitelist()
 def get_overview():
 	"""Return the permission-scoped data used by the custom CRM overview."""
-	result = {"permissions": {}, "kpis": {}, "lead_sources": [], "deal_stages": [], "quotations": [], "needs_attention": None}
+	result = {"permissions": {}, "kpis": {}, "lead_sources": [], "deal_stages": [], "quotations": [], "upcoming_activities": [], "needs_attention": None}
 
-	for doctype, key in (("DoubleT Lead", "leads"), ("DoubleT Deal", "deals"), ("DoubleT Quotation", "quotations"), ("DoubleT Deal Stage", "stages")):
+	for doctype, key in (("DoubleT Lead", "leads"), ("DoubleT Deal", "deals"), ("DoubleT Quotation", "quotations"), ("DoubleT Deal Stage", "stages"), ("DoubleT Order", "orders"), ("DoubleT Appointment", "appointments"), ("DoubleT Task", "tasks")):
 		result["permissions"][key] = _can_read(doctype)
 
 	if result["permissions"]["leads"]:
@@ -203,6 +204,7 @@ def get_overview():
 			{
 				"name": row.name,
 				"status": row.status,
+				"display_status": "Expired" if row.status == "Draft" and row.valid_until and frappe.utils.getdate(row.valid_until) < today else row.status,
 				"valid_until": row.valid_until,
 				"customer_label": company_labels.get(row.company) if row.company else contact_labels.get(row.contact),
 				"customer_restricted": bool((row.company or row.contact) and not (company_labels.get(row.company) if row.company else contact_labels.get(row.contact))),
@@ -215,12 +217,67 @@ def get_overview():
 	else:
 		result["kpis"]["draft_quotations"] = None
 
+	if result["permissions"]["orders"]:
+		orders = frappe.get_list(
+			"DoubleT Order", filters={"status": ["in", ["Confirmed", "Completed"]]},
+			fields=["name", "total"], limit_page_length=0,
+		)
+		result["kpis"]["booked_orders"] = len(orders)
+		result["kpis"]["booked_sales"] = flt(sum(flt(row.total) for row in orders), 2)
+	else:
+		result["kpis"]["booked_orders"] = None
+		result["kpis"]["booked_sales"] = None
+
+	now = now_datetime()
+	if result["permissions"]["appointments"]:
+		appointments = frappe.get_list(
+			"DoubleT Appointment", filters={"status": "Scheduled", "starts_on": [">=", now]},
+			fields=["name", "title", "starts_on", "assigned_to", "reference_doctype", "reference_docname"],
+			order_by="starts_on asc", limit_page_length=10,
+		)
+		result["kpis"]["upcoming_appointments"] = frappe.get_list(
+			"DoubleT Appointment", filters={"status": "Scheduled", "starts_on": ["between", [now, add_days(now, 7)]]},
+			fields=["count(*) as total"], order_by=None, limit_page_length=1,
+		)[0].total
+		result["upcoming_activities"].extend({
+			"type": "Appointment", "name": row.name, "title": row.title or row.name, "due_at": row.starts_on,
+			"assigned_to": row.assigned_to, "related": row.reference_docname,
+			"route": {"name": "AppointmentDetail", "params": {"appointmentId": row.name}},
+		} for row in appointments)
+	else:
+		result["kpis"]["upcoming_appointments"] = None
+
+	if result["permissions"]["tasks"]:
+		tasks = frappe.get_list(
+			"DoubleT Task", filters={"status": ["in", ["Backlog", "Todo", "In Progress"]], "due_date": [">=", now]},
+			fields=["name", "title", "due_date", "assigned_to", "reference_docname"],
+			order_by="due_date asc", limit_page_length=10,
+		)
+		result["upcoming_activities"].extend({
+			"type": "Task", "name": row.name, "title": row.title or row.name, "due_at": row.due_date,
+			"assigned_to": row.assigned_to, "related": row.reference_docname,
+			"route": {"name": "Tasks", "query": {"task": row.name}},
+		} for row in tasks)
+	result["upcoming_activities"] = sorted(result["upcoming_activities"], key=lambda row: (row["due_at"], row["name"]))[:10]
+
 	try:
-		insights = build_smart_insights(limit=5)
+		insights = build_smart_insights(limit=25)
+		grouped = {}
+		for alert in insights["alerts"]:
+			deal_key = alert["source_id"] if alert["source_doctype"] == "DoubleT Deal" else alert.get("linked_deal")
+			key = ("deal", deal_key) if deal_key else (alert["source_doctype"], alert["source_id"], alert["type"])
+			if key not in grouped:
+				grouped[key] = {**alert, "alert_count": 1, "reasons": [alert["reason"]]}
+			else:
+				grouped[key]["alert_count"] += 1
+				grouped[key]["reasons"].append(alert["reason"])
+				if alert["severity"] == "critical":
+					grouped[key]["severity"] = "critical"
 		result["permissions"]["insights"] = True
+		result["kpis"]["critical_alerts"] = insights["summary"]["critical"]
 		result["needs_attention"] = {
 			"as_of_date": insights["as_of_date"], "semantics": insights["semantics"],
-			"summary": insights["summary"], "alerts": insights["alerts"],
+			"summary": insights["summary"], "alerts": list(grouped.values())[:6],
 		}
 	except Exception:
 		try:
@@ -228,6 +285,7 @@ def get_overview():
 		except Exception:
 			pass
 		result["permissions"]["insights"] = False
+		result["kpis"]["critical_alerts"] = None
 		result["insights_error"] = True
 
 	return result

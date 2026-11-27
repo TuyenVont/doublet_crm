@@ -15,7 +15,7 @@
       <div v-else-if="rows.length && !error && !denied" class="overflow-x-auto rounded border">
         <table class="w-full min-w-[650px] text-left text-sm">
           <thead><tr><th class="p-3">{{ __('Quotation') }}</th><th>{{ __('Status') }}</th><th>{{ __('Quotation Date') }}</th><th>{{ __('Valid Until') }}</th><th class="p-3 text-right">{{ __('Grand Total') }}</th></tr></thead>
-          <tbody><tr v-for="row in rows" :key="row.name" class="cursor-pointer border-t hover:bg-surface-gray-1" @click="router.push({ name: 'QuotationDetail', params: { quotationId: row.name } })"><td class="p-3"><button class="hover:underline">{{ row.name }}</button></td><td>{{ row.status }}</td><td>{{ row.quotation_date }}</td><td>{{ row.valid_until }}</td><td class="p-3 text-right">{{ money(row.grand_total) }}</td></tr></tbody>
+          <tbody><tr v-for="row in rows" :key="row.name" class="cursor-pointer border-t hover:bg-surface-gray-1" @click="router.push({ name: 'QuotationDetail', params: { quotationId: row.name } })"><td class="p-3"><button class="hover:underline">{{ row.name }}</button></td><td><span>{{ row.status }}</span><span v-if="isQuotationExpired(row, siteToday)" class="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">{{ __('Expired') }}</span></td><td>{{ row.quotation_date }}</td><td>{{ row.valid_until }}</td><td class="p-3 text-right">{{ money(row.grand_total) }}</td></tr></tbody>
         </table>
       </div>
       <div v-if="hasMore && !error && !denied" class="mt-3 text-center"><Button :label="__('Load More')" :loading="loading" @click="load(false)" /></div>
@@ -27,11 +27,11 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Button, call } from 'frappe-ui'
-import { message, money } from '@/utils/quotation'
+import { isQuotationExpired, message, money } from '@/utils/quotation'
 
 const props = defineProps({ dealId: { type: String, required: true } })
 const router = useRouter()
-const rows = ref([]), loading = ref(false), error = ref(''), denied = ref(false), hasMore = ref(false), canCreate = ref(false)
+const rows = ref([]), loading = ref(false), error = ref(''), denied = ref(false), hasMore = ref(false), canCreate = ref(false), siteToday = ref('')
 let requestId = 0
 
 async function load(reset) {
@@ -41,12 +41,16 @@ async function load(reset) {
   if (reset) { rows.value = []; hasMore.value = false }
   loading.value = true; error.value = ''; denied.value = false
   try {
-    const data = await call('frappe.client.get_list', {
-      doctype: 'DoubleT Quotation',
-      fields: ['name', 'status', 'quotation_date', 'valid_until', 'grand_total'],
-      filters: { deal }, order_by: 'creation desc', limit_start: rows.value.length, limit_page_length: 20,
-    })
+    const [todayRes, data] = await Promise.all([
+      siteToday.value ? Promise.resolve({ today: siteToday.value }) : call('doublet_crm.doublet_crm.doctype.doublet_quotation.doublet_quotation.get_site_today').catch(() => ({ today: '' })),
+      call('frappe.client.get_list', {
+        doctype: 'DoubleT Quotation',
+        fields: ['name', 'status', 'quotation_date', 'valid_until', 'grand_total'],
+        filters: { deal }, order_by: 'creation desc', limit_start: rows.value.length, limit_page_length: 20,
+      }),
+    ])
     if (id !== requestId) return
+    if (todayRes?.today) siteToday.value = todayRes.today
     rows.value.push(...(data || [])); hasMore.value = data?.length === 20
   } catch (e) {
     if (id !== requestId) return

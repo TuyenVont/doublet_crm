@@ -43,6 +43,8 @@ def sync_layouts():
                                 "deal_type",
                                 "stage",
                                 "amount",
+                                "probability_configured",
+                                "probability",
                             ],
                         },
                         {
@@ -95,6 +97,8 @@ def sync_layouts():
                     "fields": [
                         "stage",
                         "amount",
+                        "probability_configured",
+                        "probability",
                         "expected_close_date",
                         "deal_owner",
                         "deal_type",

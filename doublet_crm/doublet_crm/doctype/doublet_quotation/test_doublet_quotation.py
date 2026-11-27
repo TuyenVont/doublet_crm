@@ -402,3 +402,151 @@ class TestDoubleTQuotation(FrappeTestCase):
 				self.assertTrue(self.quotation(deal=deal.name).insert().name)
 			finally:
 				frappe.set_user("Administrator")
+
+	def test_ext07_expiry_helper_respects_status(self):
+		from doublet_crm.doublet_crm.doctype.doublet_quotation.doublet_quotation import is_quotation_expired
+
+		self.assertTrue(is_quotation_expired("Draft", "2026-11-26", today="2026-11-27"))
+		self.assertTrue(is_quotation_expired("Sent", "2026-11-26", today="2026-11-27"))
+		self.assertFalse(is_quotation_expired("Sent", "2026-11-27", today="2026-11-27"))
+		self.assertFalse(is_quotation_expired("Accepted", "2026-11-20", today="2026-11-27"))
+		self.assertFalse(is_quotation_expired("Rejected", "2026-11-20", today="2026-11-27"))
+
+	def test_ext08_quotation_template_payload_and_isolation(self):
+		from doublet_crm.doublet_crm.doctype.doublet_quotation_template.doublet_quotation_template import (
+			get_quotation_template_payload,
+		)
+
+		price_list = frappe.get_doc({
+			"doctype": "DoubleT Price List",
+			"price_list_name": f"VIP {self.tag}",
+			"is_active": 1,
+			"items": [{"product": self.product.name, "price": 88.5}],
+		}).insert()
+		self.company.price_list = price_list.name
+		self.company.save()
+
+		tpl = frappe.get_doc({
+			"doctype": "DoubleT Quotation Template",
+			"template_name": f"Starter {self.tag}",
+			"product_category": self.category.name,
+			"is_active": 1,
+			"terms": "Net 15 days",
+			"items": [{"product": self.product.name, "default_quantity": 3}],
+		}).insert()
+
+		payload = get_quotation_template_payload(
+			tpl.name,
+			customer_type="COMPANY",
+			company=self.company.name,
+			contact=self.contact.name,
+		)
+		self.assertEqual(payload["terms"], "Net 15 days")
+		self.assertEqual(payload["items"][0]["quantity"], 3.0)
+		self.assertEqual(Decimal(payload["items"][0]["unit_price"]), Decimal("88.50"))
+
+		quote = self.quotation(
+			quotation_template=tpl.name,
+			terms=payload["terms"],
+			items=[{"product": self.product.name, "quantity": 3, "unit_price": payload["items"][0]["unit_price"]}],
+		).insert()
+
+		tpl.terms = "Net 30 days"
+		tpl.items[0].default_quantity = 9
+		tpl.save()
+		quote.reload()
+		self.assertEqual(quote.terms, "Net 15 days")
+		self.assertEqual(quote.items[0].quantity, 3)
+
+	def test_ext09_discount_approval_workflow_and_permissions(self):
+		from doublet_crm.doublet_crm.doctype.doublet_quotation.doublet_quotation import (
+			approve_discount,
+			reject_discount,
+			request_discount_approval,
+			update_discount_approval_settings,
+		)
+
+		sales_user = frappe.get_doc({
+			"doctype": "User",
+			"email": f"disc-user-{self.tag}@example.invalid",
+			"first_name": "Disc User",
+			"enabled": 1,
+			"send_welcome_email": 0,
+			"roles": [{"role": "Sales User"}],
+		}).insert()
+		sales_manager = frappe.get_doc({
+			"doctype": "User",
+			"email": f"disc-mgr-{self.tag}@example.invalid",
+			"first_name": "Disc Mgr",
+			"enabled": 1,
+			"send_welcome_email": 0,
+			"roles": [{"role": "Sales Manager"}],
+		}).insert()
+
+		update_discount_approval_settings(1, 10, 0)
+		try:
+			frappe.set_user(sales_user.name)
+			quote = self.quotation(items=[{
+				"product": self.product.name,
+				"quantity": 1,
+				"unit_price": 100,
+				"discount_type": "Percentage",
+				"discount_percent": 15,
+			}]).insert()
+			self.assertEqual(quote.approval_status, "Required")
+
+			quote.status = "Sent"
+			with self.assertRaises(frappe.ValidationError):
+				quote.save()
+			quote.reload()
+
+			request_discount_approval(quote.name, quote.modified)
+			quote.reload()
+			self.assertEqual(quote.approval_status, "Pending")
+
+			with self.assertRaises(frappe.PermissionError):
+				approve_discount(quote.name, quote.modified)
+
+			frappe.set_user(sales_manager.name)
+			reject_discount(quote.name, "Too high", quote.modified)
+			quote.reload()
+			self.assertEqual((quote.approval_status, quote.rejection_reason), ("Rejected", "Too high"))
+
+			frappe.set_user(sales_user.name)
+			request_discount_approval(quote.name, quote.modified)
+			quote.reload()
+
+			frappe.set_user(sales_manager.name)
+			approve_discount(quote.name, quote.modified)
+			quote.reload()
+			self.assertEqual(quote.approval_status, "Approved")
+
+			# Editing discount after approval must require re-approval
+			frappe.set_user(sales_user.name)
+			quote.items[0].discount_percent = 20
+			quote.save()
+			quote.reload()
+			self.assertEqual(quote.approval_status, "Required")
+
+			# A previously saved Not Required draft must use the current settings
+			# when a controlled send is attempted.
+			frappe.set_user("Administrator")
+			update_discount_approval_settings(1, 20, 0)
+			frappe.set_user(sales_user.name)
+			legacy_draft = self.quotation(items=[{
+				"product": self.product.name,
+				"quantity": 1,
+				"unit_price": 100,
+				"discount_type": "Percentage",
+				"discount_percent": 15,
+			}]).insert()
+			self.assertEqual(legacy_draft.approval_status, "Not Required")
+			frappe.set_user("Administrator")
+			update_discount_approval_settings(1, 10, 0)
+			frappe.set_user(sales_user.name)
+			legacy_draft.status = "Sent"
+			with self.assertRaises(frappe.ValidationError):
+				legacy_draft.save()
+		finally:
+			frappe.set_user("Administrator")
+			update_discount_approval_settings(0, 0, 0)

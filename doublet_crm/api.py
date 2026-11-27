@@ -406,6 +406,18 @@ def get_activities(doctype, docname):
         )
     versions.extend(emails)
 
+    if frappe.has_permission("DoubleT Appointment", "read"):
+        appointments = frappe.get_list(
+            "DoubleT Appointment",
+            filters={"reference_doctype": doctype, "reference_docname": docname},
+            fields=["name", "title", "starts_on", "ends_on", "status", "assigned_to", "location", "creation", "owner"],
+            order_by="starts_on asc",
+        )
+        for appointment in appointments:
+            appointment["activity_type"] = "appointment"
+            appointment["data"] = {key: appointment.get(key) for key in ("title", "starts_on", "ends_on", "status", "assigned_to", "location")}
+        versions.extend(appointments)
+
     calls = frappe.get_list(
         "DoubleT Call Log", filters={"reference_doctype": doctype, "reference_name": docname},
         fields=["name", "agent", "call_type", "duration", "status", "start_time",

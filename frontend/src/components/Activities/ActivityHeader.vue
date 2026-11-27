@@ -89,6 +89,7 @@ import { whatsappEnabled } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
 import { Dropdown } from 'frappe-ui'
 import { computed, h } from 'vue'
+import { useRouter } from 'vue-router'
 import { runCreateAction } from '@/utils/activityPermissions'
 
 const props = defineProps({
@@ -99,7 +100,10 @@ const props = defineProps({
   whatsappBox: { type: Object, default: () => ({}) },
   canCreateTask: { type: Boolean, default: false },
   canCreateNote: { type: Boolean, default: false },
+  canCreateAppointment: { type: Boolean, default: false },
 })
+
+const router = useRouter()
 
 const { makeCall } = globalStore()
 
@@ -144,6 +148,12 @@ const defaultActions = computed(() => {
       label: __('Task'),
       onClick: openTask,
       condition: () => props.canCreateTask,
+    },
+    {
+      icon: 'calendar',
+      label: __('Appointment'),
+      onClick: () => router.push({ name: 'AppointmentCreate', query: { reference_doctype: props.doc.doctype, reference_docname: props.doc.name } }),
+      condition: () => props.canCreateAppointment,
     },
     {
       icon: h(AttachmentIcon, { class: 'h-4 w-4' }),

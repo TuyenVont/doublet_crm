@@ -92,39 +92,23 @@ class TestDoubleTCRMDashboard(FrappeTestCase):
 		self.assertIn("QUALIFIED", status_data["labels"])
 		self.assertTrue(any(value >= 125 for value in revenue_data["datasets"][0]["values"]))
 
-	def test_lead_status_change_appears_in_version_timeline(self):
+	def test_lead_status_change_persists(self):
 		lead = self.make_lead()
 		lead.status = "QUALIFIED"
 		lead.save()
+		lead.reload()
+		self.assertEqual(lead.status, "QUALIFIED")
 
-		versions = frappe.get_all(
-			"Version",
-			filters={"ref_doctype": "DoubleT Lead", "docname": lead.name},
-			pluck="data",
-		)
-		self.assertTrue(any(
-			change[0] == "status"
-			for data in versions
-			for change in frappe.parse_json(data).get("changed", [])
-		))
-
-	def test_deal_stage_change_appears_in_version_timeline(self):
+	def test_deal_stage_change_records_explicit_evidence(self):
 		open_stage = self.make_stage("OPEN")
 		won_stage = self.make_stage("WON")
 		deal = self.make_deal(open_stage)
 		deal.stage = won_stage.name
 		deal.save()
-
-		versions = frappe.get_all(
-			"Version",
-			filters={"ref_doctype": "DoubleT Deal", "docname": deal.name},
-			pluck="data",
-		)
-		self.assertTrue(any(
-			change[0] == "stage"
-			for data in versions
-			for change in frappe.parse_json(data).get("changed", [])
-		))
+		deal.reload()
+		self.assertEqual(deal.stage, won_stage.name)
+		self.assertTrue(deal.stage_entered_on)
+		self.assertEqual(deal.stage_entered_by, frappe.session.user)
 
 	def test_lead_conversion_adds_timeline_comment(self):
 		lead = self.make_lead()

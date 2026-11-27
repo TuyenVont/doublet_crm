@@ -24,7 +24,7 @@ const filtersSource = readFileSync(
 
 test('Quotation & Order report uses correct API and detail routes', () => {
   assert.match(reportPageSource, /quotation-order/)
-  assert.match(reportPageSource, /<QuotationOrderReport/)
+  assert.match(reportPageSource, /'quotation-order': QuotationOrderReport/)
   assert.match(qoReportSource, /doublet_crm\.reports\.get_quotation_order/)
   assert.match(qoReportSource, /name: 'QuotationDetail'/)
   assert.match(qoReportSource, /name: 'OrderDetail'/)

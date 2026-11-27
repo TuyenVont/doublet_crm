@@ -7,6 +7,10 @@ from frappe.core.doctype.communication.email import _make as make_communication
 from frappe.email.doctype.email_account.email_account import EmailAccount
 from frappe.utils import cint, getdate, get_datetime, nowdate, validate_email_address
 
+from doublet_crm.doublet_crm.doctype.doublet_quotation.doublet_quotation import (
+	ensure_quotation_can_send,
+	is_quotation_expired,
+)
 from doublet_crm.doublet_crm.doctype.doublet_quotation.quotation_pdf import (
 	_pdf_content,
 	_pdf_filename,
@@ -116,7 +120,7 @@ def _crm_email_accounts(quotation):
 
 
 def _is_expired(quotation):
-	return bool(quotation.valid_until and getdate(quotation.valid_until) < getdate(nowdate()))
+	return is_quotation_expired(quotation.status, quotation.valid_until)
 
 
 def _attachments(communication):
@@ -351,9 +355,16 @@ def send_quotation_email(
 	modified: str,
 	confirm_expired: int | str = 0,
 ):
-	quotation = _quotation(name, "write")
+	if not isinstance(name, str) or not name.strip():
+		frappe.throw(_("Quotation is required."), frappe.ValidationError)
+	# Hold the Quotation row while validating and creating the queued message so
+	# an approval/edit action cannot race this controlled send.
+	quotation = frappe.get_doc("DoubleT Quotation", name.strip(), for_update=True)
+	quotation.check_permission("read")
+	quotation.check_permission("write")
 	if quotation.status != "Draft" or str(quotation.modified) != str(modified):
 		frappe.throw(_("Reload the latest draft before sending this quotation."))
+	ensure_quotation_can_send(quotation)
 	if _is_expired(quotation) and not cint(confirm_expired):
 		frappe.throw(
 			_("This quotation expired on {0}. Confirm the expired quotation before sending.").format(

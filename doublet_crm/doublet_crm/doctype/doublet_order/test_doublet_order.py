@@ -73,7 +73,7 @@ class TestOrderController(unittest.TestCase):
             self.addCleanup(target.stop)
 
     def quote(self):
-        source = Record(name="QUO-1", customer_type="COMPANY", company="CO", contact=None,
+        source = Record(name="QUO-1", status="Accepted", customer_type="COMPANY", company="CO", contact=None,
                         deal=None, currency=None, subtotal="39.98", total_discount="4.00",
                         grand_total="35.98", items=[Record(product="P", product_name="Stored Product",
                         sku="OLD-SKU", quantity=2, unit_price="19.99", discount_type="Percentage",
@@ -252,6 +252,26 @@ class TestOrderController(unittest.TestCase):
         old = OrderHarness({"quotation": "QUO-1"})
         with self.assertRaises(frappe.ValidationError):
             OrderHarness({"quotation": "QUO-2"}, previous=old).validate_lifecycle(old)
+
+    def test_direct_link_requires_accepted_and_exact_snapshot(self):
+        source = self.quote()
+        with patch.object(module, "lock_quotation", return_value=source):
+            matching = OrderHarness({
+                "quotation": source.name,
+                "items": [{
+                    "product": "P", "quantity": 2, "unit_price": "19.99",
+                    "discount_type": "Percentage", "discount_percent": 10,
+                    "discount_amount": "4.00",
+                }],
+            })
+            self.assertIs(matching.validate_quotation(None), source)
+            source.status = "Sent"
+            with self.assertRaises(frappe.ValidationError):
+                matching.validate_quotation(None)
+            source.status = "Accepted"
+            matching.items[0].quantity = 3
+            with self.assertRaises(frappe.ValidationError):
+                matching.validate_quotation(None)
 
     def test_lock_loads_current_source_and_checks_read_access(self):
         doc = Record(check_permission=Mock())

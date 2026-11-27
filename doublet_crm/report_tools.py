@@ -69,10 +69,9 @@ DERIVED_FIELDS = {
 		"days": (("DoubleT Deal", "modified"), ("DoubleT Deal", "expected_close_date")),
 		"score": (), "category": (), "definition": (),
 		"weighted_value": (("DoubleT Deal", "amount"),), "probability_source": (),
-		"stage_entry_date": (("DoubleT Deal", "stage"), ("DoubleT Deal", "creation"), ("Version", "ref_doctype"), ("Version", "docname"), ("Version", "creation"), ("Version", "data")),
-		"days_in_stage": (("DoubleT Deal", "stage"), ("DoubleT Deal", "creation"), ("Version", "ref_doctype"), ("Version", "docname"), ("Version", "creation"), ("Version", "data")),
-		"history_status": (("DoubleT Deal", "stage"), ("DoubleT Deal", "creation"), ("Version", "ref_doctype"), ("Version", "docname"), ("Version", "creation"), ("Version", "data")),
-		"unknown_reason": (("DoubleT Deal", "stage"), ("DoubleT Deal", "creation"), ("Version", "ref_doctype"), ("Version", "docname"), ("Version", "creation"), ("Version", "data")),
+		"stage_entry_date": (("DoubleT Deal", "stage"),), "stage_entry_actor": (("DoubleT Deal", "stage"),),
+		"days_in_stage": (("DoubleT Deal", "stage"),), "evidence_source": (("DoubleT Deal", "stage"),),
+		"history_status": (("DoubleT Deal", "stage"),), "unknown_reason": (("DoubleT Deal", "stage"),),
 	},
 	"DoubleT Quotation": {
 		"source_doctype": (), "source_id": (("DoubleT Quotation", "name"),), "source_label": (("DoubleT Quotation", "name"),),
@@ -116,8 +115,9 @@ ALERT_ROW_DEPENDENCIES = {
 	"DoubleT Quotation": (("DoubleT Quotation", "status"), ("DoubleT Quotation", "valid_until")),
 	"DoubleT Task": (("DoubleT Task", "status"), ("DoubleT Task", "due_date")),
 }
-STAGE_AGING_DEPENDENCIES = (
-	("DoubleT Deal", "stage"), ("DoubleT Deal", "creation"),
+STAGE_AGING_BASE_DEPENDENCIES = (("DoubleT Deal", "stage"),)
+STAGE_AGING_EXPLICIT_DEPENDENCIES = (("DoubleT Deal", "stage_entered_on"),)
+STAGE_AGING_VERSION_DEPENDENCIES = (
 	("Version", "ref_doctype"), ("Version", "docname"), ("Version", "creation"), ("Version", "data"),
 )
 
@@ -229,6 +229,19 @@ def _export_rows(report, data, allowed):
 				return False
 		return True
 
+	def stage_aging_dependencies(value, include_actor=True):
+		value = _dict(value)
+		dependencies = list(STAGE_AGING_BASE_DEPENDENCIES)
+		if value.get("evidence_source") == "deal_transition":
+			dependencies.extend(STAGE_AGING_EXPLICIT_DEPENDENCIES)
+			if include_actor and value.get("stage_entry_actor"):
+				dependencies.append(("DoubleT Deal", "stage_entered_by"))
+		elif value.get("evidence_source") == "version":
+			dependencies.extend(STAGE_AGING_VERSION_DEPENDENCIES)
+			if include_actor and value.get("stage_entry_actor"):
+				dependencies.append(("Version", "owner"))
+		return tuple(dict.fromkeys(dependencies))
+
 	def document_allowed(doctype, name):
 		if not name or not allowed.get(doctype):
 			return False
@@ -297,10 +310,12 @@ def _export_rows(report, data, allowed):
 		for group in data.get("lost_reasons") or []: add("lost_deals", group.get("deals"), "DoubleT Deal")
 		forecast = data.get("forecast") or {}
 		probability_fields = forecast.get("probability_fields") or {}
+		probability_configuration_fields = forecast.get("probability_configuration_fields") or {}
 		probability_dependencies = tuple(
-			(doctype, probability_fields.get(key))
+			(doctype, fieldname)
 			for key, doctype in (("deal", "DoubleT Deal"), ("stage", "DoubleT Deal Stage"))
-			if probability_fields.get(key)
+			for fieldname in (probability_fields.get(key), probability_configuration_fields.get(key))
+			if fieldname
 		)
 		probability_authorized = bool(probability_dependencies) and authorized(probability_dependencies)
 		if forecast.get("available") and authorized((("DoubleT Deal", "amount"), ("DoubleT Deal", "expected_close_date"), ("DoubleT Deal", "stage"))):
@@ -312,7 +327,7 @@ def _export_rows(report, data, allowed):
 			):
 				summary[key] = forecast.get(key)
 			if probability_authorized:
-				for key in ("weighted_forecast_value", "missing_probability_count", "missing_probability_value"):
+				for key in ("weighted_forecast_value", "weighted_deal_count", "missing_probability_count", "missing_probability_value"):
 					summary[key] = forecast.get(key)
 			rows.append(summary)
 		for month in forecast.get("months") or []:
@@ -327,28 +342,46 @@ def _export_rows(report, data, allowed):
 		):
 			for value in values or []:
 				row = dict(value)
-				fieldname = probability_fields.get("deal") if row.get("probability_source", "").startswith("DoubleT Deal.") else probability_fields.get("stage")
-				probability_doctype = "DoubleT Deal" if row.get("probability_source", "").startswith("DoubleT Deal.") else "DoubleT Deal Stage"
-				if not fieldname or not authorized(((probability_doctype, fieldname),)):
+				key = "deal" if row.get("probability_source", "").startswith("DoubleT Deal.") else "stage"
+				fieldname = probability_fields.get(key)
+				probability_doctype = "DoubleT Deal" if key == "deal" else "DoubleT Deal Stage"
+				probability_dependency = tuple(
+					(probability_doctype, dependency_field)
+					for dependency_field in (fieldname, probability_configuration_fields.get(key))
+					if dependency_field
+				)
+				if not fieldname or not authorized(probability_dependency):
 					for key in ("probability", "probability_source", "weighted_value"):
 						row.pop(key, None)
-				probability_dependency = ((probability_doctype, fieldname),) if fieldname else ()
 				add(section, [row], "DoubleT Deal", extra_dependencies={
 					"probability": probability_dependency,
 					"probability_source": probability_dependency,
 					"weighted_value": (("DoubleT Deal", "amount"),) + probability_dependency,
 				})
 		stage_aging = data.get("stage_aging") or {}
-		if stage_aging.get("available") and authorized(STAGE_AGING_DEPENDENCIES):
+		stage_rows = stage_aging.get("rows") or []
+		block_dependencies = tuple(dict.fromkeys(
+			dependency
+			for value in stage_rows
+			for dependency in stage_aging_dependencies(value, include_actor=False)
+		)) or STAGE_AGING_BASE_DEPENDENCIES
+		if stage_aging.get("available") and authorized(block_dependencies):
 			rows.append({"section": "stage_aging_summary", **{key: stage_aging.get(key) for key in ("average_days_in_stage", "known_count", "unknown_count")}})
 			for bucket in stage_aging.get("buckets") or []:
 				rows.append({"section": "stage_aging_buckets", **{key: bucket.get(key) for key in ("key", "label", "deal_count")}})
-			if authorized(STAGE_AGING_DEPENDENCIES + (("DoubleT Deal Stage", "name"), ("DoubleT Deal Stage", "stage_name"))):
+			if authorized(block_dependencies + (("DoubleT Deal Stage", "name"), ("DoubleT Deal Stage", "stage_name"))):
 				for stage in stage_aging.get("by_stage") or []:
 					if stage.get("stage") and not document_allowed("DoubleT Deal Stage", stage["stage"]):
 						continue
 					rows.append({"section": "stage_aging_by_stage", **{key: stage.get(key) for key in ("stage", "stage_label", "deal_count", "known_count", "unknown_count", "average_days_in_stage")}})
-			add("stage_aging_deals", stage_aging.get("rows"), "DoubleT Deal")
+		for value in stage_rows:
+			dependencies = stage_aging_dependencies(value)
+			if not authorized(dependencies):
+				continue
+			add("stage_aging_deals", [value], "DoubleT Deal", extra_dependencies={
+				key: dependencies
+				for key in ("stage_entry_date", "stage_entry_actor", "days_in_stage", "evidence_source", "history_status", "unknown_reason")
+			})
 		comparison()
 	elif report == "customer-journey":
 		for journey in data.get("journey_rows") or []:
@@ -382,11 +415,11 @@ def _export_rows(report, data, allowed):
 	else:
 		for alert in data.get("alerts") or []:
 			doctype = alert.get("source_doctype")
-			dependencies = STAGE_AGING_DEPENDENCIES if alert.get("type") == "prolonged_stage" else ALERT_ROW_DEPENDENCIES.get(doctype)
+			dependencies = stage_aging_dependencies(alert) if alert.get("type") == "prolonged_stage" else ALERT_ROW_DEPENDENCIES.get(doctype)
 			if dependencies is not None and authorized(dependencies):
 				extra_dependencies = None
 				if alert.get("type") == "prolonged_stage":
-					extra_dependencies = {key: STAGE_AGING_DEPENDENCIES for key in ("type", "severity", "reason", "relevant_date", "days")}
+					extra_dependencies = {key: dependencies for key in ("type", "severity", "reason", "relevant_date", "days", "stage_entry_actor", "evidence_source")}
 				add("alerts", [alert], doctype, extra_dependencies=extra_dependencies)
 		for health in data.get("health") or []:
 			eligibility = (("DoubleT Deal", "name"), ("DoubleT Deal", "won_on"), ("DoubleT Deal", "lost_on"), ("DoubleT Deal", "stage"), ("DoubleT Deal Stage", "stage_type"))

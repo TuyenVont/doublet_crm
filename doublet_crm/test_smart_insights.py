@@ -31,7 +31,8 @@ class TestSmartInsightsRules(FrappeTestCase):
 		task = row(name="T-1", title="Past due", status="Todo", priority="High", due_date="2026-11-24", assigned_to="owner@example.com", reference_doctype="DoubleT Deal", reference_docname="D-OPEN")
 		get_list.side_effect = [[open_deal, closed_deal], [quotation], [task], [task], [], []]
 
-		result = build_smart_insights("2026-11-25")
+		with patch("doublet_crm.smart_insights.readable_stage_evidence_fields", return_value=[]):
+			result = build_smart_insights("2026-11-25")
 
 		self.assertEqual({item["type"] for item in result["alerts"]}, {"stale_deal", "quotation_expiry", "overdue_task"})
 		self.assertEqual(next(item for item in result["alerts"] if item["type"] == "stale_deal")["days"], 7)
@@ -48,14 +49,17 @@ class TestSmartInsightsRules(FrappeTestCase):
 		get_list.side_effect = [[open_deal], [], [], [], [], []]
 		stage_aging.return_value = {"history_available": True, "rows": [{
 			"name": "D-OPEN", "deal_title": "Open", "deal_owner": "owner@example.com", "stage": "Qualified", "stage_label": "Qualified",
-			"stage_entry_date": "2026-10-01", "days_in_stage": 55,
+			"stage_entry_date": "2026-10-01", "stage_entry_actor": "agent@example.com", "days_in_stage": 55, "evidence_source": "deal_transition",
 		}]}
 
-		result = build_smart_insights("2026-11-25")
+		with patch("doublet_crm.smart_insights.readable_stage_evidence_fields", return_value=[]):
+			result = build_smart_insights("2026-11-25")
 
 		self.assertEqual([alert["type"] for alert in result["alerts"]], ["prolonged_stage"])
 		self.assertNotIn("stale_deal", {alert["type"] for alert in result["alerts"]})
 		self.assertEqual(result["thresholds"]["stage_aging_days"], 30)
+		self.assertEqual(result["alerts"][0]["stage_entry_actor"], "agent@example.com")
+		self.assertEqual(result["alerts"][0]["evidence_source"], "deal_transition")
 
 	def test_health_unknown_inputs_are_excluded_not_scored_as_zero(self):
 		deal = row(name="D-1", deal_title="Deal", deal_owner=None, amount=0, modified=None, expected_close_date=None)
@@ -84,7 +88,8 @@ class TestSmartInsightsRules(FrappeTestCase):
 	def test_standalone_sent_quotation_expiry_is_included(self, _permission, get_list, _stages):
 		quotation = row(name="Q-STANDALONE", deal=None, status="Sent", valid_until="2026-11-28", grand_total=100, modified="2026-11-20")
 		get_list.side_effect = lambda doctype, **_kwargs: [quotation] if doctype == "DoubleT Quotation" else []
-		result = build_smart_insights("2026-11-25")
+		with patch("doublet_crm.smart_insights.readable_stage_evidence_fields", return_value=[]):
+			result = build_smart_insights("2026-11-25")
 		alert = next(item for item in result["alerts"] if item["source_id"] == "Q-STANDALONE")
 		self.assertFalse(alert["follow_up"]["available"])
 
@@ -95,7 +100,8 @@ class TestSmartInsightsRules(FrappeTestCase):
 	def test_restricted_sources_are_not_queried_and_stay_unknown(self, has_permission, get_list, _stages, _aging):
 		has_permission.side_effect = lambda doctype, _ptype: doctype == "DoubleT Deal"
 		get_list.return_value = [row(name="D-1", deal_title="Deal", deal_owner=None, amount=1, stage="Open", modified="2026-11-25", expected_close_date=None, won_on=None, lost_on=None)]
-		result = build_smart_insights("2026-11-25")
+		with patch("doublet_crm.smart_insights.readable_stage_evidence_fields", return_value=[]):
+			result = build_smart_insights("2026-11-25")
 		self.assertEqual(get_list.call_count, 1)
 		self.assertFalse(result["permissions"]["tasks"])
 		self.assertFalse(result["permissions"]["quotations"])
@@ -291,18 +297,32 @@ class TestReportExportSafety(FrappeTestCase):
 		data = {"stage_aging": {
 			"available": True, "average_days_in_stage": 12, "known_count": 1, "unknown_count": 0,
 			"buckets": [{"key": "8_14", "label": "8–14 days", "deal_count": 1}], "by_stage": [],
-			"rows": [{"name": "D-1", "deal_title": "Visible", "deal_owner": "owner@example.com", "stage": "S-1", "stage_label": "Qualified", "stage_entry_date": "2026-11-13", "days_in_stage": 12, "history_status": "Known", "unknown_reason": None}],
+			"rows": [{"name": "D-1", "deal_title": "Visible", "deal_owner": "owner@example.com", "stage": "S-1", "stage_label": "Qualified", "stage_entry_date": "2026-11-13", "stage_entry_actor": "agent@example.com", "days_in_stage": 12, "evidence_source": "version", "history_status": "Known", "unknown_reason": None}],
 		}}
 		policies = {
 			"DoubleT Deal": ({"name", "deal_title", "deal_owner", "stage", "creation"}, {"name", "deal_title", "deal_owner", "stage", "creation"}),
 			"DoubleT Deal Stage": ({"name", "stage_name"}, {"name", "stage_name"}),
-			"Version": ({"name", "ref_doctype", "docname", "creation", "data"}, {"name", "ref_doctype", "docname", "creation", "data"}),
+			"Version": ({"name", "owner", "ref_doctype", "docname", "creation", "data"}, {"name", "owner", "ref_doctype", "docname", "creation", "data"}),
 		}
 		with patch("doublet_crm.report_tools._permitted_fields", side_effect=lambda doctype: policies[doctype]), patch("doublet_crm.report_tools.frappe.has_permission", return_value=True):
 			restricted = _export_rows("pipeline-analytics", data, {"DoubleT Deal": True, "DoubleT Deal Stage": True, "Version": False})
 			complete = _export_rows("pipeline-analytics", data, {"DoubleT Deal": True, "DoubleT Deal Stage": True, "Version": True})
 		self.assertNotIn("D-1", json.dumps(restricted))
 		self.assertEqual(next(row for row in complete if row["section"] == "stage_aging_deals")["days_in_stage"], 12)
+
+	def test_stage_aging_export_accepts_authorized_explicit_evidence_without_version_access(self):
+		data = {"stage_aging": {
+			"available": True, "average_days_in_stage": 12, "known_count": 1, "unknown_count": 0,
+			"buckets": [], "by_stage": [],
+			"rows": [{"name": "D-1", "deal_title": "Visible", "deal_owner": "owner@example.com", "stage": "S-1", "stage_entry_date": "2026-11-13", "stage_entry_actor": "agent@example.com", "days_in_stage": 12, "evidence_source": "deal_transition", "history_status": "Known", "unknown_reason": None}],
+		}}
+		policies = {
+			"DoubleT Deal": ({"name", "deal_title", "deal_owner", "stage", "stage_entered_on", "stage_entered_by"}, {"name", "deal_title", "deal_owner", "stage", "stage_entered_on", "stage_entered_by"}),
+			"DoubleT Deal Stage": ({"name", "stage_name"}, {"name", "stage_name"}),
+		}
+		with patch("doublet_crm.report_tools._permitted_fields", side_effect=lambda doctype: policies[doctype]), patch("doublet_crm.report_tools.frappe.has_permission", return_value=True):
+			rows = _export_rows("pipeline-analytics", data, {"DoubleT Deal": True, "DoubleT Deal Stage": True, "Version": False})
+		self.assertEqual(next(row for row in rows if row["section"] == "stage_aging_deals")["stage_entry_actor"], "agent@example.com")
 
 	@patch("doublet_crm.report_tools.frappe.has_permission", return_value=True)
 	def test_export_reruns_report_and_emits_complete_bom_csv(self, _permission):
