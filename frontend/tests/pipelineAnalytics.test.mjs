@@ -16,10 +16,6 @@ const dealsViewSource = readFileSync(
   new URL('../src/pages/DealsView.vue', import.meta.url),
   'utf8',
 )
-const dealsComposableSource = readFileSync(
-  new URL('../src/composables/useDoubleTDeals.js', import.meta.url),
-  'utf8',
-)
 const backendSource = readFileSync(
   new URL('../../doublet_crm/reports.py', import.meta.url),
   'utf8',
@@ -94,8 +90,7 @@ test('stage chart and Deal rows use existing SPA routes', () => {
   assert.match(dealsViewSource, /creationStart: route\.query\.creation_start/)
   assert.match(dealsViewSource, /creationEnd: route\.query\.creation_end/)
   assert.match(dealsViewSource, /dealOwner: route\.query\.deal_owner/)
-  assert.match(dealsViewSource, /selectedStage = ref\(String\(route\.query\.stage \|\| ''\)\)/)
-  assert.match(dealsComposableSource, /buildDealListFilters\(options\)/)
+  assert.match(dealsViewSource, /stage: route\.query\.stage/)
 })
 
 test('Deal list resource supports the exact Pipeline aggregate filter tuple', () => {

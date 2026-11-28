@@ -1,6 +1,7 @@
 import {
   ref,
   computed,
+  toValue,
   watch,
 } from 'vue'
 
@@ -18,6 +19,7 @@ import { buildDealListFilters } from '@/utils/dealFilters'
 
 export function useDoubleTDeals(options = {}) {
   const stages = ref([])
+  const stagesLoaded = ref(false)
   const contactLabels = ref({})
   const companyLabels = ref({})
 
@@ -29,8 +31,21 @@ export function useDoubleTDeals(options = {}) {
     return map
   })
 
+  const filters = computed(() => {
+    const selected = toValue(options)
+    const filters = buildDealListFilters(selected)
+    if (selected.lifecycle) {
+      const stageNames = stages.value
+        .filter((stage) => stage.stage_type === selected.lifecycle)
+        .map((stage) => stage.name)
+      if (!selected.stage || !stageNames.includes(selected.stage)) {
+        filters.stage = ['in', selected.stage ? [] : stageNames]
+      }
+    }
+    return filters
+  })
+
   async function fetchStages() {
-    dealsResource.params.filters = buildDealListFilters(options)
     try {
       const res = await call('frappe.client.get_list', {
         doctype: 'DoubleT Deal Stage',
@@ -50,19 +65,11 @@ export function useDoubleTDeals(options = {}) {
       })
       stages.value = res || []
 
-      if (!options.stage && options.lifecycle) {
-        const stageNames = stages.value
-          .filter((stage) => stage.stage_type === options.lifecycle)
-          .map((stage) => stage.name)
-        dealsResource.params.filters = {
-          ...buildDealListFilters(options),
-          stage: ['in', stageNames],
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to fetch stages', e)
+    } catch (error) {
+      console.warn('Failed to fetch stages', error)
+    } finally {
+      stagesLoaded.value = true
     }
-    await dealsResource.reload()
   }
 
   function getStageColor(stageName) {
@@ -93,9 +100,30 @@ export function useDoubleTDeals(options = {}) {
       'creation',
       'owner',
     ],
+    filters: filters.value,
     orderBy: 'modified desc',
     pageLength: 20,
     auto: false,
+  })
+
+  let reloadRequest
+
+  function reload() {
+    if (stagesLoaded.value && !dealsResource.list.loading) reloadRequest = dealsResource.reload()
+    return reloadRequest
+  }
+
+  watch([filters, stagesLoaded], async ([selected, ready], _, onCleanup) => {
+    if (!ready) return
+    let stale = false
+    onCleanup(() => { stale = true })
+    await reloadRequest?.catch(() => {})
+    if (dealsResource.list.loading) {
+      await dealsResource.list.promise.catch(() => {})
+    }
+    if (stale) return
+    dealsResource.update({ filters: selected, start: 0 })
+    return dealsResource.list.fetch()
   })
 
   fetchStages()
@@ -203,7 +231,12 @@ export function useDoubleTDeals(options = {}) {
     columns,
     rows,
     totalCount,
-    reload: () => dealsResource.reload(),
-    loadMore: () => dealsResource.next(),
+    reload,
+    loadMore() {
+      if (!dealsResource.list.loading && dealsResource.hasNextPage && dealsResource.data?.length) {
+        dealsResource.update({ start: dealsResource.data.length - dealsResource.pageLength })
+        dealsResource.next()
+      }
+    },
   }
 }
