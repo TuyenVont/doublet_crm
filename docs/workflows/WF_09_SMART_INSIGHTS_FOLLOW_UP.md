@@ -6,6 +6,7 @@
 - **Preconditions/Input/Output:** alert still valid/readable and Task assignee/reference valid; output one active follow-up Task.
 - **Modules/permissions:** M11 → M08; report and source record access plus Task create.
 - **Exceptions/result:** stale alert, unsupported Quotation reference, concurrent request or existing marker returns denial/existing task.
+- **Contract:** [BF-09 Report/Insight → source or Task](../architecture/BUSINESS_FLOW_CONTRACT.md#bf-09--reportsmart-insight--source-or-follow-up-task); source link và Task phải dùng cùng permission-scoped current alert.
 - **Status:** Explicit action source implemented; fully automatic `NEW-02` target not implemented.
 
 ```mermaid

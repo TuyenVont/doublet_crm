@@ -42,6 +42,8 @@ Booked Sales = Confirmed/Completed Order theo order_date; Won Deal Value = Deal.
 
 Filter/cohort → authorized query → aggregate/chart/table → export/drill-down trên cùng dataset.
 
+Drill-down route và follow-up action tuân theo [BF-09](../../architecture/BUSINESS_FLOW_CONTRACT.md#bf-09--reportsmart-insight--source-or-follow-up-task): route mang exact source ID, backend query quyết định population được phép và restricted/unknown không được thay bằng zero.
+
 Chi tiết end-to-end nằm ở mục Related Workflows; state không được suy ra từ nhãn UI nếu controller/schema quy định khác.
 
 ## Permissions
@@ -72,7 +74,8 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 
 ## Related Workflows
 
-- Xem [workflow index](../../workflows/README.md); chưa có workflow riêng cho mục này.
+- [WF 09 SMART INSIGHTS FOLLOW UP](../../workflows/WF_09_SMART_INSIGHTS_FOLLOW_UP.md)
+- [Report/Insight acceptance](../../testing/CROSS_MODULE_ACCEPTANCE.md#reports-and-smart-insights)
 
 ## Implementation Status
 

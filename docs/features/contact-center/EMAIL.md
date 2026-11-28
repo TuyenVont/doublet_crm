@@ -37,6 +37,15 @@ Các validation riêng được xác định từ source/checklist trong bảng 
 
 Inbound/outbound event → link customer → assign/handle → resolve; derived Task/Note giữ link về nguồn.
 
+### Quotation Email API compatibility
+
+- `get_quotation_email_context(name, search)` kiểm Quotation read, ưu tiên readable Contact rồi Company và chỉ search Contact có email trong cùng Company.
+- `get_quotation_emails(name)` kiểm Quotation, Communication và File read; Communication state ưu tiên Email Queue, thiếu evidence giữ `Unknown`.
+- `send_quotation_email` yêu cầu read/write + matching `modified`; expiry cần explicit confirmation; tạo một Communication/Email Queue và queue job có dedupe.
+- `reply_quotation_email` chỉ reply Received Email cùng Quotation; recipient lấy từ inbound sender, caller không được đổi. PDF delivery không tự đổi lifecycle.
+
+Email history giữ exact Communication reference/thread; customer-wide view không được trộn email của hai Deal chỉ vì cùng customer. Xem [Customer history continuity](../../architecture/BUSINESS_FLOW_CONTRACT.md#customer-history-continuity).
+
 Chi tiết end-to-end nằm ở mục Related Workflows; state không được suy ra từ nhãn UI nếu controller/schema quy định khác.
 
 ## Permissions

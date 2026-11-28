@@ -31,6 +31,8 @@ Quy tắc dùng chung được quản lý tại [Deal & Pipeline](DEAL_PIPELINE.
 
 Dữ liệu đi từ prospect/interaction đến customer master, Deal và các projection downstream; trạng thái chỉ thay đổi qua controller/API có kiểm quyền.
 
+Contract chuyển tiếp và dữ liệu kế thừa được quản lý tại [BF-02 Lead → Contact/Company/Deal](../../architecture/BUSINESS_FLOW_CONTRACT.md#bf-02--lead--contactcompanydeal). Converted links và Deal `source_lead` phải còn sau reload; Conversation đã link Lead tiếp tục được truy qua converted chain mà không copy Message. Contact đại diện Company phải được xác nhận, không suy ra khi ambiguous.
+
 Chi tiết end-to-end nằm ở mục Related Workflows; state không được suy ra từ nhãn UI nếu controller/schema quy định khác.
 
 ## Permissions
@@ -61,6 +63,8 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 
 - [WF 01 INDIVIDUAL SALES](../../workflows/WF_01_INDIVIDUAL_SALES.md)
 - [WF 02 COMPANY SALES](../../workflows/WF_02_COMPANY_SALES.md)
+- [WF 11 CUSTOMER LIFECYCLE](../../workflows/WF_11_CUSTOMER_LIFECYCLE.md)
+- [Identity/conversion acceptance](../../testing/CROSS_MODULE_ACCEPTANCE.md#customer-identity-and-conversion)
 
 ## Implementation Status
 

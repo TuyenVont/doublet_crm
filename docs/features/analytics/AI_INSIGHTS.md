@@ -15,7 +15,7 @@ AI diễn giải báo cáo dựa trên số liệu đã kiểm chứng. Mục n�
 
 | ID | Tính năng/việc | Hạng mục | Ưu tiên | Căn cứ và hiện trạng | Nguồn yêu cầu |
 | --- | --- | --- | --- | --- | --- |
-| REP-13 | AI diễn giải báo cáo dựa trên số liệu đã kiểm chứng | R3 · AI Reports | P2 | Main 7221e0e chưa có AI diễn giải; Smart Insights vẫn rule-based. 26/11 · Codex báo REP-13 Phase 1 AI Foundation ở worktree /tmp/doublet-crm-rep13: Settings, Beeknoee service, API Key bảo mật, giới hạn request/ngân sách. Chưa thấy branch trên GitHub. | Đề xuất mở rộng 22/11 · Smart Insights · AI Agent roadmap |
+| REP-13 | AI diễn giải báo cáo dựa trên số liệu đã kiểm chứng | R3 · AI Reports | P2 | Baseline `a7534e7` chưa có AI diễn giải; Smart Insights vẫn rule-based. Historical 26/11: Codex báo Phase 1 AI Foundation ở worktree `/tmp/doublet-crm-rep13`, mocked backend 11/11 và frontend 3/3; chưa merge/remote/migrate/build/browser/live API. | Đề xuất mở rộng 22/11 · Smart Insights · AI Agent roadmap |
 
 ## Data Model
 
@@ -80,5 +80,6 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 ## Known Limitations
 
 - **REP-13:** Main 7221e0e chưa có AI diễn giải; Smart Insights vẫn rule-based. 26/11 · Codex báo REP-13 Phase 1 AI Foundation ở worktree /tmp/doublet-crm-rep13: Settings, Beeknoee service, API Key bảo mật, giới hạn request/ngân sách. Chưa thấy branch trên GitHub.
+- **Review risks còn hiệu lực:** frontend GET/POST contract, MariaDB concurrency/reservation, duplicate request/transaction isolation, API-key removal, mock teardown, PII minimization và grounding trên permission-scoped KPI. Historical worktree evidence không chứng minh baseline implementation.
 
 Không tự nâng trạng thái checklist hoặc acceptance khi chưa có bằng chứng tương ứng.

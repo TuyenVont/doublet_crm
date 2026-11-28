@@ -24,6 +24,8 @@ flowchart LR
 
 Backend là Frappe app `doublet_crm`; frontend dùng `createWebHistory('/doublet-crm')`. Business DocType/controller nằm trong app, không override Frappe core. `hooks.py` đăng ký permission hooks, document events, `after_migrate` setup và cron reminder mỗi phút. Background queue được dùng cho AI Call Summary và email delivery.
 
+Frappe socket được khởi tạo ở frontend và Calls/Notification có realtime events, nhưng Zalo Inbox **không** publish/subscribe realtime ở baseline. MOCK inbound chỉ persistence; Inbox cần refresh. Kiến trúc target dùng event tối thiểu sau commit để client refetch qua permission-scoped API, kèm reconnect/poll fallback; xem [BF-RT-01](BUSINESS_FLOW_CONTRACT.md#bf-rt-01--inbound-chat--inboxthread-realtime).
+
 ## 3.2 Kiến trúc mục tiêu
 
 ```mermaid
@@ -56,6 +58,7 @@ Môi trường được ghi nhận: Windows/VS Code → WSL checkout → Docker 
 | CRM | `doublet_lead.convert_lead` | Lead action; Lead/customer/deal args | converted links | Lead read/write/create linked records; duplicate conversion guarded | `.../doublet_lead.py` |
 | CRM | `api.update_deal_stage` | Deal Kanban; deal, stage, lost_reason | updated Deal | Deal write; Stage exists; LOST reason | `doublet_crm/api.py` |
 | Activity | `api.get_activities` | record tabs; doctype/name | versions/calls/notes/tasks/attachments | allowed reference + record read; filters unreadable children | `doublet_crm/api.py` |
+| Task/Note | `get_linked_tasks`, `get_linked_notes`, `get_notes`, Frappe CRUD | record tabs/standalone pages | compatibility response / rows | exact reference + source read; Task/Note create/write | `api.py`, controllers |
 | Activity | `list_appointments`, Frappe CRUD | Appointments; filters/document | rows/defaults/document | Appointment hooks, time/reference validation | `doublet_appointment.py` |
 | Pricing | `pricing.get_product_price` | Quote/Order/Deal form | price/list/source | Product/customer/list read, sellability; zero preserved | `doublet_crm/pricing.py` |
 | Sales | `sales_completion.get/save_deal_products` | Deal Products tab | safe snapshots | Deal read/write, modified concurrency, Product access | `sales_completion.py` |
@@ -73,15 +76,17 @@ Môi trường được ghi nhận: Windows/VS Code → WSL checkout → Docker 
 | Loại | Method/endpoint | Contract và trạng thái |
 | --- | --- | --- |
 | Inbound MOCK | `zalo_oa.receive_mock_text` POST | Authenticated synthetic OA/user/message/content/time; deterministic dedupe; **implemented MOCK**. |
-| Inbox | `zalo_inbox.list_conversations/get_messages/...` | Permission-scoped list/history/record membership; **implemented**. |
-| Workflow | `zalo_workflow.update_conversation` POST | action + `request_id` + `version`; assign/accept/resolve/link/create Lead; audit event; **implemented**. |
+| Inbox | `zalo_inbox.list_conversations/get_messages/...` | Permission-scoped list/history/record membership, reply/handling filters và response metrics; **implemented MOCK scope**. |
+| Record chat | `list_record_conversations/get_record_messages/save_record_mock_reply` | One shared Conversation/Message history projected to Lead/Deal/Contact/Company after record membership + permission checks; **implemented MOCK**. |
+| Workflow | `zalo_workflow.update_conversation` POST | action + `request_id` + `version`; assign/transfer/accept/resolve/link/create Lead; reason + audit event + replay hash; **implemented**. |
 | Outbound MOCK | `save_mock_reply`, `save_record_mock_reply` POST | `request_id`, same content on retry, persists simulated Message; **implemented**. |
 | Call inbound | `api.create_call_log` POST | Integration principal, stable `external_call_id`, call metadata; create/dedupe/match unique phone; **implemented**, PBX adapter absent. |
 | Calls queue | `contact_center_calls.get/assign/start/open_callback/record_callback_result/resolve` | Row lock, assignee/manager scope, event audit; **implemented**. |
-| AI Call job | `ai_summary.summarize_call/get_call_summary/save_next_steps` | private recording, explicit generate, queue, provider config, reviewed Note; **implemented source**, real provider pending. |
+| AI Call job | `ai_summary.summarize_call/get_call_summary/save_next_steps` | DEMO manifest never queues; LIVE uses private recording/provider; explicit generate, permission recheck và reviewed unique Note; **implemented source**, real provider pending. |
 | Scheduler | `reminders.send_due_reminders` cron `* * * * *` | locks due Task/Appointment and writes Notification Log once; **implemented source**. |
 | Background | email delivery, `_process_call_summary` | worker-required; output status stored; runtime worker acceptance pending. |
 | Zalo LIVE | inbound signature/token + outbound delivery | **Not implemented/verified**. Do not reuse MOCK label as LIVE. |
+| Zalo realtime | after-commit event/subscription/reconnect merge | **Not implemented**; global socket availability does not make Inbox realtime. |
 | WooCommerce | Customer/Product/Order webhooks | **Not implemented**; direction/conflict/source contract pending. |
 | PBX/SIP | vendor event/recording adapter | **Not implemented**; generic Call API is not PBX integration. |
 | n8n/Webhook/Telegram | signed event, retry/log, scoped action | **Not implemented** in baseline; no verifiable workflow export. |

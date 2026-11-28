@@ -8,7 +8,7 @@ Bảng này là ánh xạ chính: mỗi checklist ID xuất hiện đúng một 
 | --- | --- | --- | --- | --- | --- | --- |
 | CRM-01 | Danh sách, tạo và cập nhật Lead | crm | [LEAD](../features/crm/LEAD.md#feature-crm-01) | FrappeLead.vue | Có; source reference FrappeLead.vue. | Cần kiểm |
 | CRM-02 | Lead → Deal cho cá nhân và doanh nghiệp | crm | [LEAD_CONVERSION](../features/crm/LEAD_CONVERSION.md#feature-crm-02) | doublet_lead.py | Có; source reference doublet_lead.py. | Cần kiểm |
-| CRM-03 | Quản lý cơ hội và pipeline | crm | [DEAL_PIPELINE](../features/crm/DEAL_PIPELINE.md#feature-crm-03) | DealsView.vue | Có; source reference DealsView.vue. | Cần kiểm |
+| CRM-03 | Quản lý cơ hội và pipeline | crm | [DEAL_PIPELINE](../features/crm/DEAL_PIPELINE.md#feature-crm-03) | `useDoubleTDeals.js`; `DealsView.vue`; `dealsResource.test.mjs` | Có — PR #37 source verified; test exists, execution/browser pending. | Cần kiểm |
 | CRM-04 | Danh sách, chi tiết Contact và Company | crm | [CUSTOMER](../features/crm/CUSTOMER.md#feature-crm-04) | router.js | Có; source reference router.js. | Cần kiểm |
 | CRM-05 | Hồ sơ khách tập trung và timeline đa kênh | crm | [CUSTOMER](../features/crm/CUSTOMER.md#feature-crm-05) | api.py | Có một phần; source reference api.py. | Cần làm |
 | CRM-06 | Phát hiện và xử lý hồ sơ trùng | crm | [IDENTITY_DUPLICATES](../features/crm/IDENTITY_DUPLICATES.md#feature-crm-06) | doublet_lead.py | Có một phần; source reference doublet_lead.py. | Cần làm |
@@ -40,10 +40,10 @@ Bảng này là ánh xạ chính: mỗi checklist ID xuất hiện đúng một 
 | CRM-09 | Điều hướng hai chiều giữa hồ sơ và cơ hội | crm | [DEAL_PIPELINE](../features/crm/DEAL_PIPELINE.md#feature-crm-09) | DoubleTEntityDetail.vue | Có một phần; source reference DoubleTEntityDetail.vue. | Cần làm |
 | UX-02 | Việt hóa màn hình ưu tiên | platform | [UX_LOCALIZATION](../features/platform/UX_LOCALIZATION.md#feature-ux-02) | main.js | Có một phần; source reference main.js. | Cần làm |
 | R2-01 | Tiếp nhận và lưu tin nhắn OA | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-r2-01) | zalo_oa.py:86 | Có một phần; source reference zalo_oa.py:86. | Chờ phụ thuộc |
-| R2-02 | Inbox, lịch sử và phản hồi OA | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-r2-02) | zalo_inbox.py:364 | Có một phần; source reference zalo_inbox.py:364. | Cần kiểm |
-| R2-03 | Tạo hoặc cập nhật Lead từ OA | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-r2-03) | zalo_oa.py:86 | Có một phần; source reference zalo_oa.py:86. | Chờ phụ thuộc |
+| R2-02 | Inbox, lịch sử và phản hồi OA | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-r2-02) | `zalo_inbox.py`; `ZaloInbox.vue`; `test_zalo_inbox.py` | Có một phần — Zalo MOCK Inbox/workflow có; LIVE chưa có. | Cần kiểm |
+| R2-03 | Tạo hoặc cập nhật Lead từ OA | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-r2-03) | `zalo_oa.py`; `zalo_workflow.py`; actions UI | Có một phần — manual Create/Link có; automatic Lead là target. | Chờ phụ thuộc |
 | R2-04 | Lượt 1 · Email báo giá trên Lead, Deal và Quotation | contact-center | [EMAIL](../features/contact-center/EMAIL.md#feature-r2-04) | QuotationEmails.vue:192 | Có; source reference QuotationEmails.vue:192. | Cần kiểm |
-| R2-06 | Nguồn dữ liệu, sự kiện lặp và lịch sử đồng bộ | integration | [WEBHOOK_N8N](../features/integration/WEBHOOK_N8N.md#feature-r2-06) | hooks.py | Có một phần; source reference hooks.py. | Cần làm |
+| R2-06 | Nguồn dữ liệu, sự kiện lặp và lịch sử đồng bộ | integration | [WEBHOOK_N8N](../features/integration/WEBHOOK_N8N.md#feature-r2-06) | `zalo_workflow.py`; `zalo_oa.py`; Conversation Event | Có một phần — event/idempotency cục bộ có; sync log đa kênh thiếu. | Cần làm |
 | R3-01 | Workflow n8n chạy trên DoubleT | integration | [WEBHOOK_N8N](../features/integration/WEBHOOK_N8N.md#feature-r3-01) | hooks.py | Bản cũ/ngoài repo; source reference hooks.py. | Cần làm |
 | REP-03 | Activity & Contact Center Reports theo nhân viên/kỳ | analytics | [ACTIVITY_CONTACT_CENTER](../features/analytics/ACTIVITY_CONTACT_CENTER.md#feature-rep-03) | reports.py · ActivityContactCenterReport.vue · report_tools.py · test_activity_reports.py | Có một phần; source reference reports.py · ActivityContactCenterReport.vue · report_tools.py · test_activity_reports.py. | Cần kiểm |
 | R2-05 | Đồng bộ Product/SKU/Variant với WooCommerce | integration | [WOOCOMMERCE](../features/integration/WOOCOMMERCE.md#feature-r2-05) | ProductsView.vue | Chưa thấy; source reference ProductsView.vue. | Cần làm |
@@ -51,13 +51,13 @@ Bảng này là ánh xạ chính: mỗi checklist ID xuất hiện đúng một 
 | R3-03 | Thông báo Telegram từ workflow | integration | [EXTERNAL_CHANNELS](../features/integration/EXTERNAL_CHANNELS.md#feature-r3-03) | hooks.py | Chưa thấy; source reference hooks.py. | Cần làm |
 | R3-04 | AI hỗ trợ một tình huống tư vấn/chăm sóc | integration | [EXTERNAL_CHANNELS](../features/integration/EXTERNAL_CHANNELS.md#feature-r3-04) | hooks.py | Chưa thấy; source reference hooks.py. | Cần chốt |
 | R3-05 | Custom app cấu hình và giám sát Webhook | integration | [WEBHOOK_N8N](../features/integration/WEBHOOK_N8N.md#feature-r3-05) | hooks.py | Cần chốt; source reference hooks.py. | Cần chốt |
-| QA-01 | Hồi quy browser và quyền trên build cuối | platform | [QUALITY_ACCEPTANCE](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-01) | FEATURE_STATUS.md | Cần xác minh; source reference FEATURE_STATUS.md. | Cần kiểm |
+| QA-01 | Hồi quy browser và quyền trên build cuối | platform | [QUALITY_ACCEPTANCE](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-01) | `docs/testing/README.md`; `docs/tracking/FEATURE_STATUS.md` | Cần xác minh; evidence matrix đã chuyển sang tài liệu modular. | Cần kiểm |
 | QA-02 | Cài sạch, nâng cấp dữ liệu và đồng bộ asset | platform | [QUALITY_ACCEPTANCE](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-02) | patches.txt | Cần xác minh; source reference patches.txt. | Cần kiểm |
-| QA-03 | Hướng dẫn cài đặt, demo và minh chứng khóa luận | platform | [QUALITY_ACCEPTANCE](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-03) | ARCHITECTURE.md | Có một phần; source reference ARCHITECTURE.md. | Cần làm |
-| QA-04 | Tổng hợp số đo đạt mục tiêu BA | platform | [QUALITY_ACCEPTANCE](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-04) | FEATURE_STATUS.md | Cần xác minh; source reference FEATURE_STATUS.md. | Cần kiểm |
+| QA-03 | Hướng dẫn cài đặt, demo và minh chứng khóa luận | platform | [QUALITY_ACCEPTANCE](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-03) | `README.md`; `docs/INDEX.md`; `docs/deployment/README.md` | Có một phần; hướng dẫn đã chuyển sang tài liệu modular. | Cần làm |
+| QA-04 | Tổng hợp số đo đạt mục tiêu BA | platform | [QUALITY_ACCEPTANCE](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-04) | `docs/tracking/FEATURE_STATUS.md`; `docs/tracking/FEATURE_INDEX.md` | Cần xác minh; evidence/traceability đã chuyển sang tracking modular. | Cần kiểm |
 | NEW-01 | Tạo bản sửa từ báo giá đã gửi | sales | [QUOTATION](../features/sales/QUOTATION.md#feature-new-01) | doublet_quotation.py | Đề xuất; source reference doublet_quotation.py. | Đề xuất |
 | NEW-02 | Nhắc follow-up Deal và báo giá sắp hết hạn | automation | [FOLLOW_UP](../features/automation/FOLLOW_UP.md#feature-new-02) | dashboard.py | Đề xuất; source reference dashboard.py. | Đề xuất |
-| NEW-03 | Hàng chờ gắn hội thoại chưa rõ khách | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-new-03) | api.py | Đề xuất; source reference api.py. | Đề xuất |
+| NEW-03 | Hàng chờ gắn hội thoại chưa rõ khách | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-new-03) | `zalo_workflow.py`; `ZaloConversationActions.vue` | Có một phần — Zalo Create/Link Lead/Contact có; queue đa kênh thiếu. | Đề xuất |
 | EXT-01 | Một Contact đại diện nhiều Company | crm | [CUSTOMER](../features/crm/CUSTOMER.md#feature-ext-01) | doublet_contact.json | Có một phần; source reference doublet_contact.json. | Cần làm |
 | EXT-02 | Vai trò người liên hệ trong Deal | crm | [CUSTOMER](../features/crm/CUSTOMER.md#feature-ext-02) | doublet_deal.json | Chưa thấy; source reference doublet_deal.json. | Đề xuất |
 | EXT-03 | Đánh dấu khách quay lại | crm | [CUSTOMER](../features/crm/CUSTOMER.md#feature-ext-03) | doublet_lead.py | Chưa thấy; source reference doublet_lead.py. | Đề xuất |
@@ -77,8 +77,8 @@ Bảng này là ánh xạ chính: mỗi checklist ID xuất hiện đúng một 
 | EXT-26 | Nhập Lead/Contact và xuất danh sách đã lọc | platform | [VIEWS_IMPORT_CUSTOM_FIELDS](../features/platform/VIEWS_IMPORT_CUSTOM_FIELDS.md#feature-ext-26) | ViewControls.vue | Cần xác minh; source reference ViewControls.vue. | Cần kiểm |
 | EXT-31 | Lịch sử báo giá trên hồ sơ khách | crm | [CUSTOMER](../features/crm/CUSTOMER.md#feature-ext-31) | DealQuotations.vue | Có một phần; source reference DealQuotations.vue. | Cần làm |
 | EXT-19 | Conversation/Message dùng chung và OA adapter | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-ext-19) | zalo_inbox.py:364 | Có một phần; source reference zalo_inbox.py:364. | Cần làm |
-| EXT-20 | Phân công và bàn giao hội thoại OA | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-ext-20) | api.py | Source baseline mới hơn checklist; implementation lifecycle/assignment có, acceptance pending. | Đề xuất |
-| EXT-21 | Đo thời gian phản hồi đầu tiên của OA | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-ext-21) | dashboard.py | Source baseline mới hơn checklist; customer linking có, acceptance pending. | Đề xuất |
+| EXT-20 | Phân công và bàn giao hội thoại OA | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-ext-20) | `zalo_workflow.py`; Conversation Event; `ZaloConversationActions.vue` | Có — assign/accept/transfer/reason/history source verified. | Cần kiểm |
+| EXT-21 | Đo thời gian phản hồi đầu tiên của OA | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-ext-21) | `zalo_inbox.py::_response_metrics`; `ZaloInbox.vue` | Có một phần — metrics/Needs reply có; SLA threshold filter thiếu. | Cần làm |
 | EXT-22 | Mẫu email bán hàng dùng lại | contact-center | [EMAIL](../features/contact-center/EMAIL.md#feature-ext-22) | QuotationForm.vue | Chưa thấy; source reference QuotationForm.vue. | Đề xuất |
 | EXT-14 | Funnel theo nhóm Lead cùng kỳ | analytics | [CUSTOMER_JOURNEY](../features/analytics/CUSTOMER_JOURNEY.md#feature-ext-14) | reports.py · CustomerJourneyReport.vue · test_reports.py | Có; source reference reports.py · CustomerJourneyReport.vue · test_reports.py. | Cần kiểm |
 | EXT-15 | Dự báo doanh thu theo ngày dự kiến chốt | analytics | [PIPELINE_ANALYTICS](../features/analytics/PIPELINE_ANALYTICS.md#feature-ext-15) | reports.py · PipelineAnalyticsReport.vue · report_tools.py · test_reports.py | Source baseline có Stage Aging; acceptance pending. | Cần kiểm |
@@ -93,9 +93,9 @@ Bảng này là ánh xạ chính: mỗi checklist ID xuất hiện đúng một 
 | EXT-18 | Nhiều pipeline theo loại hình bán | crm | [ADVANCED_CRM](../features/crm/ADVANCED_CRM.md#feature-ext-18) | doublet_deal_stage.json | Chưa thấy; source reference doublet_deal_stage.json. | Đề xuất |
 | EXT-30 | Tạo Deal định kỳ cho khách gia hạn | crm | [ADVANCED_CRM](../features/crm/ADVANCED_CRM.md#feature-ext-30) | hooks.py | Chưa thấy; source reference hooks.py. | Đề xuất |
 | CC-01 | Lượt 2 · Kênh Email trong Inbox của Contact Center | contact-center | [EMAIL](../features/contact-center/EMAIL.md#feature-cc-01) | router.js | Chưa thấy; source reference router.js. | Cần làm |
-| CC-02 | Trạng thái xử lý hội thoại | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-cc-02) | api.py | Source baseline mới hơn checklist; state/actions có, acceptance pending. | Cần làm |
-| CC-03 | Phân quyền hàng đợi và cấu hình kênh | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-cc-03) | api.py | Source baseline mới hơn checklist; audit/idempotency có, acceptance pending. | Cần làm |
-| CC-04 | v | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-cc-04) | api.py | Tên checklist là `v`; diễn giải từ hiện trạng/AC, không sửa Sheet. | Đề xuất |
+| CC-02 | Trạng thái xử lý hội thoại | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-cc-02) | `zalo_workflow.py`; `zalo_oa.py`; Conversation/Event | Có — lifecycle/reopen/audit source verified. | Cần kiểm |
+| CC-03 | Phân quyền hàng đợi và cấu hình kênh | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-cc-03) | `zalo_workflow.py`; `hooks.py`; Conversation/Message permissions | Có một phần — assignee/manager scope có; channel/team config thiếu. | Cần làm |
+| CC-04 | Tự động phân công hội thoại theo hàng đợi | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-cc-04) | `zalo_workflow.py` | Chưa thấy; manual assignment có nhưng queue auto-assignment chưa có. Tên Master Checklist cũ là `v`. | Đề xuất |
 | CC-05 | Giờ làm việc và trả lời ngoài giờ | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-cc-05) | api.py | Đề xuất; source reference api.py. | Đề xuất |
 | CC-06 | Mẫu trả lời nhanh trong Inbox | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-cc-06) | router.js | Đề xuất; source reference router.js. | Đề xuất |
 | CC-07 | Cảnh báo hội thoại chờ quá lâu | contact-center | [INBOX](../features/contact-center/INBOX.md#feature-cc-07) | dashboard.py | Đề xuất; source reference dashboard.py. | Đề xuất |
@@ -104,7 +104,7 @@ Bảng này là ánh xạ chính: mỗi checklist ID xuất hiện đúng một 
 | CC-10 | Tạo việc gọi lại từ cuộc gọi nhỡ | contact-center | [CALLS](../features/contact-center/CALLS.md#feature-cc-10) | api.py | Có; source reference api.py. | Cần kiểm |
 | CRM-10 | Hoàn thiện danh sách và chi tiết Company | crm | [CUSTOMER](../features/crm/CUSTOMER.md#feature-crm-10) | useDoubleTCompanies.js:75 | Có; source reference useDoubleTCompanies.js:75. | Cần kiểm |
 | CALL-01 | Call Logs, thống kê và phân trang | contact-center | [CALLS](../features/contact-center/CALLS.md#feature-call-01) | api.py:790, 820 | Có; source reference api.py:790, 820. | Cần kiểm |
-| CALL-02 | Xác minh AI Summary cho Call Logs | contact-center | [CALLS](../features/contact-center/CALLS.md#feature-call-02) | CallLogs.vue:366 | Có; source reference CallLogs.vue:366. | Cần kiểm |
+| CALL-02 | Xác minh AI Summary cho Call Logs | contact-center | [CALLS](../features/contact-center/CALLS.md#feature-call-02) | `call_log/ai_summary.py`; Note schema; `test_doublet_call_ai_summary.py` | Có — DEMO/LIVE separation và unique Note source verified; acceptance pending. | Cần kiểm |
 | REP-04 | Reports Hub: 6 nhóm báo cáo chuyên sâu, không trùng Dashboard | analytics | [REPORT_PLATFORM](../features/analytics/REPORT_PLATFORM.md#feature-rep-04) | ReportsPage.vue · ReportsLayout.vue · router.js · components/Reports/ | Có; source reference ReportsPage.vue · ReportsLayout.vue · router.js · components/Reports/. | Cần kiểm |
 | REP-05 | Bộ lọc thời gian, nhân viên và so sánh kỳ | analytics | [REPORT_PLATFORM](../features/analytics/REPORT_PLATFORM.md#feature-rep-05) | ReportsFilters.vue · ReportActions.vue · reports.py | Có một phần; source reference ReportsFilters.vue · ReportActions.vue · reports.py. | Cần kiểm |
 | REP-06 | Customer Journey: Lead → Deal → Quotation → Order | analytics | [CUSTOMER_JOURNEY](../features/analytics/CUSTOMER_JOURNEY.md#feature-rep-06) | reports.py · CustomerJourneyReport.vue · test_reports.py | Có; source reference reports.py · CustomerJourneyReport.vue · test_reports.py. | Cần kiểm |
@@ -127,14 +127,14 @@ Bảng này là ánh xạ chính: mỗi checklist ID xuất hiện đúng một 
 | ID thiếu | 0 |
 | ID trùng | 0 |
 | Coverage | 100% |
-| Phân bố đánh giá checklist | Có 52; Có một phần 21; Cần xác minh 7; Chưa thấy 20; Đề xuất 7; Cần chốt 2; Bản cũ/ngoài repo 1 |
-| Phân bố acceptance checklist | Cần kiểm 61; Cần làm 17; Chờ phụ thuộc 2; Cần chốt 3; Đề xuất 24; Đã xong 2; Đang làm 1 |
+| Phân bố đánh giá checklist | Có 54; Có một phần 23; Cần xác minh 7; Chưa thấy 17; Đề xuất 6; Cần chốt 2; Bản cũ/ngoài repo 1 |
+| Phân bố acceptance checklist | Cần kiểm 63; Cần làm 17; Chờ phụ thuộc 2; Cần chốt 3; Đề xuất 22; Đã xong 2; Đang làm 1 |
 
 ## Khác biệt checklist và source baseline
 
-- `EXT-20`, `EXT-21`, `CC-02`, `CC-03`: checklist chưa phản ánh PR #36; source có assignment/transfer, lifecycle, record permission, audit Event và response metrics. Chưa có migration/browser/role evidence baseline.
+- `EXT-20`, `EXT-21`, `CC-02`, `CC-03`, `NEW-03`: checklist ngày 28/11/2026 đã được đồng bộ với source PR #36; implementation và acceptance vẫn được ghi riêng, không suy ra runtime PASS.
 - `EXT-11`: checklist trỏ Task, nhưng baseline có DocType/controller/page Appointment và reminder scheduler riêng.
 - `EXT-15`, `EXT-33`: baseline có probability/stage-entry source sau PR #35; acceptance vẫn pending.
 - `REP-13`: “Đang làm” dựa worktree ngoài main; baseline không có AI Business Insights foundation.
 - `CRM-08`: còn inherited `crm.*`, `crm.fcrm.*`, WhatsApp/ViewControls/telephony và optional ERPNext paths; clean install chưa chứng minh.
-- `CC-04`: tên checklist là `v`; tài liệu giữ ID và diễn giải từ hiện trạng/AC, không sửa Google Sheet.
+- `CC-04`: Master Checklist cũ ghi `v`; tài liệu chuẩn hóa tên nghiệp vụ thành “Tự động phân công hội thoại theo hàng đợi” nhưng không sửa Sheet/trạng thái.

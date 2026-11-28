@@ -52,10 +52,10 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 
 | ID | Source reference | Bằng chứng mới trong checklist |
 | --- | --- | --- |
-| QA-01 | FEATURE_STATUS.md | 27/11 · PR #35 → main b7b6a5d; tích hợp 94c5a25, fix controller cbf0dc6. Frontend test/build PASS theo user; migrate PASS theo log; backend 197/197 trước tích hợp (Codex báo), chưa chạy lại sau tích hợp; UI user báo xong, chưa có log từng role. Đã kiểm conflict, frontend và build; chưa chạy lại backend regression và role matrix. |
+| QA-01 | `docs/testing/README.md`; `docs/tracking/FEATURE_STATUS.md` | Historical evidence retained; chưa chạy lại backend regression và browser role matrix trên baseline. |
 | QA-02 | patches.txt | 27/11 · PR #35 → main b7b6a5d; tích hợp 94c5a25, fix controller cbf0dc6. Frontend test/build PASS theo user; migrate PASS theo log; backend 197/197 trước tích hợp (Codex báo), chưa chạy lại sau tích hợp; UI user báo xong, chưa có log từng role. Migration site hiện tại PASS sau bổ sung controller; cài sạch chưa thử. |
-| QA-03 | ARCHITECTURE.md | Chưa có bằng chứng mới |
-| QA-04 | FEATURE_STATUS.md | Chưa có bằng chứng mới |
+| QA-03 | `README.md`; `docs/INDEX.md`; `docs/deployment/README.md` | Chưa có bằng chứng mới |
+| QA-04 | `docs/tracking/FEATURE_STATUS.md`; `docs/tracking/FEATURE_INDEX.md` | Chưa có bằng chứng mới |
 
 ## Upstream Dependencies
 

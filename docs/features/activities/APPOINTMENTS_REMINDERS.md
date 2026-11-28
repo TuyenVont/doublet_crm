@@ -33,6 +33,8 @@ Task: `Backlog/Todo/In Progress/Done/Canceled`; Appointment: `Scheduled/Complete
 
 Tạo/assign activity → lifecycle → reminder/notification hoặc projection lên timeline.
 
+Activity header route `AppointmentCreate` truyền `reference_doctype/reference_docname`; `AppointmentsView` prefill query này, backend vẫn phải validate source/allowlist. Save/reload phải giữ exact reference. Xem [BF-06](../../architecture/BUSINESS_FLOW_CONTRACT.md#bf-06--customer-record--tasknoteappointment).
+
 Chi tiết end-to-end nằm ở mục Related Workflows; state không được suy ra từ nhãn UI nếu controller/schema quy định khác.
 
 ## Permissions
@@ -61,6 +63,7 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 ## Related Workflows
 
 - [WF 08 ACTIVITY REMINDER](../../workflows/WF_08_ACTIVITY_REMINDER.md)
+- [WF 11 CUSTOMER LIFECYCLE](../../workflows/WF_11_CUSTOMER_LIFECYCLE.md)
 
 ## Implementation Status
 

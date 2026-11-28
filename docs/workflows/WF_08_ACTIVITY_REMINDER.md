@@ -6,6 +6,7 @@
 - **Preconditions/Input/Output:** due/start time, enabled assignee, reminder not later than due/start; output one Notification Log and sent marker.
 - **Modules/permissions:** M08 + Frappe scheduler; assignee/linked-record scope.
 - **Exceptions/result:** terminal activity, changed time/assignee/status, invalid record or retry. Row lock/sent marker prevent duplicate.
+- **Context contract:** Activity tạo từ hồ sơ giữ exact Dynamic Link theo [BF-06](../architecture/BUSINESS_FLOW_CONTRACT.md#bf-06--customer-record--tasknoteappointment); Notification không đổi source context.
 - **Status:** Source implemented; migration/scheduler/live role acceptance pending.
 
 ```mermaid

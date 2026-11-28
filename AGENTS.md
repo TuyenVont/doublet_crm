@@ -28,9 +28,9 @@
 3. Đọc [CURRENT_TASK.md](docs/CURRENT_TASK.md).
 4. Tra Graphify hiện có bằng query/path/explain hoặc wiki index nếu phù hợp.
 5. Mở [docs/INDEX.md](docs/INDEX.md) để tìm **feature file liên quan**, không đọc toàn bộ docs.
-6. Đọc dependency, workflow và permission link từ feature file đó.
+6. Đọc [Business Flow Contract](docs/architecture/BUSINESS_FLOW_CONTRACT.md), dependency, workflow và permission **được feature file liên kết**; không cần đọc các contract không liên quan.
 7. Đối chiếu source code thực tế; source thắng khi docs mâu thuẫn, nhưng phải ghi nhận và sửa docs.
-8. Triển khai và chạy focused verification trong phạm vi được giao.
+8. Triển khai và chạy focused verification cùng test luồng liên module bị ảnh hưởng trong chính lượt làm việc; nếu scope cấm runtime test thì ghi `NOT RUN`, không suy ra PASS.
 9. Cập nhật feature spec, [FEATURE_STATUS](docs/tracking/FEATURE_STATUS.md), dependency/workflow bị ảnh hưởng.
 10. Ghi kết quả và dừng; không tự chọn feature tiếp theo.
 
@@ -51,3 +51,4 @@
 - Report aggregate, export và drill-down phải dùng cùng permission-scoped dataset; unknown không phải 0.
 - Quotation/Order giữ snapshot; Pricing phân biệt giá `0` với missing; không silently reprice lịch sử.
 - Handoff gồm file thay đổi, verification, migration/schema impact, compatibility risk và nội dung chưa kiểm.
+- Mọi thay đổi entry point, route, prefill, conversion hoặc create-from-record phải cập nhật contract Source → Trigger → Destination → Context → Validation → Persistence và scenario trong [Cross-module Acceptance](docs/testing/CROSS_MODULE_ACCEPTANCE.md).
