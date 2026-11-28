@@ -82,8 +82,9 @@
         <!-- Refresh -->
         <Button
           :tooltip="__('Refresh')"
+          :label="__('Refresh')"
           :icon="RefreshIcon"
-          :loading="dealsResource.loading"
+          :loading="dealsResource.list.loading"
           :disabled="!!pendingMove"
           @click="reload"
         />
@@ -99,10 +100,10 @@
     </p>
 
     <!-- Main -->
-    <div class="relative flex-1 overflow-hidden">
+    <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <!-- Loading -->
       <div
-        v-if="dealsResource.loading && !dealsResource.data?.length"
+        v-if="dealsResource.list.loading && !dealsResource.data?.length"
         class="flex h-64 items-center justify-center text-sm text-ink-gray-5"
       >
         <div class="flex items-center gap-2">
@@ -130,7 +131,6 @@
           showTooltip: true,
           resizeColumn: true,
         }"
-        @loadMore="loadMore"
       />
 
       <!-- Empty -->
@@ -140,6 +140,12 @@
         :title="__('No Deals Found')"
         :description="__('No DoubleT deals match the selected criteria.')"
       />
+      <div
+        v-if="viewMode === 'list' && dealsResource.data?.length && dealsResource.hasNextPage"
+        class="flex shrink-0 justify-end border-t border-outline-gray-2 px-4 py-2"
+      >
+        <Button :label="__('Load More')" :loading="dealsResource.list.loading" @click="loadMore" />
+      </div>
     </div>
     <!-- LOST MODAL -->
 <div
@@ -347,13 +353,13 @@ const {
   rows,
   reload,
   loadMore,
-} = useDoubleTDeals({
+} = useDoubleTDeals(() => ({
   lifecycle: route.query.lifecycle,
   stage: route.query.stage,
   creationStart: route.query.creation_start,
   creationEnd: route.query.creation_end,
   dealOwner: route.query.deal_owner,
-})
+}))
 
 const VIEW_STORAGE_KEY =
   'doublet-deals-view-mode'
@@ -379,7 +385,7 @@ const initialView =
 const viewMode = ref(initialView)
 
 const searchQuery = ref('')
-const selectedStage = ref(String(route.query.stage || ''))
+const selectedStage = computed(() => route.query.stage || '')
 
 const pendingMove = ref(null)
 
@@ -419,35 +425,20 @@ function setViewMode(mode) {
 /*
  * Stage Filter
  */
-const stageDropdownOptions =
-  computed(() => {
-    const options = [
-      {
-        label: __('All Stages'),
+function setStage(stage) {
+  const query = { ...route.query }
+  if (stage) query.stage = stage
+  else delete query.stage
+  router.replace({ query })
+}
 
-        onClick: () => {
-          selectedStage.value = ''
-        },
-      },
-    ]
-
-    stages.value.forEach(
-      (stage) => {
-        options.push({
-          label:
-            stage.stage_name ||
-            stage.name,
-
-          onClick: () => {
-            selectedStage.value =
-              stage.name
-          },
-        })
-      },
-    )
-
-    return options
-  })
+const stageDropdownOptions = computed(() => [
+  { label: __('All Stages'), onClick: () => setStage('') },
+  ...stages.value.map((stage) => ({
+    label: stage.stage_name || stage.name,
+    onClick: () => setStage(stage.name),
+  })),
+])
 
 const selectedStageLabel =
   computed(() => {
@@ -475,18 +466,6 @@ const selectedStageLabel =
  */
 const rawDeals = computed(() => {
   let result = dealsWithLabels.value
-
-  if (route.query.lifecycle) {
-    const names = stages.value.filter((stage) => stage.stage_type === route.query.lifecycle).map((stage) => stage.name)
-    result = result.filter((row) => names.includes(row.stage))
-  }
-  if (selectedStage.value) {
-    result = result.filter(
-      (deal) =>
-        deal.stage ===
-        selectedStage.value,
-    )
-  }
 
   const query =
     searchQuery.value
