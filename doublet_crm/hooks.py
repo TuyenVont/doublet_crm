@@ -139,6 +139,8 @@ after_migrate = [
 
 
 permission_query_conditions = {
+        "DoubleT Conversation": "doublet_crm.zalo_workflow.conversation_query",
+        "DoubleT Message": "doublet_crm.zalo_workflow.message_query",
         "DoubleT Call Log": "doublet_crm.permissions.get_doublet_call_log_permission_query_conditions",
         "DoubleT Task": "doublet_crm.permissions.get_doublet_task_permission_query_conditions",
         "DoubleT Call Event": "doublet_crm.permissions.get_doublet_call_event_permission_query_conditions",
@@ -146,6 +148,8 @@ permission_query_conditions = {
 }
 
 has_permission = {
+        "DoubleT Conversation": "doublet_crm.zalo_workflow.conversation_permission",
+        "DoubleT Message": "doublet_crm.zalo_workflow.message_permission",
         "DoubleT Call Log": "doublet_crm.permissions.has_doublet_call_log_permission",
         "DoubleT Task": "doublet_crm.permissions.has_doublet_task_permission",
         "DoubleT Call Event": "doublet_crm.permissions.has_doublet_call_event_permission",

@@ -1,8 +1,9 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import get_datetime
+from frappe.utils import get_datetime, now_datetime
 
 from doublet_crm.patches.setup_zalo_lead_source import execute
 from doublet_crm.zalo_inbox import (
@@ -15,7 +16,8 @@ from doublet_crm.zalo_inbox import (
     save_mock_reply,
     save_record_mock_reply,
 )
-from doublet_crm.zalo_oa import MESSAGE, receive_mock_text
+from doublet_crm.zalo_oa import CONVERSATION, MESSAGE, receive_mock_text
+from doublet_crm.zalo_workflow import EVENT, update_conversation
 
 
 class TestZaloInbox(FrappeTestCase):
@@ -37,12 +39,31 @@ class TestZaloInbox(FrappeTestCase):
     def receive(self, **overrides):
         return receive_mock_text(**(self.payload | overrides))
 
+    def act(self, conversation, action, request_id=None, **params):
+        version = get_conversation_info(conversation)["version"]
+        return update_conversation(conversation, action, request_id or frappe.generate_hash(), version, **params)
+
+    def new_lead(self, conversation):
+        self.act(conversation, "Create Lead", lead_name="Zalo test")
+        return get_conversation_info(conversation)["lead"]
+
+    def sales_user(self, role="Sales User"):
+        user = frappe.get_doc({
+            "doctype": "User",
+            "email": f"inbox-user-{frappe.generate_hash(length=8)}@example.com",
+            "first_name": "Inbox QA",
+            "send_welcome_email": 0,
+        }).insert()
+        user.add_roles(role)
+        return user.name
+
     def test_list_lead_and_store_simulated_reply(self):
         inbound = self.receive()
         conversation = inbound["conversation"]
-        listing = list_conversations()
+        lead = self.new_lead(conversation)
+        listing = list_conversations(oa_id=self.payload["oa_id"])
         listed = next(item for item in listing["conversations"] if item["name"] == conversation)
-        self.assertEqual(listed["lead"], inbound["lead"])
+        self.assertEqual(listed["lead"], lead)
         self.assertEqual(listed["oa_id"], self.payload["oa_id"])
 
         reply = save_mock_reply(conversation, "Để mình tư vấn cho bạn.")
@@ -67,23 +88,24 @@ class TestZaloInbox(FrappeTestCase):
         self.assertFalse(older["has_more"])
         self.assertEqual(
             [older["messages"][0]["name"], page["messages"][0]["name"]],
-            sorted([first["message"], second["message"]]),
+            [first["message"], second["message"]],
         )
         with self.assertRaises(frappe.ValidationError):
             get_messages(conversation, before=other["message"])
 
-    def test_reply_is_newer_than_future_dated_inbound(self):
+    def test_future_timestamp_does_not_fabricate_response_time(self):
         external_user_id = f"future-{frappe.generate_hash(length=10)}"
         inbound = self.receive(
             external_user_id=external_user_id,
             external_message_id="future-message",
             sent_at="2099-01-01T00:00:00+07:00",
         )
-        reply = save_mock_reply(inbound["conversation"], "Future-safe reply")
+        reply = save_mock_reply(inbound["conversation"], "Reply with actual clock")
         inbound_sent_at = frappe.db.get_value(MESSAGE, inbound["message"], "sent_at")
-        self.assertGreater(get_datetime(reply["sent_at"]), get_datetime(inbound_sent_at))
-        listing = list_conversations(search=external_user_id, reply_status="Replied")
-        self.assertEqual([row["name"] for row in listing["conversations"]], [inbound["conversation"]])
+        self.assertLess(get_datetime(reply["sent_at"]), get_datetime(inbound_sent_at))
+        row = get_conversation_info(inbound["conversation"])
+        self.assertIsNone(row["first_response_seconds"])
+        self.assertIsNone(row["waiting_seconds"])
 
     def test_inbox_search_filters_latest_activity_and_reply_state(self):
         unique = frappe.generate_hash(length=10)
@@ -144,7 +166,7 @@ class TestZaloInbox(FrappeTestCase):
     def test_record_scoped_history_reply_relationships_and_isolation(self):
         inbound = self.receive()
         other = self.receive(external_user_id="other-record", external_message_id="other-record-message")
-        lead = inbound["lead"]
+        lead = self.new_lead(inbound["conversation"])
         unique = frappe.generate_hash(length=10)
         contact = frappe.get_doc({
             "doctype": "DoubleT Contact",
@@ -207,38 +229,105 @@ class TestZaloInbox(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             list_record_conversations("User", frappe.session.user)
 
-    def test_sales_user_cannot_list_read_or_reply_without_doctype_permissions(self):
+    def test_sales_user_cannot_list_read_or_reply_to_unassigned_conversation(self):
         inbound = self.receive()
-        user = frappe.get_doc({
-            "doctype": "User",
-            "email": f"inbox-sales-{frappe.generate_hash(length=8)}@example.com",
-            "first_name": "Inbox Sales",
-            "send_welcome_email": 0,
-        }).insert()
-        user.add_roles("Sales User")
-        frappe.share.add("DoubleT Lead", inbound["lead"], user.name, read=1)
-        frappe.set_user(user.name)
+        lead = self.new_lead(inbound["conversation"])
+        user = self.sales_user()
+        frappe.share.add("DoubleT Lead", lead, user, read=1)
+        frappe.set_user(user)
 
-        self.assertEqual(list_conversations(), {
-            "can_read": False,
-            "conversations": [],
-            "has_more": False,
-            "total": 0,
-            "oa_options": [],
-        })
-        with self.assertRaises(frappe.PermissionError):
-            get_messages(inbound["conversation"])
+        self.assertEqual(list_conversations(oa_id=self.payload["oa_id"])["conversations"], [])
+        for endpoint in (get_messages, get_conversation_info, get_customer_details):
+            with self.assertRaises(frappe.PermissionError):
+                endpoint(inbound["conversation"])
         with self.assertRaises(frappe.PermissionError):
             save_mock_reply(inbound["conversation"], "Test")
+        self.assertEqual(list_record_conversations("DoubleT Lead", lead), {"can_read": True, "conversations": []})
         with self.assertRaises(frappe.PermissionError):
-            get_customer_details(inbound["conversation"])
+            get_record_messages("DoubleT Lead", lead, inbound["conversation"])
         with self.assertRaises(frappe.PermissionError):
-            get_conversation_info(inbound["conversation"])
-        self.assertEqual(
-            list_record_conversations("DoubleT Lead", inbound["lead"]),
-            {"can_read": False, "conversations": []},
-        )
+            save_record_mock_reply("DoubleT Lead", lead, inbound["conversation"], "Test")
+
+    def test_handling_handover_retries_and_independent_reply_status(self):
+        first, second = self.sales_user(), self.sales_user()
+        manager = self.sales_user("Sales Manager")
+        inbound = self.receive()
+        name = inbound["conversation"]
+        frappe.set_user(manager)
+        self.act(name, "Assign", assignee=first)
+        frappe.set_user(first)
         with self.assertRaises(frappe.PermissionError):
-            get_record_messages("DoubleT Lead", inbound["lead"], inbound["conversation"])
+            save_mock_reply(name, "Accept first")
+        self.act(name, "Accept")
+        reply = save_mock_reply(name, "Sent once", request_id="same-reply")
+        self.assertEqual(save_mock_reply(name, "Sent once", request_id="same-reply"), reply)
+        with self.assertRaises(frappe.ValidationError):
+            save_mock_reply(name, "Different text", request_id="same-reply")
+        self.assertEqual(get_conversation_info(name)["reply_status"], "Replied")
+        frappe.set_user(manager)
+        version = get_conversation_info(name)["version"]
+        fields = {"assignee": second, "reason": "Shift change"}
+        self.assertFalse(update_conversation(name, "Assign", "handover", version, **fields)["duplicate"])
+        self.assertTrue(update_conversation(name, "Assign", "handover", version, **fields)["duplicate"])
+        frappe.set_user(first)
         with self.assertRaises(frappe.PermissionError):
-            save_record_mock_reply("DoubleT Lead", inbound["lead"], inbound["conversation"], "Test")
+            get_messages(name)
+        self.assertFalse(frappe.has_permission(MESSAGE, "read", doc=reply["name"]))
+        frappe.set_user(second)
+        self.act(name, "Accept")
+        self.act(name, "Resolve")
+        state = get_conversation_info(name)
+        self.assertEqual((state["handling_status"], state["reply_status"]), ("Resolved", "Replied"))
+        self.assertEqual([row["action"] for row in state["history"]],
+                         ["Assigned", "Accepted", "Transferred", "Accepted", "Resolved"])
+        self.assertEqual(state["history"][2]["reason"], "Shift change")
+        self.assertEqual(len(get_messages(name)["messages"]), 2)
+        frappe.set_user("Administrator")
+        resolved = frappe.db.get_value(CONVERSATION, name, "resolved_at")
+        with patch("doublet_crm.zalo_oa._parse_sent_at", return_value=resolved + timedelta(seconds=1)):
+            self.receive(external_message_id="reopen")
+            self.receive(external_message_id="reopen")
+        self.assertEqual(get_conversation_info(name)["handling_status"], "Waiting")
+        self.assertEqual(frappe.db.count(EVENT, {"conversation": name, "action": "Reopened"}), 1)
+
+    def test_customer_link_uses_exact_record_and_rejects_stale_or_unreadable_link(self):
+        name = self.receive()["conversation"]
+        sales = self.sales_user()
+        first = frappe.get_doc({"doctype": "DoubleT Contact", "first_name": "Same name"}).insert()
+        other = frappe.get_doc({"doctype": "DoubleT Contact", "first_name": "Same name"}).insert()
+        private_lead = frappe.get_doc({"doctype": "DoubleT Lead", "first_name": "Unshared"}).insert()
+        version = get_conversation_info(name)["version"]
+        self.act(name, "Assign", assignee=sales)
+        frappe.set_user(sales)
+        with self.assertRaises(frappe.ValidationError):
+            update_conversation(name, "Link Customer", "stale", version,
+                                customer_type=first.doctype, customer_name=first.name)
+        with self.assertRaises(frappe.PermissionError):
+            self.act(name, "Link Customer", customer_type=private_lead.doctype, customer_name=private_lead.name)
+        self.act(name, "Link Customer", customer_type=first.doctype, customer_name=first.name)
+        self.assertEqual(get_customer_details(name)["contact"]["name"], first.name)
+        with self.assertRaises(frappe.PermissionError):
+            get_record_messages(other.doctype, other.name, name)
+        self.assertEqual(get_record_messages(first.doctype, first.name, name)["messages"][0]["direction"], "inbound")
+        with self.assertRaises(frappe.PermissionError):
+            self.act(name, "Link Customer", customer_type=other.doctype, customer_name=other.name)
+
+    def test_response_time_uses_first_unanswered_inbound_and_handles_legacy_missing_time(self):
+        clock = now_datetime().replace(microsecond=0)
+        with patch("doublet_crm.zalo_oa._parse_sent_at", side_effect=[
+            clock - timedelta(seconds=120), clock - timedelta(seconds=90), clock - timedelta(seconds=12),
+        ]):
+            first = self.receive()
+            name = first["conversation"]
+            self.receive(external_message_id="second")
+            with patch("doublet_crm.zalo_inbox.now_datetime", return_value=clock - timedelta(seconds=30)):
+                self.assertEqual(get_conversation_info(name)["waiting_seconds"], 90)
+                save_mock_reply(name, "Reply")
+            self.receive(external_message_id="third")
+        with patch("doublet_crm.zalo_inbox.now_datetime", return_value=clock):
+            row = get_conversation_info(name)
+            self.assertEqual(row["first_response_seconds"], 90)
+            self.assertEqual(row["waiting_seconds"], 12)
+            self.assertEqual(row["reply_status"], "Needs reply")
+        frappe.db.set_value(MESSAGE, first["message"], {"sent_at": None, "creation": clock - timedelta(seconds=120)})
+        self.assertIsNone(get_conversation_info(name)["first_response_seconds"])

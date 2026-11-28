@@ -5,7 +5,11 @@
   "source",
   "oa_id",
   "external_user_id",
-  "lead"
+  "lead",
+  "contact",
+  "handling_status",
+  "assigned_to",
+  "resolved_at"
  ],
  "fields": [
   {
@@ -35,6 +39,35 @@
    "fieldtype": "Link",
    "options": "DoubleT Lead",
    "read_only": 1
+  },
+  {
+   "fieldname": "contact",
+   "label": "Contact",
+   "fieldtype": "Link",
+   "options": "DoubleT Contact",
+   "read_only": 1
+  },
+  {
+   "fieldname": "handling_status",
+   "label": "Handling Status",
+   "fieldtype": "Select",
+   "options": "Waiting\nIn Progress\nResolved",
+   "default": "Waiting",
+   "read_only": 1
+  },
+  {
+   "fieldname": "assigned_to",
+   "label": "Assigned To",
+   "fieldtype": "Link",
+   "options": "User",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "resolved_at",
+   "label": "Resolved At",
+   "fieldtype": "Datetime",
+   "read_only": 1
   }
  ],
  "module": "DoubleT CRM",
@@ -45,6 +78,14 @@
    "read": 1,
    "role": "System Manager",
    "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Sales Manager"
+  },
+  {
+   "read": 1,
+   "role": "Sales User"
   }
  ],
  "sort_field": "creation",

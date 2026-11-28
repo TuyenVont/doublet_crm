@@ -1,13 +1,15 @@
 """Call history, queue management and callback tasks for Contact Center."""
 
+from datetime import date, datetime, time
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 import frappe
 from frappe import _
-from frappe.utils import cint, cstr, now_datetime
+from frappe.utils import cint, cstr, getdate, now_datetime
 
 from doublet_crm.api import CALL_LOG_TYPES, _assignable_user_names
+from doublet_crm.calls_demo import is_recording_demo
 
 from doublet_crm.doublet_crm.doctype.doublet_call_log.doublet_call_log import (
 	ALLOWED_REFERENCE_DOCTYPES,
@@ -159,6 +161,7 @@ def _call_details(call, task):
 		"external_call_id": call.external_call_id,
 		"note": call.note,
 		"recording": _recording(call),
+		"is_recording_demo": is_recording_demo(call),
 		"link_state": _link_state(call, row["customer"]),
 		"history": _history(call) if can_handle else [],
 		"callback_required": is_missed_incoming(call),
@@ -452,14 +455,16 @@ def _save_callback(task):
 def _callback_summary(task):
 	if not task or not task.has_permission("read"):
 		return None
-	return {
+	summary = {
 		field: task.get(field)
 		for field in ("name", "status", "assigned_to", "callback_result", "callback_notes")
 	}
+	summary["due_date"] = getdate(task.due_date).isoformat() if task.due_date else None
+	return summary
 
 
 @frappe.whitelist(methods=["POST"])
-def open_callback(name: str):
+def open_callback(name: str, due_date: str | None = None):
 	# All callback operations lock the Call Log first. The unique Task link also
 	# protects the one-task invariant at the database level.
 	call = _read_call(name, for_update=True)
@@ -479,6 +484,13 @@ def open_callback(name: str):
 		task.priority = "High"
 		task.callback_call_log = call.name
 
+	if due_date or not task.due_date:
+		try:
+			due_day = date.fromisoformat(due_date) if due_date else getdate()
+		except (TypeError, ValueError):
+			frappe.throw(_("Choose a valid callback due date."))
+		if not task.due_date or getdate(task.due_date) != due_day:
+			task.due_date = datetime.combine(due_day, time(23, 59, 59))
 	task.status = "In Progress"
 	task.assigned_to = call.assigned_to
 	task.reference_doctype = call.reference_doctype

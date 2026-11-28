@@ -115,6 +115,9 @@
               {{ __('Open callback task') }}
               <FeatherIcon name="arrow-up-right" class="size-3.5" aria-hidden="true" />
             </RouterLink>
+            <p v-if="log.callback_task.due_date" class="text-sm text-ink-gray-6">
+              {{ __('Due date') }} · {{ log.callback_task.due_date }}
+            </p>
             <div v-if="log.callback_task.callback_result || log.callback_task.callback_notes" class="space-y-1 rounded-md bg-surface-gray-1 p-2.5">
               <p v-if="log.callback_task.callback_result" class="text-sm text-ink-gray-8">
                 {{ __('Last callback outcome') }} · {{ __(log.callback_task.callback_result) }}
@@ -152,14 +155,20 @@
             />
           </form>
 
-          <Button
+          <form
             v-if="isOpen && log.assigned_to && !hasOpenTask"
-            variant="solid"
-            :label="__(log.callback_task ? 'Reopen callback task' : 'Create callback task')"
-            :loading="saving"
-            :disabled="saving"
-            @click="updateCall('open_callback')"
-          />
+            class="flex flex-wrap items-end gap-3"
+            @submit.prevent="updateCall('open_callback', { due_date: callbackDueDate || undefined })"
+          >
+            <FormControl v-model="callbackDueDate" type="date" :label="__('Due date')" :disabled="saving" />
+            <Button
+              type="submit"
+              variant="solid"
+              :label="__(log.callback_task ? 'Reopen callback task' : 'Create callback task')"
+              :loading="saving"
+              :disabled="saving"
+            />
+          </form>
           <div v-if="isOpen && needsCustomerLink" class="space-y-2 rounded-md bg-amber-50 p-2.5 text-sm text-amber-900">
             <p>{{ __('Link a Lead or Contact before resolving this missed call.') }}</p>
             <Button v-if="log.can_link" :label="__('Link a customer')" @click="showCustomerForm" />
@@ -246,6 +255,7 @@ const assigneesLoaded = ref(false)
 const assigneeDraft = ref('')
 const saving = ref(false)
 const outcome = ref('')
+const callbackDueDate = ref('')
 const notes = ref('')
 const customerType = ref('DoubleT Contact')
 const customerName = ref('')
@@ -286,6 +296,9 @@ let requestId = 0
 let refreshPending = false
 
 watch(customerType, () => { customerName.value = '' })
+watch([() => props.callId, () => log.value?.callback_task?.due_date], ([, dueDate]) => {
+  callbackDueDate.value = dueDate || ''
+})
 watch(() => log.value?.assigned_to, (assignee) => { assigneeDraft.value = assignee || '' })
 watch(() => section.value === 'handling' && log.value?.can_manage && isOpen.value, (available) => {
   if (available && !assigneesLoaded.value && !assigneesLoading.value) loadAssignees()

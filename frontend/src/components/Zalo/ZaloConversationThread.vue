@@ -71,6 +71,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { Button, call } from 'frappe-ui'
+import { newZaloRequestId } from '@/utils/zaloInbox'
 
 const props = defineProps({
   conversation: { type: Object, required: true },
@@ -91,6 +92,7 @@ const threadError = ref('')
 const replyError = ref('')
 const isComposing = ref(false)
 let threadRequest = 0
+let replyRequest
 
 const conversationName = computed(() => props.conversation?.name || '')
 const contextKey = computed(() => JSON.stringify(props.requestContext || {}))
@@ -102,6 +104,7 @@ function resetThread() {
   canReply.value = false
   moreMessages.value = false
   draft.value = ''
+  replyRequest = undefined
   threadError.value = ''
   replyError.value = ''
   threadPending.value = false
@@ -142,9 +145,11 @@ async function loadThread(prepend = false) {
 }
 
 async function saveReply() {
-  if (!conversationName.value || sending.value || threadPending.value || !draft.value.trim()) return
+  if (!conversationName.value || !canReply.value || sending.value || threadPending.value || !draft.value.trim()) return
   const conversation = conversationName.value
   const content = draft.value
+  if (replyRequest?.content !== content) replyRequest = { content, id: newZaloRequestId() }
+  const request = replyRequest
   sending.value = true
   replyError.value = ''
   try {
@@ -152,24 +157,22 @@ async function saveReply() {
       ...props.requestContext,
       conversation,
       content,
+      request_id: request.id,
     })
-    if (conversation === conversationName.value) {
+    if (request === replyRequest) {
       if (draft.value === content) draft.value = ''
-      if (!messages.value.some((item) => item.name === message.name)) {
-        messages.value = [...messages.value, message].sort((a, b) =>
-          a.sent_at.localeCompare(b.sent_at) || a.name.localeCompare(b.name),
-        )
-      }
       emit('reply-saved', message)
-      await nextTick()
-      if (history.value) history.value.scrollTop = history.value.scrollHeight
+      await loadThread()
     }
   } catch {
-    if (conversation === conversationName.value) {
+    if (request === replyRequest) {
       replyError.value = __('Could not save the mock reply. Your draft has been kept.')
     }
   } finally {
-    if (conversation === conversationName.value) sending.value = false
+    if (request === replyRequest) {
+      sending.value = false
+      if (!replyError.value) replyRequest = undefined
+    }
   }
 }
 
