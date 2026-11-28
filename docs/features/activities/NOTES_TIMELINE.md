@@ -31,6 +31,8 @@ Các validation riêng được xác định từ source/checklist trong bảng 
 
 Tạo/assign activity → lifecycle → reminder/notification hoặc projection lên timeline.
 
+`get_linked_notes` phải lọc cả hai reference fields sau khi kiểm source access; `get_notes` là centralized permission-scoped list. `SharedNotes.vue` dùng chung cho trang Notes và bốn record detail, đồng thời bỏ stale response khi active record đổi. Note/Call/Message không được copy để tạo Customer 360; xem [BF-06](../../architecture/BUSINESS_FLOW_CONTRACT.md#bf-06--customer-record--tasknoteappointment) và [Customer history continuity](../../architecture/BUSINESS_FLOW_CONTRACT.md#customer-history-continuity).
+
 Chi tiết end-to-end nằm ở mục Related Workflows; state không được suy ra từ nhãn UI nếu controller/schema quy định khác.
 
 ## Permissions
@@ -59,6 +61,8 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 ## Related Workflows
 
 - [WF 06 CALL AI NOTE](../../workflows/WF_06_CALL_AI_NOTE.md)
+- [WF 11 CUSTOMER LIFECYCLE](../../workflows/WF_11_CUSTOMER_LIFECYCLE.md)
+- [History acceptance](../../testing/CROSS_MODULE_ACCEPTANCE.md#customer-history-continuity)
 
 ## Implementation Status
 

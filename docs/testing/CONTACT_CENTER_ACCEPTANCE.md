@@ -14,7 +14,7 @@ In **Call Logs**, find the **Calls Recording Demo Incoming** and **Calls Recordi
 
 Saving requires access to the call, its assistant, the linked customer and the existing Notes create or write permissions. A call has one follow-up note. The original customer link is retained if the call is subsequently relinked. Review the existing note before saving to a different customer. The shared note contains only the next steps explicitly saved by the employee.
 
-The optional unique `DoubleT Note.source_call_log` field links the follow-up to its source. The release migration adds this field alongside the Zalo workflow schema. Existing Notes require no backfill.
+`DoubleT Note.source_call_log` is a unique, read-only link to the source Call Log. Saving the same reviewed content returns the existing Note; an update requires the current version, and the source Call/customer reference cannot be changed. Existing Notes require no backfill.
 
 ### LIVE telephony and BeeKnoee
 

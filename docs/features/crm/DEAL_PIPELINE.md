@@ -17,7 +17,7 @@ Quản lý cơ hội và pipeline; Điều hướng hai chiều giữa hồ sơ 
 
 | ID | Tính năng/việc | Hạng mục | Ưu tiên | Căn cứ và hiện trạng | Nguồn yêu cầu |
 | --- | --- | --- | --- | --- | --- |
-| CRM-03 | Quản lý cơ hội và pipeline | R1 · CRM lõi | P0 | 23/11 · main 4d835a9: PR #28 (21aabe4, fix 0a78c37) sửa kéo thả Kanban: khóa drag khi đang lưu, xác nhận move/rollback và đồng bộ giá trị cột. Có test Timeline cho liên kết Call Log Deal cũ; chưa có kết quả browser mới. | BA SCP-01, FR-25 |
+| CRM-03 | Quản lý cơ hội và pipeline | R1 · CRM lõi | P0 | PR #37 sửa tải danh sách Deal: filter reactive theo lifecycle/stage/owner/ngày tạo, reload giữ filter, phân trang giữ tập lọc và nạp nhãn Contact/Company. Kanban stage transition từ PR #28 vẫn là contract hiện hành. | BA SCP-01, FR-25 |
 | CRM-09 | Điều hướng hai chiều giữa hồ sơ và cơ hội | R1 · Hồ sơ khách | P1 | Lead lưu converted_contact/company/deal và Deal có source_lead. Cần đối chiếu màn Contact/Company có đủ danh sách Lead/Deal cùng khách. | BA FR-04–05 · UC-01 |
 
 ## Data Model
@@ -36,6 +36,8 @@ Lead/Deal canonical rules: Lead status `NEW/CONTACTED/NURTURE/QUALIFIED/CONVERTE
 
 Dữ liệu đi từ prospect/interaction đến customer master, Deal và các projection downstream; trạng thái chỉ thay đổi qua controller/API có kiểm quyền.
 
+Lead/customer → Deal và Deal → Quotation phải giữ source/customer context theo [Business Flow Contract](../../architecture/BUSINESS_FLOW_CONTRACT.md#bf-04--leaddeal--quotation). Customer page create-with-context vẫn là GAP; Deal/Lead → Quotation đã có implementation.
+
 Chi tiết end-to-end nằm ở mục Related Workflows; state không được suy ra từ nhãn UI nếu controller/schema quy định khác.
 
 ## Permissions
@@ -48,7 +50,7 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 
 | ID | Source reference | Bằng chứng mới trong checklist |
 | --- | --- | --- |
-| CRM-03 | DealsView.vue | 18/11 · 7105984 · List/Kanban và API đổi stage có code. Sales mặc định chỉ đọc. |
+| CRM-03 | `frontend/src/composables/useDoubleTDeals.js`; `frontend/src/pages/DealsView.vue`; `frontend/tests/dealsResource.test.mjs`; stage APIs/controllers | Historical docs ghi Deal pipeline source present, cần demo-role và Dashboard comparison. PR #37 bổ sung source/focused test cho filter/reload/pagination/labels; test không chạy lại trong task tài liệu. |
 | CRM-09 | DoubleTEntityDetail.vue | 18/11 · 7105984 · Company có Contacts/Deals/Converted Leads. Còn kiểm điều hướng và báo giá theo khách. |
 
 ## Upstream Dependencies
@@ -68,12 +70,13 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 
 - [WF 01 INDIVIDUAL SALES](../../workflows/WF_01_INDIVIDUAL_SALES.md)
 - [WF 02 COMPANY SALES](../../workflows/WF_02_COMPANY_SALES.md)
+- [WF 11 CUSTOMER LIFECYCLE](../../workflows/WF_11_CUSTOMER_LIFECYCLE.md)
 
 ## Implementation Status
 
 | ID | Checklist assessment | Checklist progress | Baseline/source finding |
 | --- | --- | --- | --- |
-| CRM-03 | Có | Cần kiểm | Checklist: Có; Cần kiểm. Không suy ra runtime PASS. |
+| CRM-03 | Có | Cần kiểm | Source verified tại `a7534e7`: list resource tải sau khi stage sẵn sàng, reset `start=0` khi filter đổi, reload/pagination giữ filters và resolve nhãn Contact/Company. Browser/role và test execution trên baseline vẫn pending. |
 | CRM-09 | Có một phần | Cần làm | Checklist: Có một phần; Cần làm. Không suy ra runtime PASS. |
 
 ## Acceptance Criteria
@@ -90,7 +93,7 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 
 ## Known Limitations
 
-- **CRM-03:** Source có nhưng vẫn phải theo acceptance status.
+- **CRM-03:** Source và automated test case có, nhưng task này không chạy test/browser. Search cục bộ trong `DealsView.vue` vẫn lọc trên dữ liệu đã tải; không thay thế server filters/pagination.
 - **CRM-09:** Lead lưu converted_contact/company/deal và Deal có source_lead. Cần đối chiếu màn Contact/Company có đủ danh sách Lead/Deal cùng khách.
 
 Không tự nâng trạng thái checklist hoặc acceptance khi chưa có bằng chứng tương ứng.

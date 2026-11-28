@@ -40,6 +40,8 @@ Quy tắc dùng chung được quản lý tại [Appointment & Reminder](APPOINT
 
 Tạo/assign activity → lifecycle → reminder/notification hoặc projection lên timeline.
 
+Contract create-from-record và callback/Insight được quản lý tại [BF-06](../../architecture/BUSINESS_FLOW_CONTRACT.md#bf-06--customer-record--tasknoteappointment), [BF-07](../../architecture/BUSINESS_FLOW_CONTRACT.md#bf-07--missed-call--callback-task) và [BF-09](../../architecture/BUSINESS_FLOW_CONTRACT.md#bf-09--reportsmart-insight--source-or-follow-up-task). `get_linked_tasks(doctype, docname)` giữ response compatibility `[[], [], [], tasks, []]`; với `include_pagination=1`, index 3 là object `{tasks, has_more, limit_start, limit_page_length}`. Không đổi shape nếu chưa rà tất cả consumer.
+
 Chi tiết end-to-end nằm ở mục Related Workflows; state không được suy ra từ nhãn UI nếu controller/schema quy định khác.
 
 ## Permissions
@@ -74,6 +76,8 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 - [WF 05 MISSED CALL CALLBACK](../../workflows/WF_05_MISSED_CALL_CALLBACK.md)
 - [WF 08 ACTIVITY REMINDER](../../workflows/WF_08_ACTIVITY_REMINDER.md)
 - [WF 09 SMART INSIGHTS FOLLOW UP](../../workflows/WF_09_SMART_INSIGHTS_FOLLOW_UP.md)
+- [WF 11 CUSTOMER LIFECYCLE](../../workflows/WF_11_CUSTOMER_LIFECYCLE.md)
+- [Cross-module Acceptance](../../testing/CROSS_MODULE_ACCEPTANCE.md#context-aware-navigation)
 
 ## Implementation Status
 

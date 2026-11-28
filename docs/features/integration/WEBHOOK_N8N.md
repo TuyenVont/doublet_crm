@@ -19,7 +19,7 @@ Nguồn dữ liệu, sự kiện lặp và lịch sử đồng bộ; Workflow n8
 
 | ID | Tính năng/việc | Hạng mục | Ưu tiên | Căn cứ và hiện trạng | Nguồn yêu cầu |
 | --- | --- | --- | --- | --- | --- |
-| R2-06 | Nguồn dữ liệu, sự kiện lặp và lịch sử đồng bộ | R2 · Tích hợp chung | P0 | Zalo mock có mã tin nguồn và chống trùng. Còn hoàn thiện nhật ký sự kiện, truy vết lỗi và xử lý gửi lại ở các tích hợp thật. | BA FR-31–32 · Tài liệu Webhook |
+| R2-06 | Nguồn dữ liệu, sự kiện lặp và lịch sử đồng bộ | R2 · Tích hợp chung | P0 | Zalo MOCK có deterministic Conversation/Message identity, Conversation Event, `request_id` + request hash cho thao tác và duplicate handling. Đây là audit/idempotency cục bộ của kênh; chưa có execution log đa kênh, retry/DLQ chung. | BA FR-31–32 · Tài liệu Webhook |
 | R3-01 | Workflow n8n chạy trên DoubleT | R3 · n8n | P0 | Checklist #29–30 ghi đã nối Frappe qua event/webhook và tìm workflow. Main chưa thấy workflow export có thể đối chiếu. | BA SCP-08, SM-06 · CHECKLIST #29–30 |
 | R3-05 | Custom app cấu hình và giám sát Webhook | R3 · Webhook | P1 | Tài liệu kỹ thuật mô tả app riêng gồm cấu hình, retry, log/monitoring, quản trị và test. Mức bắt buộc của toàn bộ app cần đối chiếu phạm vi BA/đề cương. | Tài liệu Webhook · BA QD-02/QD-06 |
 
@@ -31,7 +31,9 @@ Xem [Data Model](../../architecture/DATA_MODEL.md) và [Data Ownership](../../ar
 
 ## Business Rules
 
-Các validation riêng được xác định từ source/checklist trong bảng dưới đây; quy tắc xuyên module được quản lý tại [Data Ownership](../../architecture/DATA_OWNERSHIP.md) và [Dependency Map](../../architecture/DEPENDENCY_MAP.md).
+Với Zalo MOCK, Conversation dùng identity `source + oa_id + external_user_id`; Message dùng `source + oa_id + external_message_id`. Workflow action dùng `conversation + request_id` và request hash: retry cùng payload trả duplicate, còn cùng request ID với action payload khác bị từ chối. Mock reply cũng từ chối cùng request ID với nội dung khác. Inbound duplicate chỉ đối chiếu Conversation/direction; cùng sender + message ID nhưng content/timestamp khác vẫn được coi là duplicate và là gap cần chốt trước LIVE. Contract này được quản lý chi tiết tại [Contact Center Inbox](../contact-center/INBOX.md#business-rules).
+
+Execution log đa kênh, signed webhook, retry/DLQ và monitoring vẫn là target của platform n8n/Webhook, không được suy ra từ Conversation Event.
 
 ## Workflow và State Transitions
 
@@ -49,7 +51,7 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 
 | ID | Source reference | Bằng chứng mới trong checklist |
 | --- | --- | --- |
-| R2-06 | hooks.py | 18/11 · 7105984 · zalo_oa.py. Chưa nghiệm thu đồng bộ đa kênh. |
+| R2-06 | `doublet_crm/zalo_workflow.py`; `doublet_crm/zalo_oa.py`; `DoubleT Conversation Event`; `test_zalo_inbox.py` | Source verified cho event/idempotency Zalo MOCK; test exists nhưng không chạy lại. Chưa có sync log đa kênh. |
 | R3-01 | hooks.py | Chưa có bằng chứng mới |
 | R3-05 | hooks.py | Chưa có bằng chứng mới |
 
@@ -72,7 +74,7 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 
 | ID | Checklist assessment | Checklist progress | Baseline/source finding |
 | --- | --- | --- | --- |
-| R2-06 | Có một phần | Cần làm | Checklist: Có một phần; Cần làm. Không suy ra runtime PASS. |
+| R2-06 | Có một phần | Cần làm | Có audit/idempotency cho Conversation actions và inbound/message identity; thiếu integration execution log, error trace/replay/retry chung đa kênh. |
 | R3-01 | Bản cũ/ngoài repo | Cần làm | Checklist: Bản cũ/ngoài repo; Cần làm. Không suy ra runtime PASS. |
 | R3-05 | Cần chốt | Cần chốt | Checklist: Cần chốt; Cần chốt. Không suy ra runtime PASS. |
 
@@ -91,7 +93,7 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 
 ## Known Limitations
 
-- **R2-06:** Zalo mock có mã tin nguồn và chống trùng. Còn hoàn thiện nhật ký sự kiện, truy vết lỗi và xử lý gửi lại ở các tích hợp thật.
+- **R2-06:** `DoubleT Conversation Event` không phải integration log đa kênh; nó chỉ audit workflow của một Conversation. Inbound duplicate chưa so sánh content/timestamp khi identity giữ nguyên. Chưa có signed dispatch, provider result, retry schedule, DLQ hoặc replay console chung.
 - **R3-01:** Checklist #29–30 ghi đã nối Frappe qua event/webhook và tìm workflow. Main chưa thấy workflow export có thể đối chiếu.
 - **R3-05:** Tài liệu kỹ thuật mô tả app riêng gồm cấu hình, retry, log/monitoring, quản trị và test. Mức bắt buộc của toàn bộ app cần đối chiếu phạm vi BA/đề cương.
 

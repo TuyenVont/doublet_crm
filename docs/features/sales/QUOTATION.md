@@ -66,6 +66,8 @@ State `Draft/Sent/Accepted/Rejected`; expiry chỉ derived cho Draft/Sent. Sau D
 
 Catalog → price resolution → Deal/Quotation → Accepted Quotation hoặc manual Order → lifecycle Order.
 
+`get_quotation_draft_context` là permission boundary hiện hữu cho [BF-04 Lead/Deal → Quotation](../../architecture/BUSINESS_FLOW_CONTRACT.md#bf-04--leaddeal--quotation): API chỉ trả draft context, không insert Quotation/convert Lead; exact Lead–Deal/customer links được kiểm; một Deal dùng trực tiếp, nhiều Deal buộc chọn; item price là current suggestion và chỉ thành snapshot sau Save.
+
 Chi tiết end-to-end nằm ở mục Related Workflows; state không được suy ra từ nhãn UI nếu controller/schema quy định khác.
 
 ## Permissions
@@ -111,6 +113,8 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 - [WF 01 INDIVIDUAL SALES](../../workflows/WF_01_INDIVIDUAL_SALES.md)
 - [WF 02 COMPANY SALES](../../workflows/WF_02_COMPANY_SALES.md)
 - [WF 03 QUOTATION EMAIL](../../workflows/WF_03_QUOTATION_EMAIL.md)
+- [WF 11 CUSTOMER LIFECYCLE](../../workflows/WF_11_CUSTOMER_LIFECYCLE.md)
+- [Sales lifecycle acceptance](../../testing/CROSS_MODULE_ACCEPTANCE.md#sales-lifecycle)
 
 ## Implementation Status
 

@@ -49,6 +49,12 @@ Các validation riêng được xác định từ source/checklist trong bảng 
 
 Dữ liệu đi từ prospect/interaction đến customer master, Deal và các projection downstream; trạng thái chỉ thay đổi qua controller/API có kiểm quyền.
 
+- **AS-IS navigation:** Contact/Company pages list readable linked Deals and converted Leads; Contact opens its Company. Chưa có verified `Create Deal` entry point prefill từ customer page.
+- **AS-IS history:** Activity, Tasks, Notes, Zalo record chat và related records là các projection riêng. Quote/Order history customer-wide và unified all-channel history chưa đầy đủ.
+- **TO-BE:** tạo Deal không bắt chọn lại customer đã biết; nhiều representative Contact mới yêu cầu chọn. Unified history giữ source ID/scope và không trộn Deal-specific activity giữa hai Deal cùng customer.
+
+Contract: [BF-03 Customer → Deal](../../architecture/BUSINESS_FLOW_CONTRACT.md#bf-03--contactcompany--deal) và [Customer history continuity](../../architecture/BUSINESS_FLOW_CONTRACT.md#customer-history-continuity).
+
 Chi tiết end-to-end nằm ở mục Related Workflows; state không được suy ra từ nhãn UI nếu controller/schema quy định khác.
 
 ## Permissions
@@ -87,6 +93,8 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 - [WF 01 INDIVIDUAL SALES](../../workflows/WF_01_INDIVIDUAL_SALES.md)
 - [WF 02 COMPANY SALES](../../workflows/WF_02_COMPANY_SALES.md)
 - [WF 07 WOOCOMMERCE SYNC](../../workflows/WF_07_WOOCOMMERCE_SYNC.md)
+- [WF 11 CUSTOMER LIFECYCLE](../../workflows/WF_11_CUSTOMER_LIFECYCLE.md)
+- [History acceptance](../../testing/CROSS_MODULE_ACCEPTANCE.md#customer-history-continuity)
 
 ## Implementation Status
 

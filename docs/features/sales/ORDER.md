@@ -51,6 +51,8 @@ Xem [Data Model](../../architecture/DATA_MODEL.md) và [Data Ownership](../../ar
 
 Catalog → price resolution → Deal/Quotation → Accepted Quotation hoặc manual Order → lifecycle Order.
 
+[BF-05 Accepted Quotation → Order](../../architecture/BUSINESS_FLOW_CONTRACT.md#bf-05--accepted-quotation--order) là contract chính. `create_order_from_quotation` khóa Quotation, chỉ tạo mới khi status đúng `Accepted`, validate stored totals, copy customer/items snapshot và retry trả existing readable Order.
+
 Chi tiết end-to-end nằm ở mục Related Workflows; state không được suy ra từ nhãn UI nếu controller/schema quy định khác.
 
 ## Permissions
@@ -87,6 +89,8 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 
 - [WF 01 INDIVIDUAL SALES](../../workflows/WF_01_INDIVIDUAL_SALES.md)
 - [WF 02 COMPANY SALES](../../workflows/WF_02_COMPANY_SALES.md)
+- [WF 11 CUSTOMER LIFECYCLE](../../workflows/WF_11_CUSTOMER_LIFECYCLE.md)
+- [Sales lifecycle acceptance](../../testing/CROSS_MODULE_ACCEPTANCE.md#sales-lifecycle)
 
 ## Implementation Status
 

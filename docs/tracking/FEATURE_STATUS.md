@@ -2,13 +2,13 @@
 
 [← Documentation Index](../INDEX.md) · [Feature Index](FEATURE_INDEX.md) · [Testing](../testing/README.md)
 
-“Có source” không đồng nghĩa runtime/business acceptance PASS. Bằng chứng trước tích hợp chỉ là historical evidence nếu chưa chạy lại trên baseline `c087d806e16d26701f6a1597bd82ae3ab6a55319`.
+“Có source” không đồng nghĩa runtime/business acceptance PASS. Bằng chứng trước tích hợp chỉ là historical evidence nếu chưa chạy lại trên baseline `a7534e74090f46498f5cbfcd30e0fcf77d882f2e`.
 
 | ID | Checklist source assessment | Checklist progress | Spec | Source reference | Technical evidence |
 | --- | --- | --- | --- | --- | --- |
 | CRM-01 | Có | Cần kiểm | [spec](../features/crm/LEAD.md#feature-crm-01) | FrappeLead.vue | 18/11 · 7105984 · Lead có list/detail và controller. Quyền mặc định xem CRM-07. Runtime chưa kiểm. |
 | CRM-02 | Có | Cần kiểm | [spec](../features/crm/LEAD_CONVERSION.md#feature-crm-02) | doublet_lead.py | 18/11 · 7105984 · convert_lead có code cho Personal/Company. Chưa chạy lại luồng. |
-| CRM-03 | Có | Cần kiểm | [spec](../features/crm/DEAL_PIPELINE.md#feature-crm-03) | DealsView.vue | 18/11 · 7105984 · List/Kanban và API đổi stage có code. Sales mặc định chỉ đọc. |
+| CRM-03 | Có | Cần kiểm | [spec](../features/crm/DEAL_PIPELINE.md#feature-crm-03) | `useDoubleTDeals.js`; `DealsView.vue`; stage API; `dealsResource.test.mjs` | Historical docs: pipeline/stage/Won-Lost source present, demo-role và Dashboard comparison pending. PR #37 source verified load/filter/reload/pagination/labels; test exists, NOT RUN trong task docs. |
 | CRM-04 | Có | Cần kiểm | [spec](../features/crm/CUSTOMER.md#feature-crm-04) | router.js | 18/11 · 7105984 · router.js, DoubleTEntityDetail.vue. Browser chưa kiểm. |
 | CRM-05 | Có một phần | Cần làm | [spec](../features/crm/CUSTOMER.md#feature-crm-05) | api.py | Chưa có bằng chứng mới |
 | CRM-06 | Có một phần | Cần làm | [spec](../features/crm/IDENTITY_DUPLICATES.md#feature-crm-06) | doublet_lead.py | Chưa có bằng chứng mới |
@@ -40,10 +40,10 @@
 | CRM-09 | Có một phần | Cần làm | [spec](../features/crm/DEAL_PIPELINE.md#feature-crm-09) | DoubleTEntityDetail.vue | 18/11 · 7105984 · Company có Contacts/Deals/Converted Leads. Còn kiểm điều hướng và báo giá theo khách. |
 | UX-02 | Có một phần | Cần làm | [spec](../features/platform/UX_LOCALIZATION.md#feature-ux-02) | main.js | Chưa có bằng chứng mới |
 | R2-01 | Có một phần | Chờ phụ thuộc | [spec](../features/contact-center/INBOX.md#feature-r2-01) | zalo_oa.py:86 | 16/11 · Postman: 200 OK cả hai lần. duplicate false → true, cùng ID tin và hội thoại.<br>18/11 · 7105984 có mock inbound. Chưa có Zalo OA để kết nối thật. |
-| R2-02 | Có một phần | Cần kiểm | [spec](../features/contact-center/INBOX.md#feature-r2-02) | zalo_inbox.py:364 | 16/11 · Task 24/24B: đã test chat mock. 24C: backend 6/6 và build PASS, còn nghiệm thu UI.<br>18/11 · 7105984 có Inbox và mock reply. Browser chưa kiểm lại. |
-| R2-03 | Có một phần | Chờ phụ thuộc | [spec](../features/contact-center/INBOX.md#feature-r2-03) | zalo_oa.py:86 | 16/11 · Postman: tin 01 gắn Lead j26jv05gmb, tin 02 dùng lại đúng Lead và hội thoại.<br>18/11 · 7105984 có liên kết Lead ở luồng mock. Chờ kiểm OA thật. |
+| R2-02 | Có một phần | Cần kiểm | [spec](../features/contact-center/INBOX.md#feature-r2-02) | `zalo_inbox.py`; `ZaloInbox.vue`; `test_zalo_inbox.py` | Historical Task 24: browser thấy 2 inbound + 1 mock reply; Task 24C reported 6 backend tests/build/API PASS, browser responsive/IME pending. Baseline MOCK workflow source verified; LIVE absent; tests/browser NOT RUN trong task này. |
+| R2-03 | Có một phần | Chờ phụ thuộc | [spec](../features/contact-center/INBOX.md#feature-r2-03) | `zalo_oa.py`; `zalo_workflow.py`; actions UI | Historical 16/11 Postman: tin 01 gắn Lead `j26jv05gmb`, tin 02 dùng lại đúng Lead/hội thoại; 18/11 `7105984` có link Lead. Baseline là manual Create/Link, không automatic Lead; OA LIVE pending. |
 | R2-04 | Có | Cần kiểm | [spec](../features/contact-center/EMAIL.md#feature-r2-04) | QuotationEmails.vue:192 | 17/11 PASS · CRM-NEW-LEAD-01<br>Received, 1 bản ghi sau pull lại.<br>QUO-00005: 4 thư mỗi scope API.<br>Browser: NOT TESTED.<br>18/11 · 7105984 có luồng đọc Communication theo hồ sơ và báo giá. Chưa test browser. |
-| R2-06 | Có một phần | Cần làm | [spec](../features/integration/WEBHOOK_N8N.md#feature-r2-06) | hooks.py | 18/11 · 7105984 · zalo_oa.py. Chưa nghiệm thu đồng bộ đa kênh. |
+| R2-06 | Có một phần | Cần làm | [spec](../features/integration/WEBHOOK_N8N.md#feature-r2-06) | `zalo_workflow.py`; `zalo_oa.py`; Conversation Event | Conversation audit/idempotency source verified; multi-channel execution log/retry platform absent. |
 | R3-01 | Bản cũ/ngoài repo | Cần làm | [spec](../features/integration/WEBHOOK_N8N.md#feature-r3-01) | hooks.py | Chưa có bằng chứng mới |
 | REP-03 | Có một phần | Cần kiểm | [spec](../features/analytics/ACTIVITY_CONTACT_CENTER.md#feature-rep-03) | reports.py · ActivityContactCenterReport.vue · report_tools.py · test_activity_reports.py | 27/11 · PR #35 → main b7b6a5d; tích hợp 94c5a25, fix controller cbf0dc6. Frontend test/build PASS theo user; migrate PASS theo log; backend 197/197 trước tích hợp (Codex báo), chưa chạy lại sau tích hợp; UI user báo xong, chưa có log từng role. Activity report thêm Appointment/Reminder; giới hạn attribution Email/Zalo vẫn còn. |
 | R2-05 | Chưa thấy | Cần làm | [spec](../features/integration/WOOCOMMERCE.md#feature-r2-05) | ProductsView.vue | Chưa có bằng chứng mới |
@@ -51,13 +51,13 @@
 | R3-03 | Chưa thấy | Cần làm | [spec](../features/integration/EXTERNAL_CHANNELS.md#feature-r3-03) | hooks.py | Chưa có bằng chứng mới |
 | R3-04 | Chưa thấy | Cần chốt | [spec](../features/integration/EXTERNAL_CHANNELS.md#feature-r3-04) | hooks.py | Chưa có bằng chứng mới |
 | R3-05 | Cần chốt | Cần chốt | [spec](../features/integration/WEBHOOK_N8N.md#feature-r3-05) | hooks.py | Chưa có bằng chứng mới |
-| QA-01 | Cần xác minh | Cần kiểm | [spec](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-01) | FEATURE_STATUS.md | 27/11 · PR #35 → main b7b6a5d; tích hợp 94c5a25, fix controller cbf0dc6. Frontend test/build PASS theo user; migrate PASS theo log; backend 197/197 trước tích hợp (Codex báo), chưa chạy lại sau tích hợp; UI user báo xong, chưa có log từng role. Đã kiểm conflict, frontend và build; chưa chạy lại backend regression và role matrix. |
+| QA-01 | Cần xác minh | Cần kiểm | [spec](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-01) | `docs/testing/README.md`; current file | 27/11 evidence được giữ nhưng chưa chạy lại backend regression/browser role matrix trên baseline. |
 | QA-02 | Cần xác minh | Cần kiểm | [spec](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-02) | patches.txt | 27/11 · PR #35 → main b7b6a5d; tích hợp 94c5a25, fix controller cbf0dc6. Frontend test/build PASS theo user; migrate PASS theo log; backend 197/197 trước tích hợp (Codex báo), chưa chạy lại sau tích hợp; UI user báo xong, chưa có log từng role. Migration site hiện tại PASS sau bổ sung controller; cài sạch chưa thử. |
-| QA-03 | Có một phần | Cần làm | [spec](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-03) | ARCHITECTURE.md | Chưa có bằng chứng mới |
-| QA-04 | Cần xác minh | Cần kiểm | [spec](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-04) | FEATURE_STATUS.md | Chưa có bằng chứng mới |
+| QA-03 | Có một phần | Cần làm | [spec](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-03) | `README.md`; `docs/INDEX.md`; `docs/deployment/README.md` | Chưa có bằng chứng mới |
+| QA-04 | Cần xác minh | Cần kiểm | [spec](../features/platform/QUALITY_ACCEPTANCE.md#feature-qa-04) | current file; `docs/tracking/FEATURE_INDEX.md` | Chưa có bằng chứng mới |
 | NEW-01 | Đề xuất | Đề xuất | [spec](../features/sales/QUOTATION.md#feature-new-01) | doublet_quotation.py | Chưa có bằng chứng mới |
 | NEW-02 | Đề xuất | Đề xuất | [spec](../features/automation/FOLLOW_UP.md#feature-new-02) | dashboard.py | Chưa có bằng chứng mới |
-| NEW-03 | Đề xuất | Đề xuất | [spec](../features/contact-center/INBOX.md#feature-new-03) | api.py | Chưa có bằng chứng mới |
+| NEW-03 | Có một phần | Đề xuất | [spec](../features/contact-center/INBOX.md#feature-new-03) | `zalo_workflow.py`; `ZaloConversationActions.vue` | Create Lead và Link/Change Lead/Contact có source; unified unresolved queue absent. |
 | EXT-01 | Có một phần | Cần làm | [spec](../features/crm/CUSTOMER.md#feature-ext-01) | doublet_contact.json | Chưa có bằng chứng mới |
 | EXT-02 | Chưa thấy | Đề xuất | [spec](../features/crm/CUSTOMER.md#feature-ext-02) | doublet_deal.json | Chưa có bằng chứng mới |
 | EXT-03 | Chưa thấy | Đề xuất | [spec](../features/crm/CUSTOMER.md#feature-ext-03) | doublet_lead.py | Chưa có bằng chứng mới |
@@ -77,8 +77,8 @@
 | EXT-26 | Cần xác minh | Cần kiểm | [spec](../features/platform/VIEWS_IMPORT_CUSTOM_FIELDS.md#feature-ext-26) | ViewControls.vue | Chưa có bằng chứng mới |
 | EXT-31 | Có một phần | Cần làm | [spec](../features/crm/CUSTOMER.md#feature-ext-31) | DealQuotations.vue | Chưa có bằng chứng mới |
 | EXT-19 | Có một phần | Cần làm | [spec](../features/contact-center/INBOX.md#feature-ext-19) | zalo_inbox.py:364 | 18/11 · 7105984 · Có DocType và API mock. OA thật chờ tài khoản. |
-| EXT-20 | Chưa thấy | Đề xuất | [spec](../features/contact-center/INBOX.md#feature-ext-20) | api.py | Chưa có bằng chứng mới |
-| EXT-21 | Chưa thấy | Đề xuất | [spec](../features/contact-center/INBOX.md#feature-ext-21) | dashboard.py | Chưa có bằng chứng mới |
+| EXT-20 | Có | Cần kiểm | [spec](../features/contact-center/INBOX.md#feature-ext-20) | `zalo_workflow.py`; Conversation Event; actions UI | Assign/Accept/Transfer/reason/history source verified; runtime acceptance NOT RUN. |
+| EXT-21 | Có một phần | Cần làm | [spec](../features/contact-center/INBOX.md#feature-ext-21) | `zalo_inbox.py::_response_metrics`; `ZaloInbox.vue` | First response/waiting/Needs reply source verified; SLA threshold/filter absent. |
 | EXT-22 | Chưa thấy | Đề xuất | [spec](../features/contact-center/EMAIL.md#feature-ext-22) | QuotationForm.vue | Chưa có bằng chứng mới |
 | EXT-14 | Có | Cần kiểm | [spec](../features/analytics/CUSTOMER_JOURNEY.md#feature-ext-14) | reports.py · CustomerJourneyReport.vue · test_reports.py | 25/11 · PR #33 đã merge main 319ee10 (feature 5980359). Source get_customer_journey và Lead to Won Rate; Codex báo Reports backend 51 PASS; Smart Insights/export 25 PASS; Pipeline frontend 5 PASS; Smart Insights frontend 4 PASS; compile/diff check PASS. Chưa nghiệm thu browser/role trên bản cuối. |
 | EXT-15 | Có | Cần kiểm | [spec](../features/analytics/PIPELINE_ANALYTICS.md#feature-ext-15) | reports.py · PipelineAnalyticsReport.vue · report_tools.py · test_reports.py | 27/11 · PR #35 → main b7b6a5d; tích hợp 94c5a25, fix controller cbf0dc6. Frontend test/build PASS theo user; migrate PASS theo log; backend 197/197 trước tích hợp (Codex báo), chưa chạy lại sau tích hợp; UI user báo xong, chưa có log từng role. |
@@ -93,9 +93,9 @@
 | EXT-18 | Chưa thấy | Đề xuất | [spec](../features/crm/ADVANCED_CRM.md#feature-ext-18) | doublet_deal_stage.json | Chưa có bằng chứng mới |
 | EXT-30 | Chưa thấy | Đề xuất | [spec](../features/crm/ADVANCED_CRM.md#feature-ext-30) | hooks.py | Chưa có bằng chứng mới |
 | CC-01 | Chưa thấy | Cần làm | [spec](../features/contact-center/EMAIL.md#feature-cc-01) | router.js | Ca nghiệm thu: CRM-NEW-LEAD-01 → tạo/gắn Lead → View Lead → Emails. Kiểm thêm reply QUO-00005 và hồi quy tab Zalo OA. |
-| CC-02 | Chưa thấy | Cần làm | [spec](../features/contact-center/INBOX.md#feature-cc-02) | api.py | Chưa có bằng chứng mới |
-| CC-03 | Có một phần | Cần làm | [spec](../features/contact-center/INBOX.md#feature-cc-03) | api.py | 18/11 · 7105984 · Đã đối chiếu DocType. Chưa test quyền Contact Center trên site. |
-| CC-04 | Chưa thấy | Đề xuất | [spec](../features/contact-center/INBOX.md#feature-cc-04) | api.py | Chưa có bằng chứng mới |
+| CC-02 | Có | Cần kiểm | [spec](../features/contact-center/INBOX.md#feature-cc-02) | `zalo_workflow.py`; `zalo_oa.py`; Conversation/Event | Waiting/In Progress/Resolved, reopen và audit source verified; tests/browser NOT RUN. |
+| CC-03 | Có một phần | Cần làm | [spec](../features/contact-center/INBOX.md#feature-cc-03) | `zalo_workflow.py`; `hooks.py`; permissions | Sales assignee vs Manager/System Manager scope có; channel/team config absent. |
+| CC-04 | Chưa thấy | Đề xuất | [spec](../features/contact-center/INBOX.md#feature-cc-04) | `zalo_workflow.py` | Manual assignment có; tự động phân công theo queue/team chưa có. Tên Master Checklist cũ là `v`; không đổi trạng thái. |
 | CC-05 | Đề xuất | Đề xuất | [spec](../features/contact-center/INBOX.md#feature-cc-05) | api.py | Chưa có bằng chứng mới |
 | CC-06 | Đề xuất | Đề xuất | [spec](../features/contact-center/INBOX.md#feature-cc-06) | router.js | Chưa có bằng chứng mới |
 | CC-07 | Đề xuất | Đề xuất | [spec](../features/contact-center/INBOX.md#feature-cc-07) | dashboard.py | Chưa có bằng chứng mới |
@@ -104,7 +104,7 @@
 | CC-10 | Có | Cần kiểm | [spec](../features/contact-center/CALLS.md#feature-cc-10) | api.py | 22/11 · PR #27 → main 218cdef. doublet_crm/contact_center_calls.py, doublet_task.py/json, test_callback_task_permissions.py và TaskArea.vue. Có code/test; runtime chưa xác nhận. |
 | CRM-10 | Có | Cần kiểm | [spec](../features/crm/CUSTOMER.md#feature-crm-10) | useDoubleTCompanies.js:75 | 22/11 · PR #24 merged vào main b996e72. Diff useDoubleTCompanies.js, CompaniesView.vue, DoubleTEntityDetail.vue và DealsListView.vue. Chưa có browser retest. |
 | CALL-01 | Có | Cần kiểm | [spec](../features/contact-center/CALLS.md#feature-call-01) | api.py:790, 820 | 22/11 · PR #27 merged main 218cdef. Diff contact_center_calls.py, DoubleT Call Event, Call Log schema, permissions.py, CallLogDetails.vue và test_contact_center_calls.py. Runtime cuối chưa kiểm. |
-| CALL-02 | Có | Cần kiểm | [spec](../features/contact-center/CALLS.md#feature-call-02) | CallLogs.vue:366 | 21/11 · commit 1318641; 22/11 · PR #27 → main 218cdef. Diff call_log/ai_summary.py, DoubleT Call AI Summary, CallLogAISummary.vue, test_doublet_call_ai_summary.py. Chưa xác minh chạy thực tế. |
+| CALL-02 | Có | Cần kiểm | [spec](../features/contact-center/CALLS.md#feature-call-02) | `call_log/ai_summary.py`; Note schema; `test_doublet_call_ai_summary.py` | Historical QA contract giữ two bundled recording demos, private manifest/File và reviewed next steps; không phải recorded PASS. Baseline DEMO/LIVE separation + unique Note source verified; test/provider/browser NOT RUN. |
 | REP-04 | Có | Cần kiểm | [spec](../features/analytics/REPORT_PLATFORM.md#feature-rep-04) | ReportsPage.vue · ReportsLayout.vue · router.js · components/Reports/ | 27/11 · PR #35 → main b7b6a5d; tích hợp 94c5a25, fix controller cbf0dc6. Frontend test/build PASS theo user; migrate PASS theo log; backend 197/197 trước tích hợp (Codex báo), chưa chạy lại sau tích hợp; UI user báo xong, chưa có log từng role. 6 Reports giữ nguyên sau tích hợp. |
 | REP-05 | Có một phần | Cần kiểm | [spec](../features/analytics/REPORT_PLATFORM.md#feature-rep-05) | ReportsFilters.vue · ReportActions.vue · reports.py | 27/11 · PR #35 → main b7b6a5d; tích hợp 94c5a25, fix controller cbf0dc6. Frontend test/build PASS theo user; migrate PASS theo log; backend 197/197 trước tích hợp (Codex báo), chưa chạy lại sau tích hợp; UI user báo xong, chưa có log từng role. Giữ giới hạn Team/Activity compare và Email/Zalo attribution. |
 | REP-06 | Có | Cần kiểm | [spec](../features/analytics/CUSTOMER_JOURNEY.md#feature-rep-06) | reports.py · CustomerJourneyReport.vue · test_reports.py | 27/11 · PR #35 → main b7b6a5d; tích hợp 94c5a25, fix controller cbf0dc6. Frontend test/build PASS theo user; migrate PASS theo log; backend 197/197 trước tích hợp (Codex báo), chưa chạy lại sau tích hợp; UI user báo xong, chưa có log từng role. Customer Journey drill-down; cần kiểm dữ liệu/owner. |
@@ -123,4 +123,4 @@
 - 19/11 PR #25: Product Catalog/Quotation frontend focused evidence; còn save/reopen/role gaps.
 - 24–25/11 PR #31–33: Reports tests/build/browser trên commit và data sớm hơn.
 - 27/11 PR #35: frontend/build/migration và pre/post integration evidence được ghi nhận; backend full suite không chạy lại sau toàn bộ integration theo checklist.
-- 28/11: baseline gồm PR #36 Contact Center và PR #37 Deals fix; task tài liệu không tạo runtime evidence mới.
+- 28/11: baseline `a7534e7` gồm PR #36 Contact Center, PR #37 Deals fix và PR #38 modular docs; reconciliation này chỉ source-review, không tạo runtime evidence mới.

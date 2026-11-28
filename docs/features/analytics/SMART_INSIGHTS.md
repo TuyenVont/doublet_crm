@@ -34,6 +34,8 @@ Quy tắc dùng chung được quản lý tại [Report Platform](REPORT_PLATFOR
 
 Filter/cohort → authorized query → aggregate/chart/table → export/drill-down trên cùng dataset.
 
+Source links và explicit follow-up tuân theo [BF-09](../../architecture/BUSINESS_FLOW_CONTRACT.md#bf-09--reportsmart-insight--source-or-follow-up-task): alert phải còn current/readable; Quotation chỉ tạo Task qua readable Deal hợp lệ; lock + active marker chống duplicate. Đây không phải automatic `NEW-02`.
+
 Chi tiết end-to-end nằm ở mục Related Workflows; state không được suy ra từ nhãn UI nếu controller/schema quy định khác.
 
 ## Permissions
@@ -63,6 +65,7 @@ Contract chung: [Permission Model](../../architecture/PERMISSION_MODEL.md).
 ## Related Workflows
 
 - [WF 09 SMART INSIGHTS FOLLOW UP](../../workflows/WF_09_SMART_INSIGHTS_FOLLOW_UP.md)
+- [Report/Insight acceptance](../../testing/CROSS_MODULE_ACCEPTANCE.md#reports-and-smart-insights)
 
 ## Implementation Status
 

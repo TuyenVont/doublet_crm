@@ -7,8 +7,8 @@
 
 | Thuộc tính | Giá trị |
 | --- | --- |
-| Baseline source | `c087d806e16d26701f6a1597bd82ae3ab6a55319` — merge PR #37, remote `origin/main` xác minh ngày 28/11/2026 |
-| Branch tài liệu | `docs/system-specification` |
+| Baseline source | `a7534e74090f46498f5cbfcd30e0fcf77d882f2e` — merge PR #38, remote `origin/main` xác minh ngày 28/11/2026 |
+| Branch tài liệu | `docs/reconcile-baseline-20261128` |
 | Master Checklist | Google Sheets `KLTN · Đối chiếu bản cuối`, 110 mã, đọc ngày 28/11/2026 |
 | Nguồn nghiệp vụ | Business Analysis ngày 24/10/2026; Development Rules; NOTES; source và tài liệu repository |
 | Graphify | Root/frontend tạo ngày 25/11/2026; hữu ích để định vị, nhưng có generated/minified nodes và cũ hơn baseline nên mọi kết luận được đối chiếu source |
@@ -28,6 +28,8 @@ Quy ước trạng thái:
 DoubleT CRM là custom Frappe application độc lập phục vụ bán hàng và chăm sóc khách hàng đa kênh. Vấn đề nghiệp vụ gốc là thông tin của cùng một khách hàng nằm rời rạc giữa CRM, Zalo OA, Email, WooCommerce và quy trình thủ công; người dùng phải nhập lại, đối chiếu và chuyển ứng dụng để theo dõi hành trình khách hàng.
 
 Hệ thống hướng tới một hồ sơ CRM có thể truy vết từ tương tác ban đầu đến `DoubleT Lead`, `DoubleT Contact`/`DoubleT Company`, `DoubleT Deal`, `DoubleT Quotation` và `DoubleT Order`; Frappe cung cấp identity, permission, ORM, Communication, File, queue, scheduler và Notification.
+
+Chuỗi trên được chuẩn hóa bằng [End-to-End Business Flow Contract](BUSINESS_FLOW_CONTRACT.md): mỗi chuyển tiếp phải nêu Source, Trigger, Destination, Context, Prefill, Validation, Persistence, Exception và Acceptance; AS-IS không được trộn với TO-BE/GAP.
 
 **Người dùng chính:** Administrator, System Manager, Sales Manager, Sales User; các integration principal như `Call Log API`; người quản lý xem Dashboard/Reports. Khách hàng không đăng nhập CRM nhưng tương tác qua Email/Zalo/call/commerce.
 

@@ -16,3 +16,12 @@
 | Cuộc gọi | `DoubleT Call Log`; Event/AI Summary/Task/Note là dữ liệu dẫn xuất có link | File recording hoặc callback Task như call record chính. |
 | Activity | Task/Note/Appointment/Communication/Call riêng; Activities là projection | Một bảng timeline song song. |
 | Reports | Permission-scoped queries trên business source ở trên | Mock KPI, cached frontend totals hoặc unknown = 0. |
+
+## Provenance và dữ liệu kế thừa
+
+- Route/query context không phải source of truth. Destination chỉ sở hữu dữ liệu sau khi backend validate và Save; source link/snapshot phải còn sau reload.
+- External OA identity (`source + oa_id + external_user_id`) xác định Conversation, chưa tự chứng minh một Lead/Contact. Automatic identity mapping là TO-BE và cần policy/audit riêng.
+- Lead conversion sở hữu converted links; customer record không được ghi đè lịch sử Lead/Conversation. Deal sở hữu sales context; Quotation/Order sở hữu snapshot thương mại.
+- Customer-history view chỉ projection Chat/Email/Call/Activity/Sales records được phép đọc. Không tạo bảng timeline song song và không suy diễn customer-level activity thành Deal-specific activity.
+
+Xem [Business Flow Contract](BUSINESS_FLOW_CONTRACT.md) cho quy tắc Source/Context/Prefill/Persistence.

@@ -16,3 +16,6 @@ Các luồng dưới đây phân biệt implementation hiện tại, partial, ta
 | WF-08 | [Task/Appointment → Reminder → Notification](WF_08_ACTIVITY_REMINDER.md) |
 | WF-09 | [Smart Insights → Follow-up Task](WF_09_SMART_INSIGHTS_FOLLOW_UP.md) |
 | WF-10 | [CRM Event → Webhook → n8n → Action → Execution Log](WF_10_N8N_AUTOMATION.md) |
+| WF-11 | [Customer lifecycle xuyên Chat/Lead/Customer/Sales/Activities](WF_11_CUSTOMER_LIFECYCLE.md) |
+
+Contract dữ liệu/điều hướng dùng chung được quản lý tại [Business Flow Contract](../architecture/BUSINESS_FLOW_CONTRACT.md); workflow không tự nâng TO-BE thành AS-IS.
